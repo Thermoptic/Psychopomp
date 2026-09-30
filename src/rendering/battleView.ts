@@ -5,7 +5,7 @@ import type { MatchUi } from '../app/ui';
 import {
   computeBuild,
   describeRequirement,
-  inAttackRange,
+  type PlayerId,
   rerollsRemaining,
   type BattleBuild,
   type BattleSide,
@@ -14,7 +14,7 @@ import {
   type GameState,
 } from '../core';
 import { badge, button, die, hpBar, panel, rect, strokeRect, text, wrapText, type Ctx } from './draw';
-import { ARENA_ORIGIN, DICE_SCREEN, diceScreenRows, type DiceItem } from './layout';
+import { DICE_SCREEN, diceScreenRows, type DiceItem, type Rect } from './layout';
 import { drawCreature } from './sprites';
 import { C, playerColor, playerLabel } from './theme';
 
@@ -215,91 +215,59 @@ export function drawReveal(ctx: Ctx, state: GameState): void {
 
 // --- Combat -------------------------------------------------------------------
 
-export function drawCombat(ctx: Ctx, state: GameState, ui: MatchUi, now: number): void {
+/**
+ * Side panel for one combatant during real-time combat. The fight itself is
+ * drawn on the strategic board (see drawBoard / boardUnits).
+ */
+export function drawCombatPanel(ctx: Ctx, state: GameState, owner: PlayerId, r: Rect): void {
   const b = state.battle!;
   const combat = b.combat!;
+  const f = Object.values(combat.fighters).find((x) => state.creatures[x.creatureId].owner === owner);
+  if (!f) return;
+  const info = sideInfo(state, f.side);
+  panel(ctx, r, info.color);
+  badge(ctx, r.x + 20, r.y + 22, 14, owner, info.color);
+  text(ctx, playerLabel(owner), r.x + 34, r.y + 27, { size: 16, color: info.color });
+  text(ctx, f.side.toUpperCase(), r.x + r.w - 14, r.y + 27, { size: 11, color: C.dim, align: 'right' });
+  text(ctx, info.def.name.toUpperCase(), r.x + 14, r.y + 60, { size: 16, color: C.text });
+  text(ctx, `${f.hp}/${f.maxHp}`, r.x + r.w - 14, r.y + 60, { size: 16, align: 'right', color: f.hp <= f.maxHp / 4 ? C.danger : C.text });
+  hpBar(ctx, { x: r.x + 14, y: r.y + 70, w: r.w - 28, h: 12 }, f.hp, f.maxHp, info.color);
+  let y = r.y + 112;
+  for (const [label, v] of [['POWER', f.stats.power], ['SHIELD', f.stats.shield], ['SPEED', f.stats.speed]] as const) {
+    text(ctx, label, r.x + 14, y, { size: 12, color: C.dim });
+    text(ctx, String(v), r.x + 104, y, { size: 14 });
+    y += 20;
+  }
+  text(ctx, 'GUARD', r.x + 14, y, { size: 12, color: C.dim });
+  for (let k = 0; k < f.blockCharges; k++) rect(ctx, { x: r.x + 104 + k * 13, y: y - 10, w: 10, h: 10 }, C.pp);
+  if (f.blockCharges === 0) text(ctx, '-', r.x + 104, y, { size: 14, color: C.faint });
+  y += 20;
+  text(ctx, 'ATTACK', r.x + 14, y, { size: 12, color: C.dim });
+  const ready = f.cooldown === 0 && f.windup === 0;
+  text(ctx, ready ? 'READY' : f.windup > 0 ? 'SWING' : 'RELOAD', r.x + 104, y, { size: 13, color: ready ? C.ok : C.dim });
+  const build = b.builds![f.side];
+  if (build.specialName) {
+    text(ctx, `${build.specialName.toUpperCase()}: ${build.specialActive ? 'ACTIVE' : 'OFF'}`, r.x + 14, y + 32, {
+      size: 12,
+      color: build.specialActive ? C.ok : C.faint,
+    });
+  }
+  const keys = owner === 'P1' ? ['WASD  MOVE', 'SPACE  HIT', 'L-SHIFT  GUARD'] : ['ARROWS  MOVE', 'ENTER  HIT', 'R-SHIFT  GUARD'];
+  keys.forEach((k, i) => text(ctx, k, r.x + 14, r.y + r.h - 56 + i * 18, { size: 11, color: C.dim }));
+}
+
+export function combatTimeLeft(state: GameState): number | null {
   const rules = state.ruleset.combat;
-  const ox = ARENA_ORIGIN.x;
-  const oy = ARENA_ORIGIN.y;
-
-  // HUD
-  (['attacker', 'defender'] as BattleSide[]).forEach((side, i) => {
-    const f = combat.fighters[side];
-    const info = sideInfo(state, side);
-    const x = i === 0 ? 20 : 500;
-    const r = { x, y: 50, w: 440, h: 60 };
-    panel(ctx, r, info.color);
-    badge(ctx, x + 18, r.y + 20, 12, info.cr.owner, info.color);
-    text(ctx, info.def.name.toUpperCase(), x + 32, r.y + 25, { size: 15, color: info.color });
-    const sp = b.builds![side];
-    if (sp.specialActive && sp.specialName) text(ctx, sp.specialName.toUpperCase(), x + 170, r.y + 25, { size: 11, color: C.ok });
-    text(ctx, `${f.hp}/${f.maxHp}`, x + r.w - 14, r.y + 25, { size: 15, align: 'right', color: f.hp <= f.maxHp / 4 ? C.danger : C.text });
-    hpBar(ctx, { x: x + 12, y: r.y + 32, w: r.w - 24, h: 10 }, f.hp, f.maxHp, info.color);
-    text(ctx, `POW ${f.stats.power}  SHD ${f.stats.shield}  SPD ${f.stats.speed}`, x + 12, r.y + 55, { size: 11, color: C.dim });
-    text(ctx, 'GUARD', x + 270, r.y + 55, { size: 11, color: C.dim });
-    for (let k = 0; k < f.blockCharges; k++) rect(ctx, { x: x + 318 + k * 12, y: r.y + 46, w: 9, h: 9 }, C.pp);
-  });
-
-  // Arena
-  const arena = { x: ox - 8, y: oy - 8, w: rules.arenaWidth + 16, h: rules.arenaHeight + 16 };
-  panel(ctx, arena);
-  rect(ctx, { x: ox, y: oy, w: rules.arenaWidth, h: rules.arenaHeight }, '#0b0a0d');
-  ctx.fillStyle = 'rgba(255,255,255,0.03)';
-  for (let x = 0; x < rules.arenaWidth; x += 40) ctx.fillRect(ox + x, oy, 1, rules.arenaHeight);
-  for (let y = 0; y < rules.arenaHeight; y += 40) ctx.fillRect(ox, oy + y, rules.arenaWidth, 1);
-
-  const a = combat.fighters.attacker;
-  const d = combat.fighters.defender;
-  const touching = inAttackRange(a, d, rules);
-  for (const f of [a, d]) {
-    const info = sideInfo(state, f.side);
-    const cx = ox + f.x;
-    const cy = oy + f.y;
-    // Reach ring.
-    ctx.strokeStyle = touching ? 'rgba(255,74,61,0.25)' : 'rgba(255,255,255,0.06)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(cx, cy, rules.attackRange, 0, Math.PI * 2);
-    ctx.stroke();
-    // Shadow
-    rect(ctx, { x: cx - 24, y: cy + 30, w: 48, h: 6 }, 'rgba(0,0,0,0.6)');
-    const flash = ui.flash[f.side] > 0 && Math.floor(now / 60) % 2 === 0 ? '#ffffff' : undefined;
-    drawCreature(ctx, info.def.id, info.cr.owner, cx, cy, 6, { flip: f.facing < 0, flash });
-    if (f.windup > 0) {
-      const t = 1 - f.windup / rules.windupTicks;
-      ctx.strokeStyle = C.danger;
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(cx, cy, 36 + t * 20, -Math.PI / 2, -Math.PI / 2 + t * Math.PI * 2);
-      ctx.stroke();
-    }
-    if (f.guard > 0) {
-      ctx.strokeStyle = C.pp;
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.arc(cx, cy, 44, f.facing > 0 ? -1 : Math.PI - 1, f.facing > 0 ? 1 : Math.PI + 1);
-      ctx.stroke();
-    }
-    if (f.cooldown > 0) {
-      rect(ctx, { x: cx - 24, y: cy + 40, w: 48, h: 3 }, C.faint);
-      rect(ctx, { x: cx - 24, y: cy + 40, w: Math.round((48 * (f.attackCooldownTicks - f.cooldown)) / f.attackCooldownTicks), h: 3 }, C.dim);
-    }
-  }
-  for (const fl of ui.floaters) {
-    text(ctx, fl.text, ox + fl.x, oy + fl.y - (800 - fl.ms) / 20, { size: 20, color: fl.color, align: 'center' });
-  }
-
-  if (rules.timeoutTicks > 0) {
-    const secs = Math.max(0, Math.ceil((rules.timeoutTicks - combat.tick) / rules.tickRate));
-    text(ctx, `${secs}`, 480, oy + 24, { size: 18, color: secs <= 10 ? C.danger : C.dim, align: 'center' });
-  }
+  const combat = state.battle?.combat;
+  if (!combat || rules.timeoutTicks <= 0) return null;
+  return Math.max(0, Math.ceil((rules.timeoutTicks - combat.tick) / rules.tickRate));
 }
 
 export function combatHint(state: GameState): string {
   const b = state.battle!;
   const a = state.creatures[b.attackerId].owner;
-  const keys = (p: 'P1' | 'P2') => (p === 'P1' ? 'WASD / SPACE hit / L-SHIFT guard' : 'ARROWS / ENTER hit / R-SHIFT guard');
-  return `P1: ${keys('P1')}   ·   P2: ${keys('P2')}   (attacker: ${playerLabel(a)})`;
+  const t = combatTimeLeft(state);
+  return `COMBAT ON THE BOARD  ·  ${playerLabel(a)} ATTACKS${t !== null ? `  ·  TIME ${t}` : ''}`;
 }
 
 export function drawResult(ctx: Ctx, state: GameState): void {

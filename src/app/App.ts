@@ -19,10 +19,10 @@ import {
   type PlayerId,
 } from '../core';
 import type { Action, ActionFrame } from '../input/actions';
-import { focusedItem, combatHint, drawCombat, drawDiceScreen, drawResult, drawReveal } from '../rendering/battleView';
-import { drawBoardScreen, drawHeader, drawMessageBar } from '../rendering/boardView';
+import { focusedItem, combatHint, drawCombatPanel, drawDiceScreen, drawResult, drawReveal } from '../rendering/battleView';
+import { drawBoard, drawBoardScreen, drawHeader, drawMessageBar } from '../rendering/boardView';
 import { rect, scanlines, type Ctx } from '../rendering/draw';
-import { cellAtPoint, diceScreenRows, inRect, type DiceItem } from '../rendering/layout';
+import { LEFT_PANEL, RIGHT_PANEL, cellAtPoint, diceScreenRows, inRect, type DiceItem } from '../rendering/layout';
 import {
   MENU_ITEMS,
   PAUSE_ITEMS,
@@ -581,7 +581,10 @@ export class App {
         drawReveal(ctx, s);
         drawMessageBar(ctx, 'BOTH BUILDS ARE LOCKED IN');
       } else {
-        drawCombat(ctx, s, ui, now);
+        // Combat happens on the strategic board itself.
+        drawCombatPanel(ctx, s, 'P1', LEFT_PANEL);
+        drawCombatPanel(ctx, s, 'P2', RIGHT_PANEL);
+        drawBoard(ctx, s, ui, now);
         drawMessageBar(ctx, combatHint(s), C.dim);
         if (b.stage === 'result') drawResult(ctx, s);
       }

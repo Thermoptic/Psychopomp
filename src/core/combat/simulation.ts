@@ -6,14 +6,31 @@ import type {
   BattleBuild,
   BattleOutcome,
   BattleSide,
+  BoardDef,
+  Cell,
   CombatRules,
   CombatState,
   CreatureState,
   Fighter,
   FighterInput,
   GameEvent,
+  PlayerId,
 } from '../types';
 import { computeAttackCooldown, computeBlockCharges, computeDamage, computeMoveSpeed } from './stats';
+
+/**
+ * Board cell where a player's combatant starts: the centre cell of the left
+ * edge for P1, of the right edge for P2 (on 9×9: x 0 / 8, y 4).
+ */
+export function combatSpawnCell(board: Pick<BoardDef, 'width' | 'height'>, owner: PlayerId): Cell {
+  return { x: owner === 'P1' ? 0 : board.width - 1, y: Math.floor((board.height - 1) / 2) };
+}
+
+/** Centre of a board cell in combat units. */
+export function cellCentre(cell: Cell, rules: CombatRules): Cell {
+  const half = Math.floor(rules.cellUnits / 2);
+  return { x: cell.x * rules.cellUnits + half, y: cell.y * rules.cellUnits + half };
+}
 
 function createFighter(
   side: BattleSide,
@@ -21,14 +38,15 @@ function createFighter(
   maxHp: number,
   build: BattleBuild,
   rules: CombatRules,
+  board: Pick<BoardDef, 'width' | 'height'>,
 ): Fighter {
-  const left = side === 'attacker';
+  const spawn = cellCentre(combatSpawnCell(board, creature.owner), rules);
   return {
     creatureId: creature.id,
     side,
-    x: left ? rules.startInset : rules.arenaWidth - rules.startInset,
-    y: Math.floor(rules.arenaHeight / 2),
-    facing: left ? 1 : -1,
+    x: spawn.x,
+    y: spawn.y,
+    facing: creature.owner === 'P1' ? 1 : -1,
     // Persistent HP: the fight starts with the creature's *current* HP.
     hp: creature.hp,
     maxHp,
@@ -46,12 +64,14 @@ export function createCombat(
   attacker: { creature: CreatureState; maxHp: number; build: BattleBuild },
   defender: { creature: CreatureState; maxHp: number; build: BattleBuild },
   rules: CombatRules,
+  board: Pick<BoardDef, 'width' | 'height'>,
 ): CombatState {
   return {
     tick: 0,
+    arena: { width: board.width * rules.cellUnits, height: board.height * rules.cellUnits },
     fighters: {
-      attacker: createFighter('attacker', attacker.creature, attacker.maxHp, attacker.build, rules),
-      defender: createFighter('defender', defender.creature, defender.maxHp, defender.build, rules),
+      attacker: createFighter('attacker', attacker.creature, attacker.maxHp, attacker.build, rules, board),
+      defender: createFighter('defender', defender.creature, defender.maxHp, defender.build, rules, board),
     },
   };
 }
@@ -70,20 +90,20 @@ function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
 }
 
-function move(f: Fighter, other: Fighter, input: FighterInput, rules: CombatRules): void {
+function move(f: Fighter, other: Fighter, input: FighterInput, rules: CombatRules, arena: CombatState['arena']): void {
   if (input.dx === 0 && input.dy === 0) return;
   // Diagonal movement is scaled to ~0.7 so it is not faster than straight.
   const speed = input.dx !== 0 && input.dy !== 0 ? Math.floor((f.moveSpeed * 7) / 10) : f.moveSpeed;
   const r = rules.fighterRadius;
   const minDistSq = 4 * r * r;
 
-  const nx = clamp(f.x + input.dx * speed, r, rules.arenaWidth - r);
+  const nx = clamp(f.x + input.dx * speed, r, arena.width - r);
   if (nx !== f.x) {
     const dx = nx - other.x;
     const dy = f.y - other.y;
     if (dx * dx + dy * dy >= minDistSq) f.x = nx;
   }
-  const ny = clamp(f.y + input.dy * speed, r, rules.arenaHeight - r);
+  const ny = clamp(f.y + input.dy * speed, r, arena.height - r);
   if (ny !== f.y) {
     const dx = f.x - other.x;
     const dy = ny - other.y;
@@ -126,7 +146,7 @@ export function stepCombat(
       f.cooldown = f.attackCooldownTicks;
       events.push({ type: 'ATTACK_STARTED', side: f.side });
     }
-    if (f.windup === 0 && f.guard === 0) move(f, other, input, rules);
+    if (f.windup === 0 && f.guard === 0) move(f, other, input, rules, combat.arena);
   }
 
   a.facing = d.x >= a.x ? 1 : -1;

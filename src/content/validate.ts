@@ -115,7 +115,7 @@ export function validateRuleset(raw: unknown): ValidationResult {
   else {
     const c = raw.combat;
     for (const k of [
-      'tickRate', 'arenaWidth', 'arenaHeight', 'fighterRadius', 'startInset', 'attackRange', 'windupTicks',
+      'tickRate', 'cellUnits', 'fighterRadius', 'attackRange', 'windupTicks',
       'baseCooldownTicks', 'minCooldownTicks', 'baseMoveSpeed', 'speedPerMoveUnit', 'guardTicks', 'blockChargeDivisor',
     ]) {
       intIn(errors, `ruleset.combat.${k}`, c[k], 1, 100000);

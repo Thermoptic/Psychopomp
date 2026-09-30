@@ -82,7 +82,7 @@ export function beginCombat(state: GameState, events: GameEvent[]): void {
     const creature = state.creatures[id];
     return { creature, maxHp: state.creatureDefs[creature.defId].stats.maxHp, build: b.builds![side] };
   };
-  b.combat = createCombat(fighter(b.attackerId, 'attacker'), fighter(b.defenderId, 'defender'), state.ruleset.combat);
+  b.combat = createCombat(fighter(b.attackerId, 'attacker'), fighter(b.defenderId, 'defender'), state.ruleset.combat, state.board);
   b.stage = 'combat';
   events.push({ type: 'COMBAT_STARTED' });
 }

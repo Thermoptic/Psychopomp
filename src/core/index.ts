@@ -25,4 +25,4 @@ export {
   computeBlockCharges,
   baseBattleStats,
 } from './combat/stats';
-export { inAttackRange } from './combat/simulation';
+export { inAttackRange, combatSpawnCell, cellCentre } from './combat/simulation';

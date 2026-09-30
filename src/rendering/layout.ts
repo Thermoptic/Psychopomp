@@ -101,6 +101,3 @@ export function diceScreenRows(prep: DicePrep): PlacedItem[][] {
   return rows;
 }
 
-// --- Combat -----------------------------------------------------------------
-
-export const ARENA_ORIGIN = { x: 80, y: 118 };

@@ -8,10 +8,8 @@
   },
   "combat": {
     "tickRate": 60,
-    "arenaWidth": 800,
-    "arenaHeight": 340,
+    "cellUnits": 80,
     "fighterRadius": 26,
-    "startInset": 140,
     "attackRange": 96,
     "windupTicks": 14,
     "baseCooldownTicks": 70,
