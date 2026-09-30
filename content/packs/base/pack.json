@@ -1,0 +1,8 @@
+{
+  "id": "base",
+  "name": "Psychopomp Base Pack",
+  "contentVersion": 1,
+  "ruleset": "ruleset.json",
+  "boards": ["boards/classic.json"],
+  "creatures": ["monsters/glubber.json", "monsters/shroud.json"]
+}

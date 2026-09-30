@@ -1,0 +1,38 @@
+{
+  "id": "glubber",
+  "name": "Glubber",
+  "description": "A swollen thing from the lower dark. It hits harder when fed odd numbers.",
+  "faction": "light",
+  "tags": [
+    "test"
+  ],
+  "art": {},
+  "stats": {
+    "maxHp": 20,
+    "movement": 3,
+    "power": 10,
+    "speed": 5,
+    "shield": 4
+  },
+  "dice": {
+    "slots": {
+      "speed": 1,
+      "power": 1,
+      "shield": 1,
+      "special": 1,
+      "block": 1
+    }
+  },
+  "special": {
+    "name": "Odd Surge",
+    "description": "+4 Power",
+    "requirement": {
+      "type": "allOdd",
+      "target": "special"
+    },
+    "effect": {
+      "type": "addPower",
+      "value": 4
+    }
+  }
+}

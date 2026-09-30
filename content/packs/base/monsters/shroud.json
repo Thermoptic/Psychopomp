@@ -1,0 +1,38 @@
+{
+  "id": "shroud",
+  "name": "Shroud",
+  "description": "A drifting veil of grave-cloth. Even numbers knit it tighter.",
+  "faction": "dark",
+  "tags": [
+    "test"
+  ],
+  "art": {},
+  "stats": {
+    "maxHp": 20,
+    "movement": 3,
+    "power": 10,
+    "speed": 5,
+    "shield": 4
+  },
+  "dice": {
+    "slots": {
+      "speed": 1,
+      "power": 1,
+      "shield": 1,
+      "special": 1,
+      "block": 1
+    }
+  },
+  "special": {
+    "name": "Even Veil",
+    "description": "+4 Shield",
+    "requirement": {
+      "type": "allEven",
+      "target": "special"
+    },
+    "effect": {
+      "type": "addShield",
+      "value": 4
+    }
+  }
+}

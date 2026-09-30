@@ -1,0 +1,27 @@
+{
+  "id": "classic",
+  "firstPlayer": "P1",
+  "dice": {
+    "count": 5,
+    "sides": 6,
+    "maxRerolls": 2
+  },
+  "combat": {
+    "tickRate": 60,
+    "arenaWidth": 800,
+    "arenaHeight": 340,
+    "fighterRadius": 26,
+    "startInset": 140,
+    "attackRange": 96,
+    "windupTicks": 14,
+    "baseCooldownTicks": 70,
+    "cooldownPerSpeed": 3,
+    "minCooldownTicks": 24,
+    "baseMoveSpeed": 2,
+    "speedPerMoveUnit": 3,
+    "guardTicks": 24,
+    "blockChargeDivisor": 2,
+    "minDamage": 1,
+    "timeoutTicks": 5400
+  }
+}
