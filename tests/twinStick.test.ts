@@ -11,9 +11,10 @@ import { basePack, customMatch, ok, prepareBothAndBegin, testCreature, type Test
 
 // --- fixtures ----------------------------------------------------------------
 
-const DICE1 = { sides: 1, slots: { speed: 1, power: 1, shield: 1, special: 1, block: 1 } };
+const DICE1 = { sides: 1, slots: { speed: 1, power: 1, shield: 1, dash: 1, block: 1 } };
+// Dash 5 + the DASH die (always 1 here) = 6 points = a 3-cell dash.
 const mk = (id: string, stats: TestStats = {}, extra: Partial<CreatureDef> = {}) =>
-  testCreature(id, stats, { dice: DICE1, ...extra });
+  testCreature(id, { dash: 5, ...stats }, { dice: DICE1, ...extra });
 
 /** A battle in progress: P1-a-1 (attacker, left) vs P2-b-1 (defender, right). */
 function fight(a: CreatureDef = mk('a'), b: CreatureDef = mk('b')): GameState {
@@ -229,8 +230,8 @@ describe('twin-stick: dash (Right Bumper)', () => {
   it('dash settings come from creature data (prepared for the Monster Editor)', () => {
     const rules = basePack().ruleset.combat;
     const fast = mk('fast', {}, { dash: { distance: 5, cooldown: 2, damage: 3, dealsDamage: true } });
-    expect(resolveDash(fast, rules)).toMatchObject({ cooldownTicks: 2 * rules.tickRate, damage: 3, dealsDamage: true });
-    expect(resolveDash(mk('plain'), rules)).toMatchObject({ cooldownTicks: 4 * rules.tickRate, dealsDamage: false });
+    expect(resolveDash(fast, rules, 6)).toMatchObject({ cooldownTicks: 2 * rules.tickRate, damage: 3, dealsDamage: true, distance: 5 + 6 * rules.dash.distancePerPoint });
+    expect(resolveDash(mk('plain'), rules, 6)).toMatchObject({ cooldownTicks: 4 * rules.tickRate, dealsDamage: false, distance: 3 });
     expect(validateCreature(fast, basePack().ruleset).ok).toBe(true);
     expect(validateCreature(mk('bad', {}, { dash: { cooldown: -1 } }), basePack().ruleset).ok).toBe(false);
     // A damaging dash into the opponent deals its damage once.
@@ -345,8 +346,8 @@ describe('dash regression: "RB freezes and flashes but does not dash"', () => {
 
   it('a dash that reaches a wall stops there instead of standing still', () => {
     // P1 one cell from the top wall dashes up: it should end early, not run all ticks in place.
-    let s = run(fight(), 60, { dy: -100 }).s;
-    s = run(s, 1, { dy: 100 }).s; // step slightly away so the first dash step has room
+    let s = run(fight(), 200, { dy: -100 }).s; // walk all the way to the top wall
+    while (F(s).attacker.y < s.ruleset.combat.fighterRadius + 40) s = step(s, { dy: 100 }).s; // ~half a cell of room
     s = step(s, { dy: -100, dash: true }).s;
     const startTicks = F(s).attacker.dashTicks;
     expect(startTicks).toBeGreaterThan(0);

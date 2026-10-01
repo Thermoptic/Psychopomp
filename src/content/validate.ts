@@ -16,7 +16,7 @@ const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !
 const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v);
 const isStr = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
 const ID_RE = /^[a-z0-9_]+$/;
-const EFFECT_TYPES = ['addPower', 'addShield', 'addSpeed', 'addBlock', 'multi'];
+const EFFECT_TYPES = ['addPower', 'addShield', 'addSpeed', 'addBlock', 'addDash', 'multi'];
 const TARGETED = new Set<string>(REQUIREMENT_TYPES.filter((t) => !['always', 'never', 'and', 'or', 'not', 'slots'].includes(t)));
 const MODIFIER_KEYS = ['power', 'speed', 'shield', 'block', 'dash'] as const;
 
@@ -204,7 +204,7 @@ export function validateRuleset(raw: unknown): ValidationResult {
   if (!isObj(raw)) return { ok: false, errors: ['ruleset must be an object'] };
   if (!isStr(raw.id)) errors.push('ruleset: missing "id"');
   if (!isObj(raw.creatureBase)) errors.push('ruleset: missing "creatureBase"');
-  else for (const k of ['power', 'speed', 'shield', 'block']) intIn(errors, `ruleset.creatureBase.${k}`, raw.creatureBase[k], 0, 99);
+  else for (const k of ['power', 'speed', 'shield', 'block', 'dash']) intIn(errors, `ruleset.creatureBase.${k}`, raw.creatureBase[k], 0, 99);
   if (raw.firstPlayer !== 'P1' && raw.firstPlayer !== 'P2') errors.push('ruleset.firstPlayer must be "P1" or "P2"');
   if (!isObj(raw.dice)) errors.push('ruleset: missing "dice"');
   else {
@@ -227,6 +227,8 @@ export function validateRuleset(raw: unknown): ValidationResult {
     else {
       validateDash(c.dash, 'ruleset.combat.dash', errors, true);
       intIn(errors, 'ruleset.combat.dash.durationTicks', c.dash.durationTicks, 1, 600);
+      const pp = c.dash.distancePerPoint;
+      if (typeof pp !== 'number' || !Number.isFinite(pp) || pp < 0 || pp > 10) errors.push('ruleset.combat.dash.distancePerPoint must be a number 0..10');
       intIn(errors, 'ruleset.combat.dash.minInput', c.dash.minInput, 1, 100);
     }
   }

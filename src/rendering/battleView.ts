@@ -26,7 +26,7 @@ export function sideOf(state: GameState, owner: PlayerId): BattleSide {
 
 function slotPreview(base: BattleStats, category: string, build: BattleBuild): string {
   const key = category as keyof BattleStats;
-  if (!['power', 'shield', 'speed', 'block'].includes(category)) return '';
+  if (!['power', 'shield', 'speed', 'block', 'dash'].includes(category)) return '';
   const b = base[key];
   const d = build.diceByCategory[category] ?? 0;
   return `${b}+${d} = ${b + d}`;
@@ -36,6 +36,7 @@ const CATEGORY_COLOR: Record<string, string> = {
   speed: '#5ab0ff',
   power: '#ff5a4a',
   shield: '#e8d9a8',
+  dash: '#39e0c8',
   special: '#6ee06a',
   block: '#4aa8ff',
 };

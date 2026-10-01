@@ -60,15 +60,19 @@ export function isqrt(n: number): number {
 
 const clampAxis = (v: number | undefined) => (v === undefined ? 0 : Math.max(-100, Math.min(100, Math.trunc(v))));
 
-/** Dash settings for a creature: its own `dash` data over the ruleset default. */
-export function resolveDash(def: CreatureDef, rules: CombatRules) {
+/**
+ * Dash settings. Distance = base distance (creature `dash.distance` or the
+ * ruleset's) + dash points × dash.distancePerPoint cells, where dash points =
+ * the DASH die + dash modifier (+ Special). No distance = no dash (step 0).
+ */
+export function resolveDash(def: CreatureDef, rules: CombatRules, dashPoints: number) {
   const d = { ...rules.dash, ...(def.dash ?? {}) };
-  // The creature's dash modifier adds/removes half a cell of distance per point.
-  const distance = Math.max(0.5, d.distance + (def.modifiers?.dash ?? 0) * 0.5);
+  const distance = Math.max(0, d.distance + Math.max(0, dashPoints) * rules.dash.distancePerPoint);
   const total = Math.round(distance * rules.cellUnits);
   return {
     cooldownTicks: Math.max(0, Math.round(d.cooldown * rules.tickRate)),
-    step: Math.max(1, Math.round(total / Math.max(1, rules.dash.durationTicks))),
+    distance,
+    step: total > 0 ? Math.max(1, Math.round(total / Math.max(1, rules.dash.durationTicks))) : 0,
     damage: d.damage,
     dealsDamage: d.dealsDamage,
   };
@@ -83,7 +87,7 @@ function createFighter(
   powerups: Record<string, PowerupDef>,
 ): Fighter {
   const spawn = cellCentre(combatSpawnCell(arenaGrid(rules), creature.owner), rules);
-  const dash = resolveDash(def, rules);
+  const dash = resolveDash(def, rules, build.stats.dash);
   const facing = creature.owner === 'P1' ? 1 : -1;
   return {
     creatureId: creature.id,
@@ -365,7 +369,8 @@ function triggerSpecial(f: Fighter, def: CreatureDef, rules: CombatRules): void 
   if (!def.special) return;
   const before = computeBlockCharges(f.stats, rules);
   applyEffect(f.stats, def.special.effect);
-  for (const k of ['power', 'shield', 'speed', 'block'] as const) f.stats[k] = Math.max(0, f.stats[k]);
+  for (const k of ['power', 'shield', 'speed', 'block', 'dash'] as const) f.stats[k] = Math.max(0, f.stats[k]);
+  f.dashStep = resolveDash(def, rules, f.stats.dash).step;
   f.moveSpeed = computeMoveSpeed(f.stats, rules);
   f.attackCooldownTicks = computeAttackCooldown(f.stats, rules);
   f.blockCharges = Math.max(0, f.blockCharges + computeBlockCharges(f.stats, rules) - before);
@@ -426,7 +431,9 @@ export function stepCombat(
       // Dash along the movement direction. It needs a deliberate stick push and
       // room to move; otherwise nothing happens and no cooldown is spent.
       const first = along(mx, my, f.dashStep);
-      if (f.dashCooldown > 0) {
+      if (f.dashStep === 0) {
+        events.push({ type: 'DASH_DENIED', side: f.side, reason: 'noDash' });
+      } else if (f.dashCooldown > 0) {
         events.push({ type: 'DASH_DENIED', side: f.side, reason: 'cooldown' });
       } else if (isqrt(mx * mx + my * my) < rules.dash.minInput) {
         events.push({ type: 'DASH_DENIED', side: f.side, reason: 'noDirection' });

@@ -4,6 +4,7 @@
 // is saved here is exactly what the game core plays with.
 
 import type { ContentKind, ContentLibrary, Entry } from '../content/library';
+import { DEFAULT_CATEGORIES } from '../core/types';
 import { defaultSpecial } from '../content/library';
 import { powerupMapping as M, type CreatureDef, type PowerupDef, type Ruleset, type SlotCondition, type WeaponSettings } from '../core';
 
@@ -144,7 +145,7 @@ export function slotOptionIndex(c: SlotCondition | null): number {
 
 /** The creature's dice slots in layout order (slot i = Special trigger slot i). */
 export function slotCategories(def: CreatureDef): string[] {
-  const order = def.dice.order ?? ['speed', 'power', 'shield', 'special', 'block'];
+  const order = def.dice.order ?? [...DEFAULT_CATEGORIES];
   const cats = [...order.filter((c) => (def.dice.slots[c] ?? 0) > 0), ...Object.keys(def.dice.slots).filter((c) => !order.includes(c) && def.dice.slots[c] > 0)];
   return cats.flatMap((c) => new Array(def.dice.slots[c]).fill(c));
 }

@@ -10,7 +10,7 @@ import { evaluateRequirement } from '../dice/requirements';
 import type { BattleBuild, BattleStats, CombatRules, CreatureDef, DicePrep, Effect, Ruleset, StatCategory } from '../types';
 
 /** Categories whose dice add directly to a battle stat of the same name. */
-const STAT_CATEGORIES: ReadonlyArray<keyof BattleStats> = ['power', 'shield', 'speed', 'block'];
+const STAT_CATEGORIES: ReadonlyArray<keyof BattleStats> = ['power', 'shield', 'speed', 'block', 'dash'];
 
 /** Ruleset base + the creature's start modifiers (before dice and Special). */
 export function baseBattleStats(def: CreatureDef, rules: Ruleset): BattleStats {
@@ -21,6 +21,7 @@ export function baseBattleStats(def: CreatureDef, rules: Ruleset): BattleStats {
     shield: b.shield + (m.shield ?? 0),
     speed: b.speed + (m.speed ?? 0),
     block: b.block + (m.block ?? 0),
+    dash: b.dash + (m.dash ?? 0),
   };
 }
 
@@ -37,6 +38,9 @@ export function applyEffect(stats: BattleStats, effect: Effect): void {
       break;
     case 'addBlock':
       stats.block += effect.value;
+      break;
+    case 'addDash':
+      stats.dash += effect.value;
       break;
     case 'multi':
       for (const e of effect.effects) applyEffect(stats, e);

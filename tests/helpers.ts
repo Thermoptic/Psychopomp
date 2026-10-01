@@ -31,7 +31,7 @@ export function newMatch(seed = 1234): GameState {
 
 /** A creature def with overridable stats (defaults: Glubber-like, no Special). */
 /** Stat values a test creature can set; power/speed/shield/block are absolute battle-stat bases. */
-export type TestStats = Partial<CreatureDef['stats']> & { power?: number; speed?: number; shield?: number; block?: number };
+export type TestStats = Partial<CreatureDef['stats']> & { power?: number; speed?: number; shield?: number; block?: number; dash?: number };
 
 /**
  * A creature def for tests. Absolute power/speed/shield/block (defaults: the
@@ -40,19 +40,20 @@ export type TestStats = Partial<CreatureDef['stats']> & { power?: number; speed?
  */
 export function testCreature(id: string, over: TestStats = {}, extra: Partial<CreatureDef> = {}): CreatureDef {
   const base = basePack().ruleset.creatureBase;
-  const { power, speed, shield, block, ...stats } = over;
+  const { power, speed, shield, block, dash, ...stats } = over;
   const modifiers: Record<string, number> = {};
   if (power !== undefined) modifiers.power = power - base.power;
   if (speed !== undefined) modifiers.speed = speed - base.speed;
   if (shield !== undefined) modifiers.shield = shield - base.shield;
   if (block !== undefined) modifiers.block = block - base.block;
+  if (dash !== undefined) modifiers.dash = dash - base.dash;
   return {
     id,
     name: id.toUpperCase(),
     art: {},
     stats: { maxHp: 20, movement: 3, ...stats },
     modifiers,
-    dice: { slots: { speed: 1, power: 1, shield: 1, special: 1, block: 1 } },
+    dice: { slots: { speed: 1, power: 1, shield: 1, dash: 1, block: 1 } },
     special: null,
     ...extra,
   };

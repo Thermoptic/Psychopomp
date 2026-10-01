@@ -86,13 +86,14 @@ describe('Monster content', () => {
     setModifier(def, 'power', -1);
     setModifier(def, 'shield', 3);
     setModifier(def, 'block', -2);
-    const prep: DicePrep = { creatureId: 'x', player: 'P1', sides: 6, dice: [1, 1, 1, 1, 1], locked: [false, false, false, false, false], rollsUsed: 1, maxRolls: 3, stage: 'done', slots: ['speed', 'power', 'shield', 'special', 'block'].map((category) => ({ category })), slotDice: [0, 1, 2, 3, 4] };
+    const prep: DicePrep = { creatureId: 'x', player: 'P1', sides: 6, dice: [1, 1, 1, 1, 1], locked: [false, false, false, false, false], rollsUsed: 1, maxRolls: 3, stage: 'done', slots: ['speed', 'power', 'shield', 'dash', 'block'].map((category) => ({ category })), slotDice: [0, 1, 2, 3, 4] };
     const b = computeBuild(def, prep, r);
-    expect(b.stats).toEqual({ speed: r.creatureBase.speed + 2 + 1, power: r.creatureBase.power - 1 + 1, shield: r.creatureBase.shield + 3 + 1, block: 0 }); // block 0-2+1 -> floored at 0
+    expect(b.stats).toEqual({ speed: r.creatureBase.speed + 2 + 1, power: r.creatureBase.power - 1 + 1, shield: r.creatureBase.shield + 3 + 1, block: 0, dash: r.creatureBase.dash + 1 }); // block 0-2+1 -> floored at 0; dash = the DASH die
     // Dash modifier: half a cell of dash distance per point.
-    const plain = resolveDash(testCreature('p'), r.combat);
-    setModifier(def, 'dash', 2);
-    expect(resolveDash(def, r.combat).step * r.combat.dash.durationTicks).toBe(plain.step * r.combat.dash.durationTicks + r.combat.cellUnits);
+    // Dash: each dash point (DASH die + dash modifier) = distancePerPoint cells; 0 points = no dash.
+    expect(resolveDash(def, r.combat, 0).step).toBe(0);
+    expect(resolveDash(def, r.combat, 6).distance).toBe(6 * r.combat.dash.distancePerPoint);
+    expect(resolveDash(def, r.combat, 8).distance - resolveDash(def, r.combat, 6).distance).toBe(2 * r.combat.dash.distancePerPoint);
     expect(new ContentLibrary(basePack(), memoryStorage()).validateMonster({ ...testCreature('q'), modifiers: { power: 120 } }, null).join()).toMatch(/modifiers.power/);
   });
 
@@ -312,17 +313,21 @@ describe('Content save format v2', () => {
     const v1 = JSON.stringify({ saveVersion: 1, contentVersion: 1, monsters: [{ id: 'old', name: 'Old', art: {}, stats: { maxHp: 12, movement: 2, power: 12, speed: 5, shield: 1 }, dice: { slots: { speed: 1, power: 1, shield: 1, special: 1, block: 1 } }, special: null }] });
     const r = parseSave(v1, rules());
     expect(r.ok && r.migratedFrom).toBe(1);
-    expect(r.ok && r.value.monsters[0]).toMatchObject({ stats: { maxHp: 12, movement: 2 }, modifiers: { power: 2, shield: -3 } });
-    expect(basePack().creatures.every((c) => !c.modifiers)).toBe(true); // Glubber/Shroud = ruleset base
+    // Absolute v1 stats are kept as the same totals: modifier = old value - ruleset base (base is 0).
+    expect(r.ok && r.value.monsters[0]).toMatchObject({ stats: { maxHp: 12, movement: 2 }, modifiers: { power: 12, speed: 5, shield: 1 } });
+    expect(basePack().ruleset.creatureBase).toEqual({ power: 0, speed: 0, shield: 0, block: 0, dash: 0 });
+    expect(basePack().creatures.every((c) => !c.modifiers)).toBe(true); // Glubber/Shroud start at 0: dice give the values
     // The library rewrites an old save in the current version.
     const { storage } = fresh(v1);
-    expect(JSON.parse(storage.text!).saveVersion).toBe(2);
+    expect(JSON.parse(storage.text!).saveVersion).toBe(3);
+    // ...and the old SPECIAL dice slot became DASH.
+    expect(r.ok && r.value.monsters[0].dice.slots).toEqual({ speed: 1, power: 1, shield: 1, dash: 1, block: 1 });
   });
 
   it('exports/imports monster and powerup files and refuses newer versions', () => {
     const { lib } = fresh();
     const m = lib.serialize('monster', lib.get('monster', 'glubber')!.item);
-    expect(JSON.parse(m)).toMatchObject({ format: MONSTER_FORMAT, formatVersion: 2 });
+    expect(JSON.parse(m)).toMatchObject({ format: MONSTER_FORMAT, formatVersion: 3 });
     const p = lib.serialize('powerup', lib.get('powerup', 'plasma_bolt')!.item);
     expect(JSON.parse(p)).toMatchObject({ format: POWERUP_FORMAT, formatVersion: 1 });
     const back = parseContentFile(p, rules());
@@ -421,5 +426,49 @@ describe('Monster own attack (melee / ranged settings per monster)', () => {
     const pack = lib.pack();
     const s = createMatch({ ruleset: pack.ruleset, board: pack.boards[0], creatures: pack.creatures, powerups: pack.powerups, seed: 4 });
     expect(s.creatureDefs[ed.draft.id].attack).toEqual(ed.draft.attack);
+  });
+});
+
+// --- DASH dice slot (formerly SPECIAL): the die sets dash distance -----------------------------------
+
+describe('DASH dice slot', () => {
+  /** P1 with one-sided dice (every die shows 1, so the DASH die = 1) plus a dash modifier. */
+  const dashFight = (dashMod = 0) => {
+    const a = testCreature('a', { maxHp: 200, dash: dashMod }, { dice: { sides: 1, slots: { speed: 1, power: 1, shield: 1, dash: 1, block: 1 } } });
+    let s = customMatch({ width: 9, height: 9, creatures: [a, testCreature('b', { maxHp: 200 })], placements: [{ creature: 'a', owner: 'P1', x: 3, y: 2 }, { creature: 'b', owner: 'P2', x: 5, y: 2 }, { creature: 'b', owner: 'P2', x: 8, y: 8 }] });
+    s = ok(s, { type: 'MOVE_CREATURE', creatureId: 'P1-a-1', to: { x: 5, y: 2 } });
+    return prepareBothAndBegin(s);
+  };
+
+  it('the dash distance comes from the DASH die (+ modifier): die 1 = half a cell', () => {
+    const s = dashFight();
+    const r = rules().combat;
+    const before = F(s).attacker.x;
+    const after = run(s, 12, { dx: 100, dash: true }).s;
+    expect(F(s).attacker.dashStep * r.dash.durationTicks).toBe(r.dash.distancePerPoint * r.cellUnits); // 1 point = 0.5 cell
+    expect(F(after).attacker.x - before).toBeGreaterThan(30);
+  });
+
+  it('a bigger DASH value dashes further (modifier +5 with die 1 = 6 points = 3 cells)', () => {
+    const s = dashFight(5);
+    const r = rules().combat;
+    expect(F(s).attacker.dashStep * r.dash.durationTicks).toBe(3 * r.cellUnits);
+  });
+
+  it('0 dash points = no dash (NO DASH), no cooldown spent', () => {
+    const s = dashFight(-1); // die 1 + modifier -1 = 0
+    const r = run(s, 1, { dx: 100, dash: true });
+    expect(r.events).toContainEqual({ type: 'DASH_DENIED', side: 'attacker', reason: 'noDash' });
+    expect(F(r.s).attacker.dashCooldown).toBe(0);
+  });
+
+  it('old content with a SPECIAL slot migrates to DASH (incl. requirement targets)', () => {
+    const old = { id: 'o', name: 'O', art: {}, stats: { maxHp: 9, movement: 2 }, dice: { slots: { speed: 1, power: 1, shield: 1, special: 1, block: 1 } }, special: { name: 'S', requirement: { type: 'allOdd', target: 'special' }, effect: { type: 'addPower', value: 1 } } };
+    const r = parseContentFile(JSON.stringify(old), rules());
+    expect(r.ok).toBe(true);
+    if (!r.ok || r.value.kind !== 'monster') return;
+    expect(Object.keys(r.value.item.dice.slots)).toEqual(['speed', 'power', 'shield', 'dash', 'block']);
+    expect(r.value.item.special!.requirement).toEqual({ type: 'allOdd', target: 'dash' });
+    expect(basePack().creatures.map((c) => Object.keys(c.dice.slots))).toEqual([['speed', 'power', 'shield', 'dash', 'block'], ['speed', 'power', 'shield', 'dash', 'block']]);
   });
 });

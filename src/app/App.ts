@@ -162,7 +162,7 @@ export class App {
           break;
         case 'DASH_DENIED': {
           const f = s.battle?.combat?.fighters[e.side];
-          const label = e.reason === 'noDirection' ? 'NO DIR' : e.reason === 'blocked' ? 'BLOCKED' : 'COOLDOWN';
+          const label = e.reason === 'noDirection' ? 'NO DIR' : e.reason === 'blocked' ? 'BLOCKED' : e.reason === 'noDash' ? 'NO DASH' : 'COOLDOWN';
           if (f) this.ui.floaters.push({ x: f.x, y: f.y - 40, text: label, color: C.dim, ms: 600 });
           break;
         }

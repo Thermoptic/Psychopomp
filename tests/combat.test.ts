@@ -8,7 +8,7 @@ const BLOCK = { dx: 0, dy: 0, attack: false, block: true };
 
 /** d1 dice: every die is a 1, so battle stats are exactly base + 1. */
 const fixed = (id: string, stats: Parameters<typeof testCreature>[1]) =>
-  testCreature(id, stats, { dice: { sides: 1, slots: { speed: 1, power: 1, shield: 1, special: 1, block: 1 } } });
+  testCreature(id, stats, { dice: { sides: 1, slots: { speed: 1, power: 1, shield: 1, dash: 1, block: 1 } } });
 
 function closeIn(s: GameState): GameState {
   const rules = s.ruleset.combat;
@@ -26,10 +26,10 @@ function waitWindup(s: GameState): GameState {
 describe('combat formulas', () => {
   const rules = { minDamage: 1 } as never;
   it('damage = power - shield', () => {
-    expect(computeDamage({ power: 12, shield: 0, speed: 0, block: 0 }, { power: 0, shield: 5, speed: 0, block: 0 }, rules)).toBe(7);
+    expect(computeDamage({ power: 12, shield: 0, speed: 0, block: 0, dash: 0 }, { power: 0, shield: 5, speed: 0, block: 0, dash: 0 }, rules)).toBe(7);
   });
   it('shield never reduces damage below the minimum', () => {
-    expect(computeDamage({ power: 3, shield: 0, speed: 0, block: 0 }, { power: 0, shield: 50, speed: 0, block: 0 }, rules)).toBe(1);
+    expect(computeDamage({ power: 3, shield: 0, speed: 0, block: 0, dash: 0 }, { power: 0, shield: 50, speed: 0, block: 0, dash: 0 }, rules)).toBe(1);
   });
 });
 

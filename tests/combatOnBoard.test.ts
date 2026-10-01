@@ -5,7 +5,7 @@ import { boardSpritePx, boardUnits, isArenaView, isCombatView } from '../src/ren
 import { customMatch, fightToResult, ok, prepareBothAndBegin, quickPrepare, testCreature, tick } from './helpers';
 
 const fixed = (id: string, stats: Parameters<typeof testCreature>[1] = {}) =>
-  testCreature(id, stats, { dice: { sides: 1, slots: { speed: 1, power: 1, shield: 1, special: 1, block: 1 } } });
+  testCreature(id, stats, { dice: { sides: 1, slots: { speed: 1, power: 1, shield: 1, dash: 1, block: 1 } } });
 
 /** 9×9 board with bystanders on both sides. P1-a-1 at (3,2) can attack P2-b-1 at (5,2). */
 function board9(): GameState {

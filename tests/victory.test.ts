@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { applyCommand, evaluateVictory } from '../src/core';
 import { customMatch, fightToResult, newMatch, ok, prepareBothAndBegin, testCreature } from './helpers';
 
-const strong = testCreature('a', { power: 60 }, { dice: { sides: 1, slots: { speed: 1, power: 1, shield: 1, special: 1, block: 1 } } });
-const weak = testCreature('b', { power: 0, maxHp: 3 }, { dice: { sides: 1, slots: { speed: 1, power: 1, shield: 1, special: 1, block: 1 } } });
+const strong = testCreature('a', { power: 60 }, { dice: { sides: 1, slots: { speed: 1, power: 1, shield: 1, dash: 1, block: 1 } } });
+const weak = testCreature('b', { power: 0, maxHp: 3 }, { dice: { sides: 1, slots: { speed: 1, power: 1, shield: 1, dash: 1, block: 1 } } });
 
 describe('victory', () => {
   it('a fresh match is ONGOING', () => {

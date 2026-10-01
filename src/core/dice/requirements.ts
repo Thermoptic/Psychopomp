@@ -42,7 +42,8 @@ export function slotConditionMet(cond: SlotCondition, value: number): boolean {
   return value === cond;
 }
 
-const DEFAULT_TARGET: DiceTarget = 'special';
+/** Requirements without a target look at the DASH slot (formerly SPECIAL). */
+const DEFAULT_TARGET: DiceTarget = 'dash';
 
 function pick(view: DiceView, target: DiceTarget | undefined): number[] {
   const t = target ?? DEFAULT_TARGET;

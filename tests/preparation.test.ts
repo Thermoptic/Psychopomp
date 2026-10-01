@@ -6,7 +6,7 @@ import { prepButton } from '../src/rendering/prepModel';
 import { customMatch, fightToResult, ok, prepOf, quickPrepare, runCountdown, testCreature } from './helpers';
 
 const fixed = (id: string, stats: Parameters<typeof testCreature>[1] = {}) =>
-  testCreature(id, stats, { dice: { sides: 1, slots: { speed: 1, power: 1, shield: 1, special: 1, block: 1 } } });
+  testCreature(id, stats, { dice: { sides: 1, slots: { speed: 1, power: 1, shield: 1, dash: 1, block: 1 } } });
 
 /** 9×9 match where P1-a-1 (3,2) can attack P2-b-1 (5,2); P2-b-2 can later attack. */
 function match(): GameState {

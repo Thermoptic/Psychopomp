@@ -20,7 +20,8 @@ export interface Cell {
 
 /** A dice stat category. Default categories are listed below; content may add more. */
 export type StatCategory = string;
-export const DEFAULT_CATEGORIES: readonly StatCategory[] = ['speed', 'power', 'shield', 'special', 'block'];
+/** Default dice slots. A die on DASH sets how far the creature dashes (formerly the SPECIAL slot). */
+export const DEFAULT_CATEGORIES: readonly StatCategory[] = ['speed', 'power', 'shield', 'dash', 'block'];
 
 // ---------------------------------------------------------------------------
 // Content (validated data, never mutated by the game)
@@ -62,7 +63,7 @@ export type SlotCondition = 'odd' | 'even' | number;
 export type RequirementType = Requirement['type'];
 
 export type Effect =
-  | { type: 'addPower' | 'addShield' | 'addSpeed' | 'addBlock'; value: number }
+  | { type: 'addPower' | 'addShield' | 'addSpeed' | 'addBlock' | 'addDash'; value: number }
   | { type: 'multi'; effects: Effect[] };
 
 export type EffectType = Effect['type'];
@@ -121,7 +122,7 @@ export interface AttackDef extends WeaponSettings {
 
 /** Per-creature dash options. Missing fields fall back to ruleset combat.dash. */
 export interface DashDef {
-  /** Distance in arena cells. */
+  /** Base distance in arena cells, added to the dash points' distance. */
   distance?: number;
   /** Cooldown in seconds. */
   cooldown?: number;
@@ -142,7 +143,7 @@ export interface CreatureStats {
 /**
  * Per-creature start bonus/penalty on top of the ruleset's `creatureBase`
  * (all default 0). Battle stats = creatureBase + modifiers + dice + Special.
- * `dash` changes dash distance (see resolveDash).
+ * `dash` adds dash points (dash distance, see resolveDash).
  */
 export interface CreatureModifiers {
   power?: number;
@@ -234,6 +235,8 @@ export interface CombatRules {
   attackConeCos: number;
   /** Default dash for creatures without their own `dash` data. */
   dash: Required<DashDef> & {
+    /** Cells of dash distance per dash point (the DASH die + dash modifier). */
+    distancePerPoint: number;
     /** How many ticks a dash lasts (the distance is covered over these ticks). */
     durationTicks: number;
     /**
@@ -248,7 +251,7 @@ export interface Ruleset {
   id: string;
   firstPlayer: PlayerId;
   /** Battle stats every creature starts from before its modifiers. */
-  creatureBase: { power: number; speed: number; shield: number; block: number };
+  creatureBase: { power: number; speed: number; shield: number; block: number; dash: number };
   dice: {
     count: number;
     sides: number;
@@ -334,6 +337,8 @@ export interface BattleStats {
   shield: number;
   speed: number;
   block: number;
+  /** Dash points: dash distance = ruleset dash.distance + dash × dash.distancePerPoint cells. */
+  dash: number;
 }
 
 export interface BattleBuild {
@@ -568,7 +573,7 @@ export type GameEvent =
   | { type: 'GUARD'; side: BattleSide }
   | { type: 'DASH'; side: BattleSide }
   /** Dash pressed but not performed (no cooldown spent, except 'cooldown' itself). */
-  | { type: 'DASH_DENIED'; side: BattleSide; reason: 'noDirection' | 'blocked' | 'cooldown' }
+  | { type: 'DASH_DENIED'; side: BattleSide; reason: 'noDirection' | 'blocked' | 'cooldown' | 'noDash' }
   | { type: 'DASH_HIT'; side: BattleSide; damage: number }
   | { type: 'SPECIAL_TRIGGERED'; side: BattleSide; name: string }
   | { type: 'PROJECTILE_FIRED'; side: BattleSide }

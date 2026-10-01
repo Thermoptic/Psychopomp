@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { computeBuild, evaluateRequirement, type DicePrep, type Requirement } from '../src/core';
 import { basePack } from './helpers';
 
-const view = (all: number[], special: number[] = all) => ({ all, byCategory: { special } });
+// Requirements without a target look at the DASH slot (formerly SPECIAL).
+const view = (all: number[], dash: number[] = all) => ({ all, byCategory: { dash } });
 const ev = (req: Requirement, all: number[], special?: number[]) => evaluateRequirement(req, view(all, special));
 
 describe('Special requirements', () => {
@@ -68,29 +69,31 @@ describe('Special activation from content', () => {
     rollsUsed: 1,
     maxRolls: 3,
     stage: 'done',
-    slots: ['speed', 'power', 'shield', 'special', 'block'].map((category) => ({ category })),
+    slots: ['speed', 'power', 'shield', 'dash', 'block'].map((category) => ({ category })),
     slotDice: [0, 1, 2, 3, 4],
   });
 
   it('Glubber (ODD) activates with an odd die in SPECIAL and gains Power', () => {
     const on = computeBuild(glubber, prepWith([2, 6, 3, 5, 1]), pack.ruleset);
     expect(on.specialActive).toBe(true);
-    expect(on.stats.power).toBe(10 + 6 + 4);
+    // Base stats are 0: Power = the POWER die (6) + Odd Surge (4).
+    expect(on.stats.power).toBe(6 + 4);
     const off = computeBuild(glubber, prepWith([2, 6, 3, 4, 1]), pack.ruleset);
     expect(off.specialActive).toBe(false);
-    expect(off.stats.power).toBe(10 + 6);
+    expect(off.stats.power).toBe(6);
   });
 
   it('Shroud (EVEN) activates with an even die in SPECIAL and gains Shield', () => {
     const on = computeBuild(shroud, prepWith([2, 6, 3, 4, 1]), pack.ruleset);
     expect(on.specialActive).toBe(true);
-    expect(on.stats.shield).toBe(4 + 3 + 4);
+    expect(on.stats.shield).toBe(3 + 4);
     expect(computeBuild(shroud, prepWith([2, 6, 3, 5, 1]), pack.ruleset).specialActive).toBe(false);
   });
 
-  it('dice add to base stats; the special die adds to no stat', () => {
+  it('dice add to base stats; the DASH die gives dash points', () => {
     const b = computeBuild(glubber, prepWith([2, 6, 3, 4, 1]), pack.ruleset);
-    expect(b.stats).toEqual({ speed: 5 + 2, power: 10 + 6, shield: 4 + 3, block: 1 });
-    expect(b.diceByCategory).toEqual({ speed: 2, power: 6, shield: 3, special: 4, block: 1 });
+    // Everything starts at 0; the placed dice give the values.
+    expect(b.stats).toEqual({ speed: 2, power: 6, shield: 3, block: 1, dash: 4 });
+    expect(b.diceByCategory).toEqual({ speed: 2, power: 6, shield: 3, dash: 4, block: 1 });
   });
 });

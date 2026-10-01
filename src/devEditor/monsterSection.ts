@@ -9,8 +9,8 @@ import { setWeaponType, weaponSettingsGroup, weaponSummary, weaponTypeSelector }
 import { MODIFIER_KEYS, SLOT_OPTIONS, modifier, setModifier, setSlotCondition, slotCategories, slotConditions, slotOptionIndex, type ItemEditor } from './model';
 
 const idSanitize = (v: string) => v.toLowerCase().replace(/\s/g, '_').replace(/[^a-z0-9_]/g, '').slice(0, 32);
-const EFFECTS: Array<Exclude<Effect['type'], 'multi'>> = ['addPower', 'addShield', 'addSpeed', 'addBlock'];
-const EFFECT_LABELS = ['+ Power', '+ Shield', '+ Speed', '+ Block'];
+const EFFECTS: Array<Exclude<Effect['type'], 'multi'>> = ['addPower', 'addShield', 'addSpeed', 'addBlock', 'addDash'];
+const EFFECT_LABELS = ['+ Power', '+ Shield', '+ Speed', '+ Block', '+ Dash'];
 const signed = (n: number) => (n > 0 ? `+${n}` : String(n));
 
 export function monsterForm(ed: ItemEditor<'monster'>, refresh: () => void, rebuild: () => void): HTMLElement {
@@ -102,12 +102,22 @@ export function monsterForm(ed: ItemEditor<'monster'>, refresh: () => void, rebu
         numberMin: -99,
         numberMax: 99,
         value: modifier(d, k),
-        meaning: (v) => (k === 'dash' ? `${signed(v)} → ${Math.max(0.5, rules.combat.dash.distance + v * 0.5)} cells` : `${signed(v)} → ${Math.max(0, base[k] + v)}`),
+        meaning: (v) => (k === 'dash' ? `${signed(v)} → +${Math.max(0, base.dash + v) * rules.combat.dash.distancePerPoint} cells` : `${signed(v)} → ${Math.max(0, base[k] + v)}`),
         onInput: (v) => edit((m) => setModifier(m, k, v)),
       }),
     ),
   );
-  const modifiers = group('START MODIFIERS', h('div', { class: 'hint dim', text: `Added to the ruleset base (Power ${base.power}, Speed ${base.speed}, Shield ${base.shield}, Block ${base.block}) before dice.` }), ...modRows);
+  const baseIsZero = base.power === 0 && base.speed === 0 && base.shield === 0 && base.block === 0 && base.dash === 0;
+  const modifiers = group(
+    'START MODIFIERS',
+    h('div', {
+      class: 'hint dim',
+      text: baseIsZero
+        ? `Everything starts at 0: the dice placed in battle give the values (a 6 on POWER = Power 6; a die on DASH = ${rules.combat.dash.distancePerPoint} cell of dash per pip). A modifier adds to that.`
+        : `Added to the ruleset base (Power ${base.power}, Speed ${base.speed}, Shield ${base.shield}, Block ${base.block}) before dice.`,
+    }),
+    ...modRows,
+  );
 
   // --- Special --------------------------------------------------------------------------------
   const count = rules.dice.count;
@@ -226,7 +236,7 @@ export function monsterForm(ed: ItemEditor<'monster'>, refresh: () => void, rebu
       'details',
       {},
       h('summary', { text: 'Advanced dash (overrides the ruleset; empty = default)' }),
-      row('Dash distance', dashNum('distance', 0.5)),
+      row('Base dash cells', dashNum('distance', 0.5)),
       row('Dash cooldown s', dashNum('cooldown', 0.5)),
       row('Dash damage', dashNum('damage', 1)),
       row('Hit on dash', h('input', { type: 'checkbox', checked: d.dash?.dealsDamage === true, on: { change: (e: Event) => edit((m) => (m.dash = { ...(m.dash ?? {}), dealsDamage: (e.target as HTMLInputElement).checked })) } })),
@@ -248,7 +258,7 @@ export function monsterPreview(ed: ItemEditor<'monster'>): HTMLElement {
   }
   const stats = baseBattleStats(d, rules);
   const pu = d.powerupId ? ed.lib.get('powerup', d.powerupId)?.item : undefined;
-  const dash = resolveDash(d, rules.combat);
+  const dashPts = stats.dash;
   const tr = (k: string, v: string) => h('tr', {}, h('td', { class: 'k', text: k }), h('td', { text: v }));
   const mod = (k: 'power' | 'speed' | 'shield' | 'block') => `${stats[k]} (${signed(modifier(d, k))})`;
   const origin = ed.originalId === null ? 'NEW' : ed.origin() === 'base' ? 'BASE' : ed.origin() === 'modified' ? 'MODIFIED BASE' : 'CUSTOM';
@@ -268,7 +278,7 @@ export function monsterPreview(ed: ItemEditor<'monster'>): HTMLElement {
       tr('Speed', mod('speed')),
       tr('Shield', mod('shield')),
       tr('Block', mod('block')),
-      tr('Dash', `${((dash.step * rules.combat.dash.durationTicks) / rules.combat.cellUnits).toFixed(1)} cells (${signed(modifier(d, 'dash'))})`),
+      tr('Dash', `die × ${rules.combat.dash.distancePerPoint} cells${dashPts ? ` +${resolveDash(d, rules.combat, dashPts).distance}` : ''} (${signed(modifier(d, 'dash'))})`),
       tr('Attack', weaponSummary(d.attack, rules)),
       tr('Powerup', pu ? `${pu.name} (${pu.type}) - replaces attack` : 'none'),
       tr('Auto Fire', d.attack?.autoFire ? 'yes' : 'no'),
