@@ -19,6 +19,7 @@ import {
   type PlayerId,
 } from '../core';
 import type { Action, ActionFrame } from '../input/actions';
+import { aimToward, emptyQueue, queuePresses, toFighterInput } from '../input/combatInput';
 import { ARENA_EXPAND_MS, drawArena, drawCombatHud, drawCountdown } from '../rendering/arenaView';
 import { combatHint, drawPrepPanel, drawResult, sideOf } from '../rendering/battleView';
 import { drawBoard, drawBoardScreen, drawHeader, drawMessageBar } from '../rendering/boardView';
@@ -131,7 +132,7 @@ export class App {
           break;
         case 'COMBAT_STARTED':
           this.ui.bannerMs = 700;
-          this.ui.queued = { attacker: { attack: false, block: false }, defender: { attack: false, block: false } };
+          this.ui.queued = { attacker: emptyQueue(), defender: emptyQueue() };
           break;
         case 'TURN_STARTED': {
           this.ui.selected = null;
@@ -150,17 +151,24 @@ export class App {
           this.say(`${s.creatureDefs[c.defId].name.toUpperCase()} (${playerLabel(c.owner)}) IS DESTROYED`, C.danger);
           break;
         }
+        case 'DASH_DENIED': {
+          const f = s.battle?.combat?.fighters[e.side];
+          const label = e.reason === 'noDirection' ? 'NO DIR' : e.reason === 'blocked' ? 'BLOCKED' : 'COOLDOWN';
+          if (f) this.ui.floaters.push({ x: f.x, y: f.y - 40, text: label, color: C.dim, ms: 600 });
+          break;
+        }
         case 'HIT':
+        case 'DASH_HIT':
         case 'BLOCKED': {
-          const target: BattleSide = e.type === 'HIT' ? (e.side === 'attacker' ? 'defender' : 'attacker') : e.side;
+          const target: BattleSide = e.type !== 'BLOCKED' ? (e.side === 'attacker' ? 'defender' : 'attacker') : e.side;
           const f = s.battle?.combat?.fighters[target];
           if (f) {
-            if (e.type === 'HIT') this.ui.flash[target] = 260;
+            if (e.type !== 'BLOCKED') this.ui.flash[target] = 260;
             this.ui.floaters.push({
               x: f.x,
               y: f.y - 40,
-              text: e.type === 'HIT' ? `-${e.damage}` : 'BLOCK',
-              color: e.type === 'HIT' ? C.danger : C.pp,
+              text: e.type !== 'BLOCKED' ? `-${e.damage}` : 'BLOCK',
+              color: e.type !== 'BLOCKED' ? C.danger : C.pp,
               ms: 800,
             });
           }
@@ -463,8 +471,8 @@ export class App {
     };
     for (const side of ['attacker', 'defender'] as const) {
       const pf = f[owner[side]];
-      if (pf.pressed.has('confirm')) this.ui.queued[side].attack = true;
-      if (pf.pressed.has('cancel')) this.ui.queued[side].block = true;
+      queuePresses(this.ui.queued[side], pf);
+      this.ui.aimActive[side] = pf.axes.aimX !== 0 || pf.axes.aimY !== 0;
     }
     const step = 1000 / s.ruleset.combat.tickRate;
     this.acc = Math.min(this.acc + dtMs, step * 6);
@@ -472,17 +480,14 @@ export class App {
     while (this.acc >= step && running()) {
       this.acc -= step;
       const inputs = {} as Record<BattleSide, FighterInput>;
+      const combat = this.state?.battle?.combat ?? null;
       for (const side of ['attacker', 'defender'] as const) {
-        const held = f[owner[side]].held;
-        const q = this.ui.queued[side];
-        inputs[side] = {
-          dx: ((held.has('move_right') ? 1 : 0) - (held.has('move_left') ? 1 : 0)) as -1 | 0 | 1,
-          dy: ((held.has('move_down') ? 1 : 0) - (held.has('move_up') ? 1 : 0)) as -1 | 0 | 1,
-          attack: q.attack,
-          block: q.block,
-        };
-        q.attack = false;
-        q.block = false;
+        // Keyboard players aim at the opponent automatically; gamepad players use the right stick.
+        const me = combat?.fighters[side];
+        const foe = combat?.fighters[side === 'attacker' ? 'defender' : 'attacker'];
+        const autoAim = me && foe ? aimToward(me, foe) : null;
+        inputs[side] = toFighterInput(f[owner[side]], this.ui.queued[side], autoAim);
+        this.ui.queued[side] = emptyQueue();
       }
       this.send({ type: 'COMBAT_TICK', inputs });
     }

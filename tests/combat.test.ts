@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { applyCommand, computeDamage, inAttackRange, type GameState } from '../src/core';
 import { customMatch, fightToResult, ok, prepareBothAndBegin, testCreature, tick } from './helpers';
 
-const MOVE_RIGHT = { dx: 1 as const, dy: 0 as const, attack: false, block: false };
-const ATTACK = { dx: 0 as const, dy: 0 as const, attack: true, block: false };
-const BLOCK = { dx: 0 as const, dy: 0 as const, attack: false, block: true };
+const MOVE_RIGHT = { dx: 100, dy: 0, attack: false, block: false };
+const ATTACK = { dx: 0, dy: 0, attack: true, block: false };
+const BLOCK = { dx: 0, dy: 0, attack: false, block: true };
 
 /** d1 dice: every die is a 1, so battle stats are exactly base + 1. */
 const fixed = (id: string, stats: Parameters<typeof testCreature>[1]) =>

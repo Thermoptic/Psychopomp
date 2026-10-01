@@ -23,6 +23,15 @@
     "blockChargeDivisor": 2,
     "minDamage": 1,
     "timeoutTicks": 5400,
-    "countdownTicks": 180
+    "countdownTicks": 180,
+    "attackConeCos": 50,
+    "dash": {
+      "distance": 3,
+      "cooldown": 4,
+      "damage": 0,
+      "dealsDamage": false,
+      "durationTicks": 8,
+      "minInput": 35
+    }
   }
 }

@@ -82,8 +82,8 @@ describe('combat arena', () => {
     s = prepareBothAndBegin(s);
     const arena = s.battle!.combat!.arena;
     const r = s.ruleset.combat.fighterRadius;
-    for (let i = 0; i < 400; i++) s = tick(s, { dx: 0, dy: -1, attack: false, block: false });
-    for (let i = 0; i < 1000; i++) s = tick(s, { dx: 1, dy: 0, attack: false, block: false }, { dx: 0, dy: 1, attack: false, block: false });
+    for (let i = 0; i < 400; i++) s = tick(s, { dx: 0, dy: -100, attack: false, block: false });
+    for (let i = 0; i < 1000; i++) s = tick(s, { dx: 100, dy: 0, attack: false, block: false }, { dx: 0, dy: 100, attack: false, block: false });
     const a = s.battle!.combat!.fighters.attacker;
     expect(a.y).toBe(r);
     expect(a.x).toBe(arena.width - r);
@@ -154,7 +154,7 @@ describe('combat arena', () => {
     let s = ok(s0, { type: 'MOVE_CREATURE', creatureId: 'P1-a-1', to: { x: 5, y: 2 } });
     s = prepareBothAndBegin(s);
     // Walk the P1 combatant around the board.
-    for (let i = 0; i < 30; i++) s = tick(s, { dx: 1, dy: 1, attack: false, block: false });
+    for (let i = 0; i < 30; i++) s = tick(s, { dx: 100, dy: 100, attack: false, block: false });
     const f = s.battle!.combat!.fighters.attacker;
     expect(f.y).not.toBe(cellCentre({ x: 0, y: 4 }, s.ruleset.combat).y);
     for (const id of Object.keys(s0.creatures)) {

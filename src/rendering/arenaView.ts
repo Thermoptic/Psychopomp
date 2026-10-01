@@ -69,7 +69,9 @@ interface HudData {
   speed: number;
   guard: number;
   attack: 'READY' | 'SWING' | 'RELOAD' | 'WAIT';
-  special: { name: string; active: boolean } | null;
+  /** Dash: 'READY', 'DASH' while dashing, or remaining cooldown seconds. */
+  dash: string;
+  special: { name: string; active: boolean; manualReady: boolean } | null;
 }
 
 /** HUD numbers for one player: live fighter during combat, the build during the countdown. */
@@ -90,7 +92,15 @@ function hudData(state: GameState, owner: PlayerId): HudData | null {
     speed: build.stats.speed,
     guard: f ? f.blockCharges : computeBlockCharges(build.stats, state.ruleset.combat),
     attack: !f ? 'WAIT' : f.windup > 0 ? 'SWING' : f.cooldown > 0 ? 'RELOAD' : 'READY',
-    special: build.specialName ? { name: build.specialName.toUpperCase(), active: build.specialActive } : null,
+    dash: !f ? 'WAIT' : f.dashTicks > 0 ? 'DASH' : f.dashCooldown > 0 ? (f.dashCooldown / state.ruleset.combat.tickRate).toFixed(1) + 's' : 'READY',
+    special: build.specialName
+      ? {
+          name: build.specialName.toUpperCase(),
+          // Manual Specials count as active once triggered.
+          active: f ? f.special === 'passive' || f.special === 'used' : build.specialActive && !build.specialManual,
+          manualReady: f ? f.special === 'ready' : build.specialActive && build.specialManual,
+        }
+      : null,
   };
 }
 
@@ -115,9 +125,10 @@ export function drawCombatHud(ctx: Ctx, state: GameState): void {
     ctx.fillStyle = color;
     ctx.fillRect(mirror ? H.x + H.w - 6 : H.x + 3, H.y + 6, 3, H.h - 12);
     text(ctx, d.name, X(14), top, { size: 14, color: C.text, align: al });
-    if (d.special?.active) {
+    if (d.special && (d.special.active || d.special.manualReady)) {
       const w = measure(ctx, d.name, 14) + 8;
-      text(ctx, d.special.name, mirror ? X(14) - w : X(14) + w, top, { size: 9, color: C.ok, align: al });
+      const label = d.special.manualReady ? `${d.special.name} [LT]` : d.special.name;
+      text(ctx, label, mirror ? X(14) - w : X(14) + w, top, { size: 9, color: d.special.manualReady ? C.pp : C.ok, align: al });
     }
     text(ctx, `${d.hp}/${d.maxHp}`, X(206), top, { size: 14, color: d.hp <= d.maxHp / 4 ? C.danger : C.text, align: ar });
     hpBar(ctx, { x: mirror ? H.x + H.w - 206 : H.x + 14, y: bot - 8, w: 192, h: 10 }, d.hp, d.maxHp, color);
@@ -138,12 +149,15 @@ export function drawCombatHud(ctx: Ctx, state: GameState): void {
     col(220, 'POWER', String(d.power), 'SHIELD', String(d.shield));
     col(310, 'SPEED', String(d.speed), 'GUARD', d.guard === 0 ? '-' : null, d.guard);
 
-    // Attack status.
+    // Attack + dash status.
     ctx.fillStyle = C.faint;
     ctx.fillRect(X(394), H.y + 8, 1, H.h - 16);
-    text(ctx, 'ATTACK', X(400), top, { size: 10, color: C.dim, align: al });
     const atkColor = d.attack === 'READY' ? C.ok : d.attack === 'SWING' ? C.danger : C.dim;
-    text(ctx, d.attack, X(400), bot, { size: 12, color: atkColor, align: al });
+    text(ctx, 'ATK', X(400), top, { size: 9, color: C.dim, align: al });
+    text(ctx, d.attack, X(422), top, { size: 10, color: atkColor, align: al });
+    const dashColor = d.dash === 'READY' ? C.ok : d.dash === 'DASH' ? C.pp : C.dim;
+    text(ctx, 'DSH', X(400), bot, { size: 9, color: C.dim, align: al });
+    text(ctx, d.dash, X(422), bot, { size: 10, color: dashColor, align: al });
   }
 
   // Centre: time left / status.

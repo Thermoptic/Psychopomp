@@ -2,6 +2,7 @@
 // None of this affects gameplay; the GameState is the source of truth.
 
 import type { BattleSide, Cell, PlayerId } from '../core/types';
+import { emptyQueue, type QueuedPresses } from '../input/combatInput';
 
 export interface Floater {
   x: number;
@@ -44,7 +45,9 @@ export interface MatchUi {
   flash: Record<BattleSide, number>;
   floaters: Floater[];
   /** Queued combat button presses, consumed by the next fixed tick. */
-  queued: Record<BattleSide, { attack: boolean; block: boolean }>;
+  queued: Record<BattleSide, QueuedPresses>;
+  /** Right stick currently deflected (reticle highlighted). */
+  aimActive: Record<BattleSide, boolean>;
   debug: boolean;
 }
 
@@ -63,7 +66,8 @@ export function createMatchUi(): MatchUi {
     pauseReason: null,
     flash: { attacker: 0, defender: 0 },
     floaters: [],
-    queued: { attacker: { attack: false, block: false }, defender: { attack: false, block: false } },
+    queued: { attacker: emptyQueue(), defender: emptyQueue() },
+    aimActive: { attacker: false, defender: false },
     debug: false,
   };
 }

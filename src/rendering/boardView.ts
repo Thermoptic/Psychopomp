@@ -5,7 +5,7 @@ import type { MatchUi } from '../app/ui';
 import { creatureAt, describeRequirement, getLegalMoves, livingCreatures, type GameState, type PlayerId } from '../core';
 import { badge, hpBar, panel, rect, strokeRect, text, wrapText, type Ctx } from './draw';
 import { HEADER, LEFT_PANEL, MESSAGE_BAR, RIGHT_PANEL, boardLayout, cellRect, type BoardLayout, type Rect } from './layout';
-import { boardUnits, combatToScreen, isBattleView, isCombatView, type BoardUnit } from './boardUnits';
+import { aimReticle, boardUnits, combatToScreen, isBattleView, isCombatView, type BoardUnit } from './boardUnits';
 import { drawCreature } from './sprites';
 import { C, playerColor, playerLabel } from './theme';
 
@@ -233,8 +233,34 @@ export function drawUnits(ctx: Ctx, state: GameState, ui: MatchUi, l: BoardLayou
         ctx.stroke();
       }
     }
+    if (f && f.dashTicks > 0) {
+      // Dash: motion streak of fading ghosts along the path travelled so far.
+      const len = Math.hypot(f.dashDir.x, f.dashDir.y) || 1;
+      const travelled = (rules.dash.durationTicks - f.dashTicks) * f.dashStep * unitScale;
+      ctx.save();
+      for (let k = 3; k >= 1; k--) {
+        const back = (travelled * k) / 4;
+        ctx.globalAlpha = 0.12 * (4 - k);
+        drawCreature(ctx, u.defId, u.owner, u.cx - (f.dashDir.x / len) * back, u.cy - 3 - (f.dashDir.y / len) * back, u.px, {
+          flip: f.facing < 0,
+          flash: color,
+        });
+      }
+      ctx.restore();
+    }
     const flash = f && ui.flash[f.side] > 0 && Math.floor(now / 60) % 2 === 0 ? '#ffffff' : undefined;
     drawCreature(ctx, u.defId, u.owner, u.cx, u.cy - 3, u.px, { flip: f ? f.facing < 0 : u.owner === 'P2' && !!state.battle, flash });
+    if (f) {
+      // Aim reticle: small dot in the player's colour, brighter while the right stick is held.
+      const p = aimReticle(u, f, l);
+      const active = ui.aimActive[f.side];
+      ctx.fillStyle = C.edgeDark;
+      ctx.fillRect(Math.round(p.x) - 4, Math.round(p.y) - 4, 8, 8);
+      ctx.fillStyle = color;
+      ctx.globalAlpha = active ? 1 : 0.6;
+      ctx.fillRect(Math.round(p.x) - 3, Math.round(p.y) - 3, 6, 6);
+      ctx.globalAlpha = 1;
+    }
     const left = u.cx - l.cell / 2;
     const top = u.cy - l.cell / 2;
     badge(ctx, left + 8, top + 8, 9, u.owner, color);

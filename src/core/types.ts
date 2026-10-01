@@ -63,6 +63,29 @@ export interface SpecialDef {
   description?: string;
   requirement: Requirement;
   effect: Effect;
+  /**
+   * 'auto' (default): the effect applies for the whole battle as soon as the
+   * dice requirement is met. 'manual': the requirement only unlocks it; the
+   * player triggers it once per battle with the SPECIAL input (Left Trigger).
+   */
+  activation?: 'auto' | 'manual';
+}
+
+/** Per-creature attack options (all optional; defaults keep the classic attack). */
+export interface AttackDef {
+  /** true: holding the attack input keeps attacking whenever the cooldown allows. */
+  autoFire?: boolean;
+}
+
+/** Per-creature dash options. Missing fields fall back to ruleset combat.dash. */
+export interface DashDef {
+  /** Distance in arena cells. */
+  distance?: number;
+  /** Cooldown in seconds. */
+  cooldown?: number;
+  /** Damage dealt when the dash runs into the opponent (only if dealsDamage). */
+  damage?: number;
+  dealsDamage?: boolean;
 }
 
 export interface CreatureStats {
@@ -100,6 +123,8 @@ export interface CreatureDef {
     order?: StatCategory[];
   };
   special: SpecialDef | null;
+  attack?: AttackDef;
+  dash?: DashDef;
 }
 
 export interface CombatRules {
@@ -132,6 +157,21 @@ export interface CombatRules {
   timeoutTicks: number;
   /** Ticks of the 3-2-1 countdown between "both READY" and combat (0 = start at once). */
   countdownTicks: number;
+  /**
+   * Attacks hit only targets inside a cone around the aim direction:
+   * cos(half-angle) in percent (50 = ±60°, -100 = all around).
+   */
+  attackConeCos: number;
+  /** Default dash for creatures without their own `dash` data. */
+  dash: Required<DashDef> & {
+    /** How many ticks a dash lasts (the distance is covered over these ticks). */
+    durationTicks: number;
+    /**
+     * Minimum movement-stick deflection (percent) for a dash, so stick drift or
+     * noise just outside the deadzone never triggers one.
+     */
+    minInput: number;
+  };
 }
 
 export interface Ruleset {
@@ -229,7 +269,10 @@ export interface BattleBuild {
   /** Sum of dice per category. */
   diceByCategory: Record<StatCategory, number>;
   specialName: string | null;
+  /** Requirement met (for 'manual' specials: unlocked, not yet applied). */
   specialActive: boolean;
+  /** 'manual' specials are applied in combat with the SPECIAL input. */
+  specialManual: boolean;
   stats: BattleStats;
 }
 
@@ -248,6 +291,23 @@ export interface Fighter {
   windup: number;
   guard: number;
   blockCharges: number;
+  /** Current aim direction (integer vector, never 0,0). Kept when the aim input is released. */
+  aim: { x: number; y: number };
+  /** Aim captured when the current swing started; the swing resolves in this direction. */
+  swingAim: { x: number; y: number };
+  autoFire: boolean;
+  /** Dash: remaining dash ticks, direction, per-tick step, cooldown. */
+  dashTicks: number;
+  dashDir: { x: number; y: number };
+  dashStep: number;
+  dashCooldown: number;
+  dashCooldownTicks: number;
+  dashDamage: number;
+  dashDealsDamage: boolean;
+  /** The current dash already dealt its damage. */
+  dashHit: boolean;
+  /** 'none' | 'passive' (auto, already applied) | 'ready' (manual, unlocked) | 'used'. */
+  special: 'none' | 'passive' | 'ready' | 'used';
 }
 
 export interface CombatState {
@@ -314,13 +374,28 @@ export interface GameState {
 // Commands and events
 // ---------------------------------------------------------------------------
 
+/**
+ * One player's combat input for one tick. Analog values are integers in
+ * -100..100 (percent of full stick deflection) so the simulation stays
+ * deterministic; the platform layer applies deadzones before quantising.
+ */
 export interface FighterInput {
-  dx: -1 | 0 | 1;
-  dy: -1 | 0 | 1;
-  /** Attack pressed this tick (edge, not held). */
+  /** Movement (left stick / movement keys). Also the dash direction. */
+  dx: number;
+  dy: number;
+  /** Aim (right stick). 0,0 = no aim input: the last aim direction is kept. */
+  aimX?: number;
+  aimY?: number;
+  /** Attack pressed this tick (edge). */
   attack: boolean;
-  /** Block pressed this tick (edge, not held). */
+  /** Attack held (Right Trigger held); only used by autoFire attacks. */
+  attackHeld?: boolean;
+  /** Block pressed this tick (edge). */
   block: boolean;
+  /** Dash pressed this tick (edge, Right Bumper). */
+  dash?: boolean;
+  /** Special pressed this tick (edge, Left Trigger). */
+  special?: boolean;
 }
 
 export const IDLE_INPUT: FighterInput = { dx: 0, dy: 0, attack: false, block: false };
@@ -364,6 +439,11 @@ export type GameEvent =
   | { type: 'HIT'; side: BattleSide; damage: number }
   | { type: 'BLOCKED'; side: BattleSide }
   | { type: 'GUARD'; side: BattleSide }
+  | { type: 'DASH'; side: BattleSide }
+  /** Dash pressed but not performed (no cooldown spent, except 'cooldown' itself). */
+  | { type: 'DASH_DENIED'; side: BattleSide; reason: 'noDirection' | 'blocked' | 'cooldown' }
+  | { type: 'DASH_HIT'; side: BattleSide; damage: number }
+  | { type: 'SPECIAL_TRIGGERED'; side: BattleSide; name: string }
   | { type: 'COMBAT_ENDED'; outcome: BattleOutcome }
   | { type: 'CREATURE_DIED'; creatureId: string }
   | { type: 'POWER_POINT_CAPTURED'; x: number; y: number; owner: PlayerId }

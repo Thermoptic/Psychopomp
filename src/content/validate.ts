@@ -51,6 +51,21 @@ function validateEffect(eff: unknown, where: string, errors: string[], depth = 0
   }
 }
 
+/** Dash data (ruleset default when `required`, otherwise optional per-creature overrides). */
+function validateDash(d: Obj, where: string, errors: string[], required: boolean): void {
+  const num = (k: string, min: number, max: number) => {
+    const v = d[k];
+    if (v === undefined && !required) return;
+    if (typeof v !== 'number' || !Number.isFinite(v) || v < min || v > max) errors.push(`${where}.${k} must be a number ${min}..${max}`);
+  };
+  num('distance', 0, 30);
+  num('cooldown', 0, 120);
+  num('damage', 0, 999);
+  if (d.dealsDamage !== undefined || required) {
+    if (typeof d.dealsDamage !== 'boolean') errors.push(`${where}.dealsDamage must be true/false`);
+  }
+}
+
 export function validateCreature(raw: unknown, ruleset: Ruleset): ValidationResult {
   const errors: string[] = [];
   if (!isObj(raw)) return { ok: false, errors: ['creature must be an object'] };
@@ -95,7 +110,18 @@ export function validateCreature(raw: unknown, ruleset: Ruleset): ValidationResu
       if (!isStr(sp.name)) errors.push(`${where}: special needs a "name"`);
       validateRequirement(sp.requirement, `${where}.special.requirement`, errors);
       validateEffect(sp.effect, `${where}.special.effect`, errors);
+      if (sp.activation !== undefined && sp.activation !== 'auto' && sp.activation !== 'manual') {
+        errors.push(`${where}.special.activation must be "auto" or "manual"`);
+      }
     }
+  }
+  if (raw.attack !== undefined) {
+    if (!isObj(raw.attack)) errors.push(`${where}: "attack" must be an object`);
+    else if (raw.attack.autoFire !== undefined && typeof raw.attack.autoFire !== 'boolean') errors.push(`${where}.attack.autoFire must be true/false`);
+  }
+  if (raw.dash !== undefined) {
+    if (!isObj(raw.dash)) errors.push(`${where}: "dash" must be an object`);
+    else validateDash(raw.dash, `${where}.dash`, errors, false);
   }
   return { ok: errors.length === 0, errors };
 }
@@ -121,6 +147,13 @@ export function validateRuleset(raw: unknown): ValidationResult {
       intIn(errors, `ruleset.combat.${k}`, c[k], 1, 100000);
     }
     for (const k of ['cooldownPerSpeed', 'minDamage', 'timeoutTicks', 'countdownTicks']) intIn(errors, `ruleset.combat.${k}`, c[k], 0, 1000000);
+    intIn(errors, 'ruleset.combat.attackConeCos', c.attackConeCos, -100, 100);
+    if (!isObj(c.dash)) errors.push('ruleset.combat: missing "dash"');
+    else {
+      validateDash(c.dash, 'ruleset.combat.dash', errors, true);
+      intIn(errors, 'ruleset.combat.dash.durationTicks', c.dash.durationTicks, 1, 600);
+      intIn(errors, 'ruleset.combat.dash.minInput', c.dash.minInput, 1, 100);
+    }
   }
   return { ok: errors.length === 0, errors };
 }

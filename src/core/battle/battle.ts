@@ -103,7 +103,7 @@ function beginCombat(state: GameState, events: GameEvent[]): void {
   const b = state.battle!;
   const fighter = (id: string, side: BattleSide) => {
     const creature = state.creatures[id];
-    return { creature, maxHp: state.creatureDefs[creature.defId].stats.maxHp, build: b.builds![side] };
+    return { creature, def: state.creatureDefs[creature.defId], build: b.builds![side] };
   };
   b.combat = createCombat(fighter(b.attackerId, 'attacker'), fighter(b.defenderId, 'defender'), state.ruleset.combat);
   b.countdown = 0;
@@ -120,7 +120,11 @@ export function combatTick(state: GameState, inputs: Record<BattleSide, FighterI
     if (b.countdown <= 0) beginCombat(state, events);
     return;
   }
-  const outcome = stepCombat(b.combat!, inputs, state.ruleset.combat, events);
+  const defs = {
+    attacker: state.creatureDefs[state.creatures[b.attackerId].defId],
+    defender: state.creatureDefs[state.creatures[b.defenderId].defId],
+  };
+  const outcome = stepCombat(b.combat!, inputs, state.ruleset.combat, events, defs);
   if (outcome) {
     b.result = {
       outcome,

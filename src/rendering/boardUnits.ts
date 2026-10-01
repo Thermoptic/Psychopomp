@@ -50,6 +50,15 @@ export function isBattleView(state: GameState): boolean {
   return !!state.battle;
 }
 
+/**
+ * Aim reticle: a small dot in front of the fighter in its aim direction, at a
+ * fixed distance (in cells). Purely visual; it never affects movement.
+ */
+export function aimReticle(u: { cx: number; cy: number }, f: Fighter, l: BoardLayout, distanceCells = 0.8): { x: number; y: number } {
+  const len = Math.hypot(f.aim.x, f.aim.y) || 1;
+  return { x: u.cx + (f.aim.x / len) * l.cell * distanceCells, y: u.cy + (f.aim.y / len) * l.cell * distanceCells };
+}
+
 /** Converts a combat-unit coordinate to a screen pixel on the board. */
 export function combatToScreen(state: GameState, l: BoardLayout, x: number, y: number): { x: number; y: number } {
   const u = state.ruleset.combat.cellUnits;

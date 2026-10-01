@@ -114,15 +114,23 @@ export function prepareBothAndBegin(state: GameState): GameState {
 
 const idle: FighterInput = { dx: 0, dy: 0, attack: false, block: false };
 
-/** Simple AI: walk towards the opponent, attack when in range and ready. */
+/** Aim input (-100..100) pointing from `me` at `other`. */
+export function aimAt(me: { x: number; y: number }, other: { x: number; y: number }): { aimX: number; aimY: number } {
+  const tx = other.x - me.x;
+  const ty = other.y - me.y;
+  const m = Math.max(Math.abs(tx), Math.abs(ty), 1);
+  return { aimX: Math.trunc((tx * 100) / m), aimY: Math.trunc((ty * 100) / m) };
+}
+
+/** Simple AI: walk towards the opponent, aim at it, attack when in range and ready. */
 export function chaseInput(state: GameState, side: BattleSide): FighterInput {
   const c = state.battle!.combat!;
   const me = c.fighters[side];
   const other = c.fighters[side === 'attacker' ? 'defender' : 'attacker'];
   if (inAttackRange(me, other, state.ruleset.combat)) {
-    return { ...idle, attack: me.cooldown === 0 && me.windup === 0 };
+    return { ...idle, ...aimAt(me, other), attack: me.cooldown === 0 && me.windup === 0 };
   }
-  return { ...idle, dx: Math.sign(other.x - me.x) as -1 | 0 | 1, dy: Math.sign(other.y - me.y) as -1 | 0 | 1 };
+  return { ...idle, ...aimAt(me, other), dx: Math.sign(other.x - me.x) * 100, dy: Math.sign(other.y - me.y) * 100 };
 }
 
 export function tick(state: GameState, attacker: FighterInput = idle, defender: FighterInput = idle): GameState {

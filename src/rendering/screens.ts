@@ -39,12 +39,14 @@ export function drawControls(ctx: Ctx): void {
     ['REROLL', 'R', '/  or  NUM +'],
     ['LOCK DIE', 'F', "'  or  NUM ."],
     ['PICK DIE 1-5', '1 - 5', 'NUM 1 - 5'],
+    ['DASH / SPECIAL', 'C  /  X', 'NUM *  /  NUM -'],
     ['PAUSE', 'ESC', 'BACKSPACE'],
-    ['GAMEPAD', 'PAD 1', 'PAD 2'],
-    ['', 'A confirm/hit, B cancel/guard', 'X lock, Y reroll, START pause'],
+    ['GAMEPAD (P1 = PAD 1, P2 = PAD 2)', '', ''],
+    ['  COMBAT', 'L-STICK move   R-STICK aim', 'RT attack   RB dash   LT special'],
+    ['  MENUS / DICE', 'A confirm   B cancel / guard', 'X lock   Y reroll   START pause'],
   ];
   rows.forEach(([a, b, c], i) => {
-    const y = 130 + i * 30;
+    const y = 122 + i * 26;
     const head = i === 0;
     text(ctx, a, 120, y, { size: 13, color: C.dim });
     text(ctx, b, 350, y, { size: head ? 15 : 13, color: head ? C.p1 : C.text });

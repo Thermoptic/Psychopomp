@@ -72,6 +72,15 @@ export class Sfx {
         case 'BLOCKED':
           this.play([{ freq: 1500, to: 900, dur: 0.1, type: 'square', gain: 0.05 }]);
           break;
+        case 'DASH':
+          this.play([{ freq: 200, to: 900, dur: 0.12, type: 'triangle', gain: 0.05 }]);
+          break;
+        case 'SPECIAL_TRIGGERED':
+          this.play([{ freq: 440, to: 1320, dur: 0.3, type: 'triangle', gain: 0.07 }]);
+          break;
+        case 'DASH_HIT':
+          this.play([{ freq: 120, to: 40, dur: 0.18, type: 'sawtooth', gain: 0.1 }]);
+          break;
         case 'GUARD':
           this.play([{ freq: 600, dur: 0.04, gain: 0.03 }]);
           break;

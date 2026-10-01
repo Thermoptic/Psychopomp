@@ -6,6 +6,7 @@ import type { PlayerId } from '../core/types';
 import { PLAYER_IDS } from '../core/types';
 import { emptyFrame, type Action, type ActionFrame } from './actions';
 import { DEFAULT_BINDINGS, type InputBindings } from './bindings';
+import { NO_AXES, readPad, type StickAxes } from './gamepad';
 
 const REPEATABLE: ReadonlySet<Action> = new Set(['move_up', 'move_down', 'move_left', 'move_right', 'next', 'previous']);
 const REPEAT_DELAY_MS = 280;
@@ -51,7 +52,7 @@ export class InputManager {
     return PLAYER_IDS.some((p) => code in this.bindings.keyboard[p]);
   }
 
-  private currentHeld(player: PlayerId): Set<Action> {
+  private currentHeld(player: PlayerId): { held: Set<Action>; axes: StickAxes; hasGamepad: boolean } {
     const held = new Set<Action>();
     const map = this.bindings.keyboard[player];
     for (const code of [...this.keysDown, ...this.keysTapped]) {
@@ -60,28 +61,21 @@ export class InputManager {
     }
     const pads = typeof navigator !== 'undefined' && navigator.getGamepads ? navigator.getGamepads() : [];
     const pad = pads[this.bindings.gamepadSlots[player]];
-    if (pad && pad.connected) {
-      pad.buttons.forEach((b, i) => {
-        const a = this.bindings.gamepad[i];
-        if (a && b.pressed) held.add(a);
-      });
-      const dz = this.bindings.stickDeadzone;
-      const [ax = 0, ay = 0] = pad.axes;
-      if (ax < -dz) held.add('move_left');
-      if (ax > dz) held.add('move_right');
-      if (ay < -dz) held.add('move_up');
-      if (ay > dz) held.add('move_down');
-    }
-    return held;
+    if (!pad || !pad.connected) return { held, axes: { ...NO_AXES }, hasGamepad: false };
+    const r = readPad(pad, this.bindings);
+    for (const a of r.held) held.add(a);
+    return { held, axes: r.axes, hasGamepad: true };
   }
 
   /** Call once per rendered frame. */
   poll(now: number): Record<PlayerId, ActionFrame> {
     const out = { P1: emptyFrame(), P2: emptyFrame() };
     for (const p of PLAYER_IDS) {
-      const held = this.currentHeld(p);
+      const { held, axes, hasGamepad } = this.currentHeld(p);
       const frame = out[p];
       frame.held = held;
+      frame.axes = axes;
+      frame.hasGamepad = hasGamepad;
       for (const a of held) {
         if (!this.prevHeld[p].has(a)) {
           frame.pressed.add(a);

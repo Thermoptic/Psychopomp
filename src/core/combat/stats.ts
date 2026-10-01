@@ -53,7 +53,9 @@ export function computeBuild(def: CreatureDef, prep: DicePrep): BattleBuild {
   for (const key of STAT_CATEGORIES) stats[key] += diceByCategory[key] ?? 0;
 
   const specialActive = def.special ? evaluateRequirement(def.special.requirement, view) : false;
-  if (def.special && specialActive) applyEffect(stats, def.special.effect);
+  const specialManual = def.special?.activation === 'manual';
+  // 'auto' Specials apply now; 'manual' ones are only unlocked and applied in combat.
+  if (def.special && specialActive && !specialManual) applyEffect(stats, def.special.effect);
 
   for (const key of STAT_CATEGORIES) stats[key] = Math.max(0, stats[key]);
 
@@ -62,6 +64,7 @@ export function computeBuild(def: CreatureDef, prep: DicePrep): BattleBuild {
     diceByCategory,
     specialName: def.special?.name ?? null,
     specialActive,
+    specialManual,
     stats,
   };
 }
