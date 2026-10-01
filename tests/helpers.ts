@@ -13,6 +13,7 @@ import {
   type FighterInput,
   type GameState,
   type Placement,
+  type PlayerId,
   type RngState,
 } from '../src/core';
 import { bundledPackFiles } from '../src/platform/web/bundledContent';
@@ -82,20 +83,33 @@ export function ok(state: GameState, cmd: Command): GameState {
   return r.state;
 }
 
-/** Rolls once, keeps the dice and places die i in slot i. */
-export function quickPrepare(state: GameState): GameState {
-  let s = ok(state, { type: 'ROLL_DICE' });
-  s = ok(s, { type: 'FINISH_ROLLING' });
-  const prep = s.battle!.prep[s.battle!.preparing!];
-  for (let i = 0; i < prep.slots.length; i++) s = ok(s, { type: 'ALLOCATE_DIE', die: i, slot: i });
-  return ok(s, { type: 'CONFIRM_ALLOCATION' });
+export const sidePlayer = (s: GameState, side: BattleSide): PlayerId =>
+  s.creatures[side === 'attacker' ? s.battle!.attackerId : s.battle!.defenderId].owner;
+
+/** The player's prep (works in any battle stage). */
+export const prepOf = (s: GameState, player: PlayerId) =>
+  Object.values(s.battle!.prep).find((p) => p.player === player)!;
+
+/** Keeps the initial roll, places die i in slot i and presses APPLY. */
+export function quickPrepare(state: GameState, player: PlayerId): GameState {
+  let s = state;
+  const prep = prepOf(s, player);
+  for (let i = 0; i < prep.slots.length; i++) s = ok(s, { type: 'ALLOCATE_DIE', die: i, slot: i, player });
+  return ok(s, { type: 'CONFIRM_ALLOCATION', player });
 }
 
-/** Both sides quick-prepare, then combat begins. */
+/** Ticks the 3-2-1 countdown away. */
+export function runCountdown(state: GameState): GameState {
+  let s = state;
+  while (s.battle?.stage === 'countdown') s = ok(s, { type: 'COMBAT_TICK', inputs: { attacker: idle, defender: idle } });
+  return s;
+}
+
+/** Both sides quick-prepare, the countdown runs, combat begins. */
 export function prepareBothAndBegin(state: GameState): GameState {
-  let s = quickPrepare(state);
-  s = quickPrepare(s);
-  return ok(s, { type: 'BEGIN_COMBAT' });
+  let s = quickPrepare(state, sidePlayer(state, 'attacker'));
+  s = quickPrepare(s, sidePlayer(s, 'defender'));
+  return runCountdown(s);
 }
 
 const idle: FighterInput = { dx: 0, dy: 0, attack: false, block: false };
@@ -153,24 +167,25 @@ export function botCommand(state: GameState, rng: RngState): Command {
 
   const b = state.battle!;
   if (b.stage === 'dice') {
-    const prep = b.prep[b.preparing!];
+    // Both players prepare in parallel; the bot serves whichever is not READY yet.
+    const prep = [b.prep.attacker, b.prep.defender].find((p) => p.stage !== 'done')!;
+    const player = prep.player;
     if (prep.stage === 'roll') {
-      if (prep.rollsUsed === 0) return { type: 'ROLL_DICE' };
       // Keep 5s and 6s, reroll the rest once.
       const lowUnlocked = prep.dice.findIndex((v, i) => v < 5 && !prep.locked[i]);
       const highUnlocked = prep.dice.findIndex((v, i) => v >= 5 && !prep.locked[i]);
-      if (highUnlocked >= 0) return { type: 'LOCK_DIE', die: highUnlocked };
-      if (prep.rollsUsed === 1 && lowUnlocked >= 0) return { type: 'REROLL' };
-      return { type: 'FINISH_ROLLING' };
+      if (highUnlocked >= 0) return { type: 'LOCK_DIE', die: highUnlocked, player };
+      if (prep.rollsUsed === 1 && lowUnlocked >= 0) return { type: 'REROLL', player };
+      return { type: 'FINISH_ROLLING', player };
     }
     const emptySlot = prep.slotDice.indexOf(null);
     if (emptySlot >= 0) {
       const die = prep.dice.findIndex((_, i) => !prep.slotDice.includes(i));
-      return { type: 'ALLOCATE_DIE', die, slot: emptySlot };
+      return { type: 'ALLOCATE_DIE', die, slot: emptySlot, player };
     }
-    return { type: 'CONFIRM_ALLOCATION' };
+    return { type: 'CONFIRM_ALLOCATION', player };
   }
-  if (b.stage === 'reveal') return { type: 'BEGIN_COMBAT' };
+  if (b.stage === 'countdown') return { type: 'COMBAT_TICK', inputs: { attacker: idle, defender: idle } };
   if (b.stage === 'combat') {
     return { type: 'COMBAT_TICK', inputs: { attacker: chaseInput(state, 'attacker'), defender: chaseInput(state, 'defender') } };
   }

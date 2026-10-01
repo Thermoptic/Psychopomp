@@ -19,10 +19,11 @@ import {
   type PlayerId,
 } from '../core';
 import type { Action, ActionFrame } from '../input/actions';
-import { focusedItem, combatHint, drawCombatPanel, drawDiceScreen, drawResult, drawReveal } from '../rendering/battleView';
+import { combatHint, drawCombatPanel, drawCountdown, drawPrepPanel, drawResult, sideOf } from '../rendering/battleView';
 import { drawBoard, drawBoardScreen, drawHeader, drawMessageBar } from '../rendering/boardView';
 import { rect, scanlines, type Ctx } from '../rendering/draw';
-import { LEFT_PANEL, RIGHT_PANEL, cellAtPoint, diceScreenRows, inRect, type DiceItem } from '../rendering/layout';
+import { LEFT_PANEL, RIGHT_PANEL, cellAtPoint, inRect, prepItemAt, prepPanelLayout, type PrepItem } from '../rendering/layout';
+import { prepButton } from '../rendering/prepModel';
 import {
   MENU_ITEMS,
   PAUSE_ITEMS,
@@ -36,7 +37,7 @@ import {
   pauseItemRect,
 } from '../rendering/screens';
 import { C, VIEW_H, VIEW_W, playerColor, playerLabel } from '../rendering/theme';
-import { createMatchUi, type MatchUi } from './ui';
+import { createMatchUi, createPrepCursor, type MatchUi } from './ui';
 
 type Screen = 'menu' | 'controls' | 'match' | 'error';
 type Frames = Record<PlayerId, ActionFrame>;
@@ -113,16 +114,19 @@ export class App {
           const d = s.creatureDefs[s.creatures[e.defenderId].defId].name.toUpperCase();
           this.ui.selected = null;
           this.ui.introMs = 1300;
-          this.ui.readyGate = true;
-          this.ui.heldDie = null;
-          this.ui.focus = { row: 1, col: 0 };
+          // Fresh, independent preparation cursors for this battle.
+          this.ui.prep = { P1: createPrepCursor(), P2: createPrepCursor() };
+          this.acc = 0;
           this.say(`${a} ATTACKS ${d}!  BATTLE!`, C.danger, 1300);
           break;
         }
         case 'ALLOCATION_CONFIRMED':
-          this.ui.readyGate = true;
-          this.ui.heldDie = null;
-          this.ui.focus = { row: 1, col: 0 };
+          this.ui.prep[e.player].held = null;
+          this.say(`${playerLabel(e.player)} IS READY`, playerColor(e.player), 1500);
+          break;
+        case 'COMBAT_STARTED':
+          this.ui.bannerMs = 700;
+          this.ui.queued = { attacker: { attack: false, block: false }, defender: { attack: false, block: false } };
           break;
         case 'TURN_STARTED': {
           this.ui.selected = null;
@@ -168,6 +172,7 @@ export class App {
     const ui = this.ui;
     if (ui.message) ui.message.ms -= dtMs;
     ui.introMs = Math.max(0, ui.introMs - dtMs);
+    ui.bannerMs = Math.max(0, ui.bannerMs - dtMs);
     ui.flash.attacker = Math.max(0, ui.flash.attacker - dtMs);
     ui.flash.defender = Math.max(0, ui.flash.defender - dtMs);
     ui.floaters = ui.floaters.filter((f) => (f.ms -= dtMs) > 0);
@@ -242,13 +247,12 @@ export class App {
 
     const b = s.battle!;
     switch (b.stage) {
-      case 'dice': {
-        const prep = b.prep[b.preparing!];
-        return this.diceInput(prep, f[prep.player]);
-      }
-      case 'reveal':
-        if (this.any(f, 'confirm')) this.send({ type: 'BEGIN_COMBAT' });
+      case 'dice':
+        // Both players prepare at the same time, each with their own input.
+        this.prepInput('P1', f.P1);
+        if (this.state?.battle?.stage === 'dice') this.prepInput('P2', f.P2);
         return;
+      case 'countdown':
       case 'combat':
         return this.combatInput(f, dtMs);
       case 'result':
@@ -329,107 +333,117 @@ export class App {
     return `${playerLabel(p)}: SELECT A CREATURE (${MOVE_KEYS[p]}, Q/E CYCLE)`;
   }
 
-  // --- dice ----------------------------------------------------------------------
+  // --- preparation (both players simultaneously) -----------------------------------
 
-  private diceInput(prep: DicePrep, f: ActionFrame): void {
-    const ui = this.ui;
-    if (ui.readyGate) {
-      if (f.pressed.has('confirm')) {
-        ui.readyGate = false;
-        ui.focus = { row: 1, col: 0 };
-        this.sfx.ui('confirm');
+  private prepOf(owner: PlayerId): DicePrep | null {
+    const s = this.state;
+    if (!s?.battle || s.battle.stage !== 'dice') return null;
+    return s.battle.prep[sideOf(s, owner)];
+  }
+
+  /** One player's panel input. Never touches the other player's state. */
+  private prepInput(owner: PlayerId, f: ActionFrame): void {
+    const prep = this.prepOf(owner);
+    if (!prep || prep.stage === 'done') return;
+    const cur = this.ui.prep[owner];
+    const n = prep.dice.length;
+    // Rows 0..n-1 are dice rows, row n is the button.
+    const dRow = (f.repeat.has('move_down') ? 1 : 0) - (f.repeat.has('move_up') ? 1 : 0);
+    if (dRow) cur.row = Math.max(0, Math.min(n, cur.row + dRow));
+    // Left/right follow the mirrored layout: P1 [die][slot], P2 [slot][die].
+    const toSlot = owner === 'P1' ? 'move_right' : 'move_left';
+    const toDie = owner === 'P1' ? 'move_left' : 'move_right';
+    if (f.repeat.has(toSlot)) cur.col = 'slot';
+    if (f.repeat.has(toDie)) cur.col = 'die';
+    if (dRow || f.repeat.has(toSlot) || f.repeat.has(toDie)) this.sfx.ui('move');
+
+    for (let i = 0; i < n && i < 5; i++) {
+      if (f.pressed.has(`die_${i + 1}` as Action)) this.activatePrep(owner, { kind: 'die', i });
+    }
+    if (f.pressed.has('reroll')) this.activatePrep(owner, { kind: 'button' }, 'reroll');
+    if (f.pressed.has('lock_die') && cur.row < n) this.activatePrep(owner, { kind: 'lock', i: cur.row });
+    if (f.pressed.has('cancel')) cur.held = null;
+    if (f.pressed.has('confirm')) {
+      const item: PrepItem = cur.row >= n ? { kind: 'button' } : { kind: cur.col, i: cur.row };
+      this.activatePrep(owner, item);
+    }
+  }
+
+  private activatePrep(owner: PlayerId, item: PrepItem, only?: 'reroll'): void {
+    const prep = this.prepOf(owner);
+    if (!prep || prep.stage === 'done') return;
+    const cur = this.ui.prep[owner];
+    const player = owner;
+    const n = prep.dice.length;
+    if (item.kind === 'button') {
+      if (!only) cur.row = n; // a hotkey does not move the cursor
+      const btn = prepButton(prep);
+      if (only && btn.kind !== only) return;
+      if (btn.kind === 'reroll') {
+        if (btn.enabled) this.send({ type: 'REROLL', player });
+        else this.deny(`${playerLabel(owner)}: NO REROLL AVAILABLE`);
+      } else if (btn.kind === 'apply') {
+        if (btn.enabled) this.send({ type: 'CONFIRM_ALLOCATION', player });
+        else this.deny(`${playerLabel(owner)}: PLACE EVERY DIE FIRST`);
       }
       return;
     }
-    const rows = diceScreenRows(prep);
-    const dCol = (f.repeat.has('move_right') ? 1 : 0) - (f.repeat.has('move_left') ? 1 : 0);
-    const dRow = (f.repeat.has('move_down') ? 1 : 0) - (f.repeat.has('move_up') ? 1 : 0);
-    if (dCol || dRow) {
-      const row = Math.max(0, Math.min(rows.length - 1, ui.focus.row + dRow));
-      const col = Math.max(0, Math.min(rows[row].length - 1, (dRow ? Math.min(ui.focus.col, rows[row].length - 1) : ui.focus.col) + dCol));
-      ui.focus = { row, col };
-      this.sfx.ui('move');
-    }
-    const p = prep.player;
-    for (let i = 0; i < 5; i++) {
-      if (f.pressed.has(`die_${i + 1}` as Action) && i < prep.dice.length) this.activateDice(prep, { kind: 'die', i });
-    }
-    if (f.pressed.has('reroll') && prep.stage === 'roll') this.sendDice({ type: 'ROLL_DICE', player: p });
-    if (f.pressed.has('lock_die')) {
-      const it = focusedItem(prep, ui);
-      if (it?.kind === 'die' && prep.stage === 'roll') this.activateDice(prep, it);
-    }
-    if (f.pressed.has('cancel')) {
-      if (prep.stage === 'roll' && prep.rollsUsed > 0) this.sendDice({ type: 'FINISH_ROLLING', player: p });
-      else if (prep.stage === 'allocate') ui.heldDie = null;
-    }
-    if (f.pressed.has('confirm')) {
-      const it = focusedItem(prep, ui);
-      if (it) this.activateDice(prep, it);
-    }
-  }
-
-  /** Sends a dice command and fixes up focus after stage changes. */
-  private sendDice(cmd: Command): boolean {
-    const before = this.currentPrep()?.stage;
-    const ok = this.send(cmd);
-    const prep = this.currentPrep();
-    if (ok && prep && before === 'roll' && prep.stage === 'allocate') {
-      this.ui.heldDie = null;
-      this.ui.focus = { row: 0, col: 0 };
-    }
-    return ok;
-  }
-
-  private currentPrep(): DicePrep | null {
-    const b = this.state?.battle;
-    return b && b.stage === 'dice' && b.preparing ? b.prep[b.preparing] : null;
-  }
-
-  private activateDice(prep: DicePrep, item: DiceItem): void {
-    const p = prep.player;
-    const ui = this.ui;
-    if (item.kind === 'btn') {
-      if (item.id === 'roll' || item.id === 'reroll') this.sendDice({ type: 'ROLL_DICE', player: p });
-      else if (item.id === 'keep') this.sendDice({ type: 'FINISH_ROLLING', player: p });
-      else if (item.id === 'clear') {
-        prep.slotDice.forEach((d, slot) => d !== null && this.send({ type: 'UNALLOCATE_DIE', slot, player: p }));
-        ui.heldDie = null;
-      } else if (item.id === 'confirm') this.send({ type: 'CONFIRM_ALLOCATION', player: p });
+    if (item.kind === 'lock') {
+      if (prep.stage !== 'roll' || prep.slotDice.includes(item.i)) return;
+      this.send({ type: prep.locked[item.i] ? 'UNLOCK_DIE' : 'LOCK_DIE', die: item.i, player });
       return;
     }
     if (item.kind === 'die') {
-      if (prep.stage === 'roll') {
-        if (prep.rollsUsed === 0) return void this.sendDice({ type: 'ROLL_DICE', player: p });
-        this.send({ type: prep.locked[item.i] ? 'UNLOCK_DIE' : 'LOCK_DIE', die: item.i, player: p });
-        return;
+      cur.row = item.i;
+      cur.col = 'die';
+      const inSlot = prep.slotDice.indexOf(item.i);
+      if (inSlot >= 0) {
+        // Picking a placed die back up.
+        this.send({ type: 'UNALLOCATE_DIE', slot: inSlot, player });
+        cur.held = item.i;
+      } else {
+        cur.held = cur.held === item.i ? null : item.i;
       }
-      ui.heldDie = ui.heldDie === item.i ? null : item.i;
-      if (ui.heldDie !== null) {
+      if (cur.held !== null) {
         const empty = prep.slotDice.indexOf(null);
-        ui.focus = { row: 1, col: empty >= 0 ? empty : 0 };
+        if (empty >= 0) {
+          cur.row = empty;
+          cur.col = 'slot';
+        }
         this.sfx.ui('confirm');
       }
       return;
     }
-    // slot
-    if (prep.stage !== 'allocate') return;
+    // Slot
+    cur.row = item.i;
+    cur.col = 'slot';
     const occupant = prep.slotDice[item.i];
-    if (ui.heldDie !== null) {
-      if (occupant !== null && occupant !== ui.heldDie) this.send({ type: 'UNALLOCATE_DIE', slot: item.i, player: p });
-      if (occupant !== ui.heldDie) this.send({ type: 'ALLOCATE_DIE', die: ui.heldDie, slot: item.i, player: p });
-      ui.heldDie = null;
-      const after = this.currentPrep()!;
-      const nextDie = after.dice.findIndex((_, i) => !after.slotDice.includes(i));
-      ui.focus = nextDie >= 0 ? { row: 0, col: nextDie } : { row: 2, col: 1 };
+    if (cur.held !== null) {
+      if (occupant !== null && occupant !== cur.held) this.send({ type: 'UNALLOCATE_DIE', slot: item.i, player });
+      if (occupant !== cur.held) this.send({ type: 'ALLOCATE_DIE', die: cur.held, slot: item.i, player });
+      cur.held = null;
+      const after = this.prepOf(owner);
+      if (!after) return;
+      const next = after.dice.findIndex((_, i) => !after.slotDice.includes(i));
+      if (next >= 0) {
+        cur.row = next;
+        cur.col = 'die';
+      } else cur.row = n; // everything placed: jump to APPLY
     } else if (occupant !== null) {
-      this.send({ type: 'UNALLOCATE_DIE', slot: item.i, player: p });
-      ui.heldDie = occupant;
+      this.send({ type: 'UNALLOCATE_DIE', slot: item.i, player });
+      cur.held = occupant;
     } else {
       const free = prep.dice.findIndex((_, i) => !prep.slotDice.includes(i));
-      if (free >= 0) ui.focus = { row: 0, col: free };
-      this.say('PICK A DIE FIRST, THEN A SLOT', C.pp);
+      if (free >= 0) {
+        cur.row = free;
+        cur.col = 'die';
+      }
+      this.say(`${playerLabel(owner)}: PICK A DIE FIRST, THEN A SLOT`, C.pp);
     }
+  }
+
+  prepHint(): string {
+    return 'P1: WASD + SPACE, F LOCK, R REROLL   ·   P2: ARROWS + ENTER, \' LOCK, / REROLL';
   }
 
   // --- combat -------------------------------------------------------------------
@@ -448,7 +462,8 @@ export class App {
     }
     const step = 1000 / s.ruleset.combat.tickRate;
     this.acc = Math.min(this.acc + dtMs, step * 6);
-    while (this.acc >= step && this.state?.battle?.stage === 'combat') {
+    const running = () => this.state?.battle?.stage === 'countdown' || this.state?.battle?.stage === 'combat';
+    while (this.acc >= step && running()) {
       this.acc -= step;
       const inputs = {} as Record<BattleSide, FighterInput>;
       for (const side of ['attacker', 'defender'] as const) {
@@ -465,7 +480,7 @@ export class App {
       }
       this.send({ type: 'COMBAT_TICK', inputs });
     }
-    if (this.state?.battle?.stage !== 'combat') this.acc = 0;
+    if (!running()) this.acc = 0;
   }
 
   // --- mouse -------------------------------------------------------------------
@@ -481,13 +496,16 @@ export class App {
       return;
     }
     if (this.state.phase === 'board') this.ui.hover = cellAtPoint(this.state.board, x, y);
-    const prep = this.currentPrep();
-    if (prep && !this.ui.readyGate) {
-      diceScreenRows(prep).forEach((row, r) =>
-        row.forEach((it, c) => {
-          if (inRect(it.rect, x, y)) this.ui.focus = { row: r, col: c };
-        }),
-      );
+    for (const owner of ['P1', 'P2'] as const) {
+      const prep = this.prepOf(owner);
+      if (!prep || prep.stage === 'done') continue;
+      const it = prepItemAt(prepPanelLayout(owner, prep.dice.length), x, y);
+      const cur = this.ui.prep[owner];
+      if (it?.kind === 'button') cur.row = prep.dice.length;
+      else if (it?.kind === 'die' || it?.kind === 'slot') {
+        cur.row = it.i;
+        cur.col = it.kind;
+      }
     }
   }
 
@@ -522,23 +540,13 @@ export class App {
       return;
     }
     const b = s.battle!;
-    if (b.stage === 'reveal') this.send({ type: 'BEGIN_COMBAT' });
-    else if (b.stage === 'result') this.send({ type: 'END_BATTLE' });
+    if (b.stage === 'result') this.send({ type: 'END_BATTLE' });
     else if (b.stage === 'dice') {
-      const prep = b.prep[b.preparing!];
-      if (this.ui.readyGate) {
-        this.ui.readyGate = false;
-        this.ui.focus = { row: 1, col: 0 };
-        return;
-      }
-      for (const [r, row] of diceScreenRows(prep).entries()) {
-        for (const [c, it] of row.entries()) {
-          if (inRect(it.rect, x, y)) {
-            this.ui.focus = { row: r, col: c };
-            this.activateDice(prep, it.item);
-            return;
-          }
-        }
+      for (const owner of ['P1', 'P2'] as const) {
+        const prep = this.prepOf(owner);
+        if (!prep) continue;
+        const it = prepItemAt(prepPanelLayout(owner, prep.dice.length), x, y);
+        if (it) this.activatePrep(owner, it);
       }
     }
   }
@@ -573,19 +581,22 @@ export class App {
       if (s.phase === 'gameOver') drawGameOver(ctx, s);
     } else {
       drawHeader(ctx, s);
-      if (b.stage === 'dice') {
-        drawDiceScreen(ctx, s, ui);
-        const who = playerLabel(b.prep[b.preparing!].player);
-        drawMessageBar(ctx, ui.message && ui.message.ms > 0 ? ui.message.text : `${who} IS PREPARING`, ui.message && ui.message.ms > 0 ? ui.message.color : C.text);
-      } else if (b.stage === 'reveal') {
-        drawReveal(ctx, s);
-        drawMessageBar(ctx, 'BOTH BUILDS ARE LOCKED IN');
+      if (b.stage === 'dice' || b.stage === 'countdown') {
+        // Preparation on the battle view: both panels live, combatants on the board.
+        drawPrepPanel(ctx, s, ui, 'P1');
+        drawPrepPanel(ctx, s, ui, 'P2');
+        drawBoard(ctx, s, ui, now);
+        drawCountdown(ctx, s, ui);
+        const msg = ui.message && ui.message.ms > 0 ? ui.message : null;
+        const text = b.stage === 'countdown' ? 'BOTH READY - BATTLE STARTS' : this.prepHint();
+        drawMessageBar(ctx, msg ? msg.text : text, msg ? msg.color : C.dim);
       } else {
         // Combat happens on the strategic board itself.
         drawCombatPanel(ctx, s, 'P1', LEFT_PANEL);
         drawCombatPanel(ctx, s, 'P2', RIGHT_PANEL);
         drawBoard(ctx, s, ui, now);
         drawMessageBar(ctx, combatHint(s), C.dim);
+        drawCountdown(ctx, s, ui);
         if (b.stage === 'result') drawResult(ctx, s);
       }
     }

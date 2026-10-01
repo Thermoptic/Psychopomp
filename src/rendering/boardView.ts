@@ -5,7 +5,7 @@ import type { MatchUi } from '../app/ui';
 import { creatureAt, describeRequirement, getLegalMoves, livingCreatures, type GameState, type PlayerId } from '../core';
 import { badge, hpBar, panel, rect, strokeRect, text, wrapText, type Ctx } from './draw';
 import { HEADER, LEFT_PANEL, MESSAGE_BAR, RIGHT_PANEL, boardLayout, cellRect, type Rect } from './layout';
-import { boardUnits, combatToScreen, isCombatView } from './boardUnits';
+import { boardUnits, combatToScreen, isBattleView, isCombatView } from './boardUnits';
 import { drawCreature } from './sprites';
 import { C, playerColor, playerLabel } from './theme';
 
@@ -93,7 +93,7 @@ export function drawPlayerPanel(ctx: Ctx, state: GameState, ui: MatchUi, player:
   }
 }
 
-export function drawBoard(ctx: Ctx, state: GameState, ui: MatchUi, now: number): void {
+export function drawBoard(ctx: Ctx, state: GameState, ui: MatchUi, now: number, battleView = isBattleView(state)): void {
   const board = state.board;
   const l = boardLayout(board);
   panel(ctx, { x: l.ox - 10, y: l.oy - 10, w: l.cell * board.width + 20, h: l.cell * board.height + 20 });
@@ -157,8 +157,8 @@ export function drawBoard(ctx: Ctx, state: GameState, ui: MatchUi, now: number):
   // Battle emphasis (board mode only; in combat mode the board is cleared).
   const b = state.battle;
   const pulse = Math.floor(now / 150) % 2 === 0;
-  const combatView = isCombatView(state);
-  if (b && !combatView) {
+  const combatView = battleView && isCombatView(state);
+  if (b && !battleView) {
     for (const c of [b.from, b.cell]) {
       const r = cellRect(l, c);
       strokeRect(ctx, { x: r.x - 2, y: r.y - 2, w: r.w + 4, h: r.h + 4 }, pulse ? C.danger : '#ffd0c8', 3);
@@ -169,7 +169,7 @@ export function drawBoard(ctx: Ctx, state: GameState, ui: MatchUi, now: number):
   // combat mode, always at the same board sprite scale.
   const rules = state.ruleset.combat;
   const unitScale = l.cell / rules.cellUnits;
-  for (const u of boardUnits(state, l)) {
+  for (const u of boardUnits(state, l, battleView)) {
     const color = playerColor(u.owner);
     const f = u.fighter;
     if (f) {
@@ -233,11 +233,12 @@ export function drawMessageBar(ctx: Ctx, msg: string, color: string = C.text): v
   text(ctx, msg, MESSAGE_BAR.x + 18, MESSAGE_BAR.y + 28, { size: 14, color });
 }
 
+/** Plain board mode (also used for the short battle intro). */
 export function drawBoardScreen(ctx: Ctx, state: GameState, ui: MatchUi, now: number, hint: string): void {
   drawHeader(ctx, state);
   drawPlayerPanel(ctx, state, ui, 'P1', LEFT_PANEL);
   drawPlayerPanel(ctx, state, ui, 'P2', RIGHT_PANEL);
-  drawBoard(ctx, state, ui, now);
+  drawBoard(ctx, state, ui, now, false);
   if (ui.message && ui.message.ms > 0) drawMessageBar(ctx, ui.message.text, ui.message.color);
   else drawMessageBar(ctx, hint, playerColor(state.currentTurn.player));
 }

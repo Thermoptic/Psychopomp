@@ -1,39 +1,15 @@
-// Battle screens: dice preparation, reveal, real-time combat and result.
-// Every number shown comes from core queries (computeBuild etc.).
+// Battle screens on the strategic board: the two simultaneous preparation
+// panels (P1 left, P2 right), the countdown, the combat side panels and the
+// result overlay. Every number shown comes from core queries (computeBuild
+// etc.); the panels only send commands, the core decides what is legal.
 
-import type { MatchUi } from '../app/ui';
-import {
-  computeBuild,
-  describeRequirement,
-  type PlayerId,
-  rerollsRemaining,
-  type BattleBuild,
-  type BattleSide,
-  type BattleStats,
-  type DicePrep,
-  type GameState,
-} from '../core';
-import { badge, button, die, hpBar, panel, rect, strokeRect, text, wrapText, type Ctx } from './draw';
-import { DICE_SCREEN, diceScreenRows, type DiceItem, type Rect } from './layout';
+import type { MatchUi, PrepCursor } from '../app/ui';
+import { computeBuild, type BattleBuild, type BattleSide, type BattleStats, type GameState, type PlayerId } from '../core';
+import { badge, die, hpBar, panel, rect, strokeRect, text, wrapText, type Ctx } from './draw';
+import { boardLayout, prepPanelLayout, type Rect } from './layout';
+import { prepButton, prepPhaseLabel, shortRequirement } from './prepModel';
 import { drawCreature } from './sprites';
 import { C, playerColor, playerLabel } from './theme';
-
-const sameItem = (a: DiceItem, b: DiceItem) =>
-  a.kind === b.kind && (a.kind === 'btn' ? a.id === (b as typeof a).id : a.i === (b as { i: number }).i);
-
-export function focusedItem(prep: DicePrep, ui: MatchUi): DiceItem | null {
-  const rows = diceScreenRows(prep);
-  const row = rows[Math.min(ui.focus.row, rows.length - 1)];
-  return row ? row[Math.min(ui.focus.col, row.length - 1)].item : null;
-}
-
-const BUTTON_LABEL: Record<string, string> = {
-  roll: 'ROLL DICE',
-  reroll: 'REROLL',
-  keep: 'KEEP DICE',
-  clear: 'CLEAR ALL',
-  confirm: 'CONFIRM BUILD',
-};
 
 function sideInfo(state: GameState, side: BattleSide) {
   const b = state.battle!;
@@ -43,177 +19,177 @@ function sideInfo(state: GameState, side: BattleSide) {
   return { cr, def, color: playerColor(cr.owner) };
 }
 
-export function drawDiceScreen(ctx: Ctx, state: GameState, ui: MatchUi): void {
-  const b = state.battle!;
-  const side = b.preparing!;
-  const prep = b.prep[side];
-  const me = sideInfo(state, side);
-  const foe = sideInfo(state, side === 'attacker' ? 'defender' : 'attacker');
-  const R = DICE_SCREEN;
-  panel(ctx, R, me.color);
-
-  badge(ctx, R.x + 26, R.y + 28, 14, me.cr.owner, me.color);
-  text(ctx, `${playerLabel(me.cr.owner)}  ·  PREPARE ${me.def.name.toUpperCase()}`, R.x + 42, R.y + 33, { size: 18, color: me.color });
-  text(ctx, `${side === 'attacker' ? 'ATTACKER' : 'DEFENDER'}  ·  HP ${me.cr.hp}/${me.def.stats.maxHp}`, R.x + R.w - 20, R.y + 33, { size: 13, color: C.text, align: 'right' });
-  text(ctx, `VS ${foe.def.name.toUpperCase()} (${playerLabel(foe.cr.owner)})  ·  HP ${foe.cr.hp}/${foe.def.stats.maxHp}`, R.x + 42, R.y + 54, { size: 12, color: C.dim });
-
-  if (ui.readyGate) {
-    drawCreature(ctx, me.def.id, me.cr.owner, R.x + R.w / 2, R.y + 150, 9);
-    text(ctx, `${playerLabel(me.cr.owner)}: YOUR DICE`, R.x + R.w / 2, R.y + 250, { size: 22, color: me.color, align: 'center' });
-    text(ctx, side === 'defender' ? 'The other build stays hidden until both are done.' : 'Build your creature for this fight.', R.x + R.w / 2, R.y + 280, { size: 13, color: C.dim, align: 'center' });
-    text(ctx, 'PRESS CONFIRM WHEN READY', R.x + R.w / 2, R.y + 330, { size: 16, color: C.pp, align: 'center' });
-    return;
-  }
-
-  const focus = focusedItem(prep, ui);
-  const rows = diceScreenRows(prep);
-
-  // Status line.
-  const status =
-    prep.stage === 'roll'
-      ? prep.rollsUsed === 0
-        ? 'ROLL FIVE DICE'
-        : `ROLL ${prep.rollsUsed} OF ${prep.maxRolls}  ·  REROLLS LEFT: ${rerollsRemaining(prep)}  ·  LOCKED DICE ARE KEPT`
-      : 'PLACE EVERY DIE IN A SLOT';
-  text(ctx, status, R.x + R.w / 2, R.y + 78, { size: 13, color: C.text, align: 'center' });
-
-  for (const { item, rect: r } of rows[0]) {
-    if (item.kind !== 'die') continue;
-    const allocated = prep.slotDice.includes(item.i);
-    die(ctx, r, prep.dice[item.i], {
-      locked: prep.stage === 'roll' && prep.locked[item.i],
-      allocated,
-      focused: !!focus && sameItem(focus, item),
-      held: ui.heldDie === item.i,
-      accent: me.color,
-    });
-    text(ctx, String(item.i + 1), r.x + r.w / 2, r.y + r.h + 32, { size: 10, color: C.faint, align: 'center' });
-  }
-
-  const build = computeBuild(me.def, prep);
-
-  if (prep.stage === 'roll') {
-    for (const { item, rect: r } of rows[1]) {
-      if (item.kind === 'btn') button(ctx, r, BUTTON_LABEL[item.id], { focused: !!focus && sameItem(focus, item), accent: me.color });
-    }
-    // Layout preview.
-    let y = R.y + 262;
-    text(ctx, 'DICE SLOTS', R.x + 40, y, { size: 11, color: C.dim });
-    const counts: Record<string, number> = {};
-    for (const s of prep.slots) counts[s.category] = (counts[s.category] ?? 0) + 1;
-    text(ctx, Object.entries(counts).map(([c, n]) => `${c.toUpperCase()} x${n}`).join('   '), R.x + 40, (y += 18), { size: 13 });
-    y += 28;
-    drawSpecialLine(ctx, me.def.special, null, R.x + 40, y, R.w - 80);
-    text(ctx, 'CONFIRM: lock / unlock die  ·  REROLL key: reroll  ·  CANCEL: keep dice', R.x + R.w / 2, R.y + R.h - 16, { size: 11, color: C.dim, align: 'center' });
-    return;
-  }
-
-  // Allocation.
-  for (const { item, rect: r } of rows[1]) {
-    if (item.kind !== 'slot') continue;
-    const slot = prep.slots[item.i];
-    const focused = !!focus && sameItem(focus, item);
-    rect(ctx, r, C.edgeDark);
-    rect(ctx, { x: r.x + 2, y: r.y + 2, w: r.w - 4, h: r.h - 4 }, focused ? '#26262f' : '#18181f');
-    if (focused) strokeRect(ctx, r, me.color, 2);
-    text(ctx, slot.category.toUpperCase(), r.x + r.w / 2, r.y + 18, { size: 12, color: slot.category === 'special' ? C.pp : C.text, align: 'center' });
-    const d = prep.slotDice[item.i];
-    const dieSize = 40;
-    const dr = { x: Math.round(r.x + r.w / 2 - dieSize / 2), y: r.y + 28, w: dieSize, h: dieSize };
-    if (d === null) {
-      strokeRect(ctx, dr, C.faint, 2);
-    } else {
-      die(ctx, dr, prep.dice[d]);
-    }
-    text(ctx, slotPreview(me.def.stats, slot.category, build), r.x + r.w / 2, r.y + r.h - 12, { size: 11, color: C.dim, align: 'center' });
-  }
-  drawSpecialLine(ctx, me.def.special, build, R.x + 40, R.y + 318, R.w - 80);
-  for (const { item, rect: r } of rows[2]) {
-    if (item.kind === 'btn') {
-      const complete = !prep.slotDice.includes(null);
-      button(ctx, r, BUTTON_LABEL[item.id], {
-        focused: !!focus && sameItem(focus, item),
-        disabled: item.id === 'confirm' && !complete,
-        accent: me.color,
-      });
-    }
-  }
-  text(ctx, 'CONFIRM on a die picks it up, CONFIRM on a slot places it  ·  1-5: pick die', R.x + R.w / 2, R.y + R.h - 8, { size: 11, color: C.dim, align: 'center' });
+/** The battle side a player controls in the current battle. */
+export function sideOf(state: GameState, owner: PlayerId): BattleSide {
+  return state.creatures[state.battle!.attackerId].owner === owner ? 'attacker' : 'defender';
 }
 
 function slotPreview(base: { power: number; shield: number; speed: number; block?: number }, category: string, build: BattleBuild): string {
   const key = category as keyof BattleStats;
-  if (!['power', 'shield', 'speed', 'block'].includes(category)) return category === 'special' ? 'TRIGGER' : '';
+  if (!['power', 'shield', 'speed', 'block'].includes(category)) return '';
   const b = key === 'block' ? base.block ?? 0 : base[key];
-  return `${b}+${build.diceByCategory[category] ?? 0} = ${b + (build.diceByCategory[category] ?? 0)}`;
+  const d = build.diceByCategory[category] ?? 0;
+  return `${b}+${d} = ${b + d}`;
 }
 
-function drawSpecialLine(
-  ctx: Ctx,
-  special: GameState['creatureDefs'][string]['special'],
-  build: BattleBuild | null,
-  x: number,
-  y: number,
-  w: number,
-): void {
-  if (!special) {
-    text(ctx, 'NO SPECIAL', x, y, { size: 12, color: C.dim });
-    return;
-  }
-  text(ctx, `SPECIAL: ${special.name.toUpperCase()}`, x, y, { size: 13, color: C.pp });
-  const req = describeRequirement(special.requirement);
-  wrapText(ctx, `NEEDS ${req}  ->  ${special.description ?? ''}`, x, y + 18, w, { size: 12, color: C.text });
-  if (build) {
-    const on = build.specialActive;
-    text(ctx, on ? '[ ACTIVE ]' : '[ NOT MET ]', x + w, y, { size: 13, color: on ? C.ok : C.danger, align: 'right' });
-  }
-}
+const CATEGORY_COLOR: Record<string, string> = {
+  speed: '#5ab0ff',
+  power: '#ff5a4a',
+  shield: '#e8d9a8',
+  special: '#6ee06a',
+  block: '#4aa8ff',
+};
 
-// --- Reveal -------------------------------------------------------------------
-
-export function drawReveal(ctx: Ctx, state: GameState): void {
+/**
+ * One player's preparation panel: REROLL -> APPLY (disabled) -> APPLY (green)
+ * -> READY. Both panels are live at the same time.
+ */
+export function drawPrepPanel(ctx: Ctx, state: GameState, ui: MatchUi, owner: PlayerId): void {
   const b = state.battle!;
-  const R = DICE_SCREEN;
-  panel(ctx, R, C.danger);
-  text(ctx, 'BUILDS REVEALED', R.x + R.w / 2, R.y + 34, { size: 20, color: C.danger, align: 'center' });
-  const colW = (R.w - 60) / 2;
-  (['attacker', 'defender'] as BattleSide[]).forEach((side, i) => {
-    const info = sideInfo(state, side);
-    const build = b.builds![side];
-    const x = R.x + 20 + i * (colW + 20);
-    const y = R.y + 56;
-    panel(ctx, { x, y, w: colW, h: 300 }, info.color, C.panel2);
-    drawCreature(ctx, info.def.id, info.cr.owner, x + 50, y + 56, 6);
-    text(ctx, info.def.name.toUpperCase(), x + 100, y + 36, { size: 17, color: info.color });
-    text(ctx, `${playerLabel(info.cr.owner)} · ${side.toUpperCase()}`, x + 100, y + 56, { size: 11, color: C.dim });
-    text(ctx, `HP ${info.cr.hp}/${info.def.stats.maxHp}`, x + 100, y + 80, { size: 14 });
+  const side = sideOf(state, owner);
+  const prep = b.prep[side];
+  const info = sideInfo(state, side);
+  const L = prepPanelLayout(owner, prep.dice.length);
+  const P = L.panel;
+  const mirror = owner === 'P2';
+  const cur: PrepCursor = ui.prep[owner];
+  const locked = prep.stage === 'done';
+  const editable = b.stage === 'dice' && !locked;
+  panel(ctx, P, info.color);
 
-    let ty = y + 124;
-    const cols = [x + 16, x + 110, x + 160, x + 214, x + 272];
-    ['STAT', 'BASE', 'DICE', 'SPEC', 'TOTAL'].forEach((h, k) => text(ctx, h, cols[k], ty, { size: 10, color: C.dim }));
-    for (const stat of ['power', 'shield', 'speed', 'block'] as const) {
-      ty += 22;
-      const base = stat === 'block' ? info.def.stats.block ?? 0 : info.def.stats[stat];
-      const dice = build.diceByCategory[stat] ?? 0;
-      const spec = build.stats[stat] - base - dice;
-      text(ctx, stat.toUpperCase(), cols[0], ty, { size: 13 });
-      text(ctx, String(base), cols[1], ty, { size: 13, color: C.dim });
-      text(ctx, `+${dice}`, cols[2], ty, { size: 13 });
-      text(ctx, spec ? `+${spec}` : '-', cols[3], ty, { size: 13, color: spec ? C.pp : C.faint });
-      text(ctx, String(build.stats[stat]), cols[4], ty, { size: 15, color: info.color });
-    }
-    ty += 34;
-    if (build.specialName) {
-      text(ctx, `${build.specialName.toUpperCase()}: ${build.specialActive ? 'ACTIVE' : 'NOT MET'}`, x + 16, ty, {
-        size: 14,
-        color: build.specialActive ? C.ok : C.danger,
+  // Header: player tag, phase, creature, persistent HP.
+  const tagW = 40;
+  const tagX = mirror ? P.x + P.w - 14 - tagW : P.x + 14;
+  rect(ctx, { x: tagX, y: P.y + 10, w: tagW, h: 20 }, info.color);
+  text(ctx, owner, tagX + tagW / 2, P.y + 21, { size: 15, color: C.edgeDark, align: 'center', baseline: 'middle' });
+  const phase = prepPhaseLabel(prep);
+  text(ctx, phase, mirror ? P.x + 14 : P.x + P.w - 14, P.y + 25, {
+    size: 11,
+    color: phase === 'READY' ? C.ok : C.dim,
+    align: mirror ? 'left' : 'right',
+  });
+  const portX = mirror ? P.x + P.w - 14 - 40 : P.x + 14;
+  rect(ctx, { x: portX, y: P.y + 36, w: 40, h: 40 }, '#0c0c10');
+  strokeRect(ctx, { x: portX, y: P.y + 36, w: 40, h: 40 }, info.color, 1);
+  drawCreature(ctx, info.def.id, owner, portX + 20, P.y + 56, 3, { flip: mirror });
+  const nameX = mirror ? portX - 8 : portX + 48;
+  const align = mirror ? 'right' : 'left';
+  text(ctx, info.def.name.toUpperCase(), nameX, P.y + 50, { size: 14, align });
+  text(ctx, `${info.cr.hp}/${info.def.stats.maxHp} HP`, nameX, P.y + 68, {
+    size: 12,
+    align,
+    color: info.cr.hp < info.def.stats.maxHp ? C.danger : C.text,
+  });
+  const barW = 64;
+  hpBar(ctx, { x: mirror ? nameX - 84 - barW : nameX + 84, y: P.y + 60, w: barW, h: 8 }, info.cr.hp, info.def.stats.maxHp, info.color);
+
+  const build = computeBuild(info.def, prep);
+  const focusOn = (kind: 'die' | 'slot', i: number) => editable && cur.row === i && cur.col === kind;
+
+  L.rows.forEach((row, i) => {
+    // LOCK tag (only meaningful while rolling).
+    if (prep.stage === 'roll') {
+      const on = prep.locked[i];
+      rect(ctx, row.lock, on ? info.color : C.panel2);
+      strokeRect(ctx, row.lock, on ? info.color : C.faint, 1);
+      text(ctx, 'LOCK', row.lock.x + row.lock.w / 2, row.lock.y + 8, {
+        size: 8,
+        color: on ? C.edgeDark : C.dim,
+        align: 'center',
+        baseline: 'middle',
       });
     }
+    // Die tray: the die, or an empty socket once it has been placed.
+    const placed = prep.slotDice.includes(i);
+    if (placed) strokeRect(ctx, row.die, C.faint, 1);
+    else die(ctx, row.die, prep.dice[i], { locked: prep.stage === 'roll' && prep.locked[i], held: cur.held === i, accent: info.color });
+    if (focusOn('die', i)) strokeRect(ctx, { x: row.die.x - 3, y: row.die.y - 3, w: row.die.w + 6, h: row.die.h + 6 }, C.text, 2);
+
+    // Slot i and its category.
+    const slot = prep.slots[i];
+    if (!slot) return;
+    rect(ctx, row.slot, '#0d0d12');
+    strokeRect(ctx, row.slot, focusOn('slot', i) ? C.text : C.faint, focusOn('slot', i) ? 2 : 1);
+    const d = prep.slotDice[i];
+    if (d !== null) die(ctx, { x: row.slot.x + 2, y: row.slot.y + 2, w: row.slot.w - 4, h: row.slot.h - 4 }, prep.dice[d]);
+    else if (slot.category === 'special' && info.def.special) {
+      text(ctx, shortRequirement(info.def.special.requirement), row.slot.x + row.slot.w / 2, row.slot.y + row.slot.h / 2, {
+        size: 10,
+        color: C.danger,
+        align: 'center',
+        baseline: 'middle',
+      });
+    }
+    const cc = CATEGORY_COLOR[slot.category] ?? C.text;
+    text(ctx, slot.category.toUpperCase(), row.labelX, row.y + row.h / 2 - 2, { size: 13, color: cc, align: row.labelAlign });
+    const preview = slotPreview(info.def.stats, slot.category, build);
+    if (preview) text(ctx, preview, row.labelX, row.y + row.h / 2 + 12, { size: 10, color: C.dim, align: row.labelAlign });
   });
-  text(ctx, 'PRESS CONFIRM TO FIGHT', R.x + R.w / 2, R.y + R.h - 24, { size: 16, color: C.pp, align: 'center' });
+
+  // Special: requirement, effect and live status.
+  if (info.def.special) {
+    const sx = P.x + 14;
+    const anyInSpecial = prep.slots.some((s, i) => s.category === 'special' && prep.slotDice[i] !== null);
+    text(ctx, `SPECIAL: ${info.def.special.name.toUpperCase()}`, sx, L.specialY, { size: 11, color: C.ok });
+    if (anyInSpecial) {
+      text(ctx, build.specialActive ? 'ACTIVE' : 'NOT MET', P.x + P.w - 14, L.specialY, {
+        size: 11,
+        color: build.specialActive ? C.ok : C.danger,
+        align: 'right',
+      });
+    }
+    wrapText(ctx, info.def.special.description ?? '', sx, L.specialY + 15, P.w - 28, { size: 11, color: C.text });
+  }
+
+  if (locked) {
+    // Dim the locked build so READY is obvious at a glance.
+    ctx.fillStyle = 'rgba(7,7,10,0.5)';
+    ctx.fillRect(P.x + 3, P.y + 80, P.w - 6, L.button.y - P.y - 86);
+    text(ctx, 'BUILD LOCKED', P.x + P.w / 2, L.button.y - 10, { size: 11, color: C.ok, align: 'center' });
+  }
+
+  // State button: REROLL -> APPLY (grey) -> APPLY (green) -> READY.
+  const btn = prepButton(prep);
+  const focused = editable && cur.row >= prep.dice.length;
+  drawPrepButton(ctx, L.button, btn.label, btn.kind, btn.enabled, focused);
 }
 
-// --- Combat -------------------------------------------------------------------
+function drawPrepButton(ctx: Ctx, r: Rect, label: string, kind: string, enabled: boolean, focused: boolean): void {
+  rect(ctx, r, C.edgeDark);
+  let fill: string = C.panel2;
+  let color: string = C.faint;
+  let border: string = C.faint;
+  if (kind === 'ready') {
+    fill = C.ok;
+    color = C.edgeDark;
+    border = C.ok;
+  } else if (kind === 'apply' && enabled) {
+    fill = '#16301a';
+    color = C.ok;
+    border = C.ok;
+  } else if (kind === 'reroll' && enabled) {
+    color = C.danger;
+    border = C.danger;
+  }
+  rect(ctx, { x: r.x + 2, y: r.y + 2, w: r.w - 4, h: r.h - 4 }, fill);
+  strokeRect(ctx, r, focused ? C.text : border, 2);
+  text(ctx, (focused ? '> ' : '') + label, r.x + r.w / 2, r.y + r.h / 2 + 1, { size: 16, color, align: 'center', baseline: 'middle' });
+}
+
+/** Big 3-2-1 over the board while the countdown runs, then BATTLE!. */
+export function drawCountdown(ctx: Ctx, state: GameState, ui: MatchUi): void {
+  const b = state.battle;
+  const l = boardLayout(state.board);
+  const cx = l.ox + (l.cell * state.board.width) / 2;
+  const cy = l.oy + (l.cell * state.board.height) / 2;
+  let label = '';
+  if (b?.stage === 'countdown') label = String(Math.max(1, Math.ceil(b.countdown / state.ruleset.combat.tickRate)));
+  else if (ui.bannerMs > 0) label = 'BATTLE!';
+  if (!label) return;
+  const size = label.length > 1 ? 44 : 96;
+  text(ctx, label, cx + 3, cy + 3, { size, color: C.edgeDark, align: 'center', baseline: 'middle' });
+  text(ctx, label, cx, cy, { size, color: label.length > 1 ? C.danger : C.text, align: 'center', baseline: 'middle' });
+}
 
 /**
  * Side panel for one combatant during real-time combat. The fight itself is

@@ -119,7 +119,7 @@ describe('combat flow', () => {
   it('commands for the wrong battle stage are rejected', () => {
     const s = duel({}, {});
     expect(applyCommand(s, { type: 'END_BATTLE' }).error).toBeDefined();
-    expect(applyCommand(s, { type: 'ROLL_DICE' }).error).toBeDefined();
+    expect(applyCommand(s, { type: 'ROLL_DICE', player: 'P1' }).error).toBeDefined();
     expect(applyCommand(s, { type: 'MOVE_CREATURE', creatureId: 'P1-a-2', to: { x: 0, y: 3 } }).error).toBeDefined();
   });
 });

@@ -11,17 +11,28 @@ export interface Floater {
   ms: number;
 }
 
+/** One player's cursor in their own preparation panel. */
+export interface PrepCursor {
+  /** 0..dice-1 = dice rows, dice = the button. */
+  row: number;
+  col: 'die' | 'slot';
+  /** Die picked up for placing. */
+  held: number | null;
+}
+
+export function createPrepCursor(): PrepCursor {
+  return { row: 0, col: 'die', held: null };
+}
+
 export interface MatchUi {
   cursor: Record<PlayerId, Cell>;
   selected: string | null;
   /** Mouse-hovered board cell. */
   hover: Cell | null;
-  /** Focus on the dice screen (row/col into diceScreenRows). */
-  focus: { row: number; col: number };
-  /** Die picked up for allocation. */
-  heldDie: number | null;
-  /** The preparing player must confirm before their dice are shown (hot-seat privacy). */
-  readyGate: boolean;
+  /** Independent preparation cursors: both players prepare at the same time. */
+  prep: Record<PlayerId, PrepCursor>;
+  /** "BATTLE!" banner after the countdown, in ms. */
+  bannerMs: number;
   /** Battle intro emphasis on the board, in ms. */
   introMs: number;
   message: { text: string; color: string; ms: number } | null;
@@ -40,9 +51,8 @@ export function createMatchUi(): MatchUi {
     cursor: { P1: { x: 0, y: 0 }, P2: { x: 0, y: 0 } },
     selected: null,
     hover: null,
-    focus: { row: 1, col: 0 },
-    heldDie: null,
-    readyGate: true,
+    prep: { P1: createPrepCursor(), P2: createPrepCursor() },
+    bannerMs: 0,
     introMs: 0,
     message: null,
     paused: false,

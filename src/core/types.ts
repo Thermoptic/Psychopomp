@@ -126,6 +126,8 @@ export interface CombatRules {
   minDamage: number;
   /** 0 = no timeout. On timeout the attacker withdraws. */
   timeoutTicks: number;
+  /** Ticks of the 3-2-1 countdown between "both READY" and combat (0 = start at once). */
+  countdownTicks: number;
 }
 
 export interface Ruleset {
@@ -259,7 +261,14 @@ export interface BattleResult {
   defenderHp: number;
 }
 
-export type BattleStage = 'dice' | 'reveal' | 'combat' | 'result';
+/**
+ * dice:      both players prepare at the same time (each DicePrep has its own
+ *            roll -> allocate -> done stage; done = READY)
+ * countdown: entered exactly once, when the second player becomes READY
+ * combat:    real-time fight
+ * result:    fight over, waiting for END_BATTLE
+ */
+export type BattleStage = 'dice' | 'countdown' | 'combat' | 'result';
 
 export interface BattleState {
   attackerId: string;
@@ -269,10 +278,10 @@ export interface BattleState {
   /** The contested cell (defender's position). */
   cell: Cell;
   stage: BattleStage;
-  /** Which side is currently preparing dice (stage 'dice'). */
-  preparing: BattleSide | null;
   prep: Record<BattleSide, DicePrep>;
   builds: Record<BattleSide, BattleBuild> | null;
+  /** Countdown ticks remaining (stage 'countdown'). */
+  countdown: number;
   combat: CombatState | null;
   result: BattleResult | null;
 }
@@ -320,15 +329,17 @@ export const IDLE_INPUT: FighterInput = { dx: 0, dy: 0, attack: false, block: fa
 export type Command =
   | { type: 'MOVE_CREATURE'; creatureId: string; to: Cell; player?: PlayerId }
   | { type: 'PASS_TURN'; player?: PlayerId }
-  | { type: 'ROLL_DICE'; player?: PlayerId }
-  | { type: 'REROLL'; player?: PlayerId }
-  | { type: 'LOCK_DIE'; die: number; player?: PlayerId }
-  | { type: 'UNLOCK_DIE'; die: number; player?: PlayerId }
-  | { type: 'FINISH_ROLLING'; player?: PlayerId }
-  | { type: 'ALLOCATE_DIE'; die: number; slot: number; player?: PlayerId }
-  | { type: 'UNALLOCATE_DIE'; slot: number; player?: PlayerId }
-  | { type: 'CONFIRM_ALLOCATION'; player?: PlayerId }
-  | { type: 'BEGIN_COMBAT' }
+  // Dice preparation runs for both players at once, so these must name the player.
+  | { type: 'ROLL_DICE'; player: PlayerId }
+  | { type: 'REROLL'; player: PlayerId }
+  | { type: 'LOCK_DIE'; die: number; player: PlayerId }
+  | { type: 'UNLOCK_DIE'; die: number; player: PlayerId }
+  | { type: 'FINISH_ROLLING'; player: PlayerId }
+  | { type: 'ALLOCATE_DIE'; die: number; slot: number; player: PlayerId }
+  | { type: 'UNALLOCATE_DIE'; slot: number; player: PlayerId }
+  /** APPLY: locks the player's build (READY). */
+  | { type: 'CONFIRM_ALLOCATION'; player: PlayerId }
+  /** Battle clock: advances the countdown, then the real-time fight. */
   | { type: 'COMBAT_TICK'; inputs: Record<BattleSide, FighterInput> }
   | { type: 'END_BATTLE' };
 
@@ -342,6 +353,7 @@ export type GameEvent =
   | { type: 'DIE_ALLOCATED'; player: PlayerId; die: number; slot: number }
   | { type: 'ALLOCATION_CONFIRMED'; player: PlayerId }
   | { type: 'BUILDS_REVEALED' }
+  | { type: 'COUNTDOWN_STARTED'; ticks: number }
   | { type: 'SPECIAL_ACTIVATED'; creatureId: string; name: string }
   | { type: 'COMBAT_STARTED' }
   | { type: 'ATTACK_STARTED'; side: BattleSide }

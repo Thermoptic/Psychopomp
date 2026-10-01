@@ -1,7 +1,7 @@
 // Screen layout shared by the renderer (drawing) and the app (mouse hit tests).
 // Pure geometry — no game rules.
 
-import type { BoardDef, Cell, DicePrep } from '../core/types';
+import type { BoardDef, Cell } from '../core/types';
 
 export interface Rect {
   x: number;
@@ -45,59 +45,66 @@ export function cellAtPoint(board: BoardDef, x: number, y: number): Cell | null 
   return { x: cx, y: cy };
 }
 
-// --- Dice screen ------------------------------------------------------------
+// --- Preparation panels ----------------------------------------------------------
+//
+// Each player prepares in their own side panel (P1 left, P2 right, mirrored).
+// One row per die: [LOCK tag] [die] [slot] [category], P2 reversed.
 
-export const DICE_SCREEN: Rect = { x: 110, y: 54, w: 740, h: 418 };
+export type PrepItem = { kind: 'die'; i: number } | { kind: 'slot'; i: number } | { kind: 'lock'; i: number } | { kind: 'button' };
 
-export type DiceItem =
-  | { kind: 'die'; i: number }
-  | { kind: 'slot'; i: number }
-  | { kind: 'btn'; id: 'roll' | 'reroll' | 'keep' | 'clear' | 'confirm' };
-
-export interface PlacedItem {
-  item: DiceItem;
-  rect: Rect;
+export interface PrepRow {
+  lock: Rect;
+  die: Rect;
+  slot: Rect;
+  /** Text anchor for the category label. */
+  labelX: number;
+  labelAlign: 'left' | 'right';
+  y: number;
+  h: number;
 }
 
-const DIE = 60;
+export interface PrepPanelLayout {
+  panel: Rect;
+  rows: PrepRow[];
+  specialY: number;
+  button: Rect;
+}
 
-/** Rows of focusable items for the dice screen, with their rectangles. */
-export function diceScreenRows(prep: DicePrep): PlacedItem[][] {
-  const rows: PlacedItem[][] = [];
-  const cx = DICE_SCREEN.x + DICE_SCREEN.w / 2;
-
-  const n = prep.dice.length;
-  const gap = 22;
-  const diceW = n * DIE + (n - 1) * gap;
-  rows.push(
-    prep.dice.map((_, i) => ({
-      item: { kind: 'die', i },
-      rect: { x: Math.round(cx - diceW / 2 + i * (DIE + gap)), y: 146, w: DIE, h: DIE },
-    })),
-  );
-
-  const btn = (id: Extract<DiceItem, { kind: 'btn' }>['id'], i: number, count: number, y: number): PlacedItem => {
-    const w = 170;
-    const g = 20;
-    const total = count * w + (count - 1) * g;
-    return { item: { kind: 'btn', id }, rect: { x: Math.round(cx - total / 2 + i * (w + g)), y, w, h: 34 } };
-  };
-
-  if (prep.stage === 'roll') {
-    rows.push(prep.rollsUsed === 0 ? [btn('roll', 0, 1, 250)] : [btn('reroll', 0, 2, 250), btn('keep', 1, 2, 250)]);
-  } else {
-    const m = prep.slots.length;
-    const sw = Math.min(118, Math.floor((DICE_SCREEN.w - 40) / m) - 10);
-    const sg = 10;
-    const total = m * sw + (m - 1) * sg;
-    rows.push(
-      prep.slots.map((_, i) => ({
-        item: { kind: 'slot', i },
-        rect: { x: Math.round(cx - total / 2 + i * (sw + sg)), y: 246, w: sw, h: 104 },
-      })),
-    );
-    rows.push([btn('clear', 0, 2, 414), btn('confirm', 1, 2, 414)]);
+export function prepPanelLayout(owner: 'P1' | 'P2', rowCount: number): PrepPanelLayout {
+  const P = owner === 'P1' ? LEFT_PANEL : RIGHT_PANEL;
+  const top = P.y + 80;
+  const rowsArea = P.h - 80 - 96;
+  const h = Math.min(50, Math.floor(rowsArea / Math.max(1, rowCount)));
+  const d = Math.min(38, h - 10);
+  const mirror = owner === 'P2';
+  // x offsets measured from the panel's outer edge (left for P1, right for P2).
+  const at = (off: number, w: number) => (mirror ? P.x + P.w - off - w : P.x + off);
+  const rows: PrepRow[] = [];
+  for (let i = 0; i < rowCount; i++) {
+    const y = top + i * h;
+    const cy = y + Math.floor((h - d) / 2);
+    rows.push({
+      lock: { x: at(4, 28), y: cy + Math.floor(d / 2) - 7, w: 28, h: 14 },
+      die: { x: at(34, d), y: cy, w: d, h: d },
+      slot: { x: at(36 + d + 6, d), y: cy, w: d, h: d },
+      labelX: mirror ? P.x + P.w - (36 + 2 * d + 16) : P.x + 36 + 2 * d + 16,
+      labelAlign: mirror ? 'right' : 'left',
+      y,
+      h,
+    });
   }
-  return rows;
+  const specialY = top + rowCount * h + 16;
+  return { panel: P, rows, specialY, button: { x: P.x + 22, y: P.y + P.h - 48, w: P.w - 44, h: 36 } };
 }
 
+/** Which preparation item (if any) is under a point. */
+export function prepItemAt(layout: PrepPanelLayout, x: number, y: number): PrepItem | null {
+  if (inRect(layout.button, x, y)) return { kind: 'button' };
+  for (let i = 0; i < layout.rows.length; i++) {
+    const r = layout.rows[i];
+    if (inRect(r.lock, x, y)) return { kind: 'lock', i };
+    if (inRect(r.die, x, y)) return { kind: 'die', i };
+    if (inRect(r.slot, x, y)) return { kind: 'slot', i };
+  }
+  return null;
+}

@@ -6,7 +6,7 @@
 // illegal command returns the *original* state object plus an error message,
 // so an illegal action can never have a gameplay effect.
 
-import { advancePreparation, beginCombat, combatTick, endBattle, requireActivePrep, startBattle } from '../battle/battle';
+import { combatTick, endBattle, onPlayerReady, requirePrep, startBattle } from '../battle/battle';
 import { findLegalMove, getMovableCreatures } from '../board/movement';
 import { updatePowerPoints } from '../board/powerPoints';
 import { otherPlayer } from '../board/queries';
@@ -59,7 +59,7 @@ function execute(s: GameState, cmd: Command, events: GameEvent[]): void {
       rule(move, 'Illegal move');
       if (move.attacks) {
         events.push({ type: 'BATTLE_STARTED', attackerId: cr.id, defenderId: move.attacks });
-        startBattle(s, cr.id, move.attacks, { x: cr.x, y: cr.y }, cmd.to);
+        startBattle(s, cr.id, move.attacks, { x: cr.x, y: cr.y }, cmd.to, events);
         return;
       }
       events.push({ type: 'CREATURE_MOVED', creatureId: cr.id, from: { x: cr.x, y: cr.y }, to: { ...cmd.to } });
@@ -77,7 +77,7 @@ function execute(s: GameState, cmd: Command, events: GameEvent[]): void {
     }
     case 'ROLL_DICE':
     case 'REROLL': {
-      const prep = requireActivePrep(s, cmd.player);
+      const prep = requirePrep(s, cmd.player);
       if (cmd.type === 'REROLL') rule(prep.rollsUsed > 0, 'Roll the dice first');
       const values = roll(prep, s.rng);
       events.push({ type: 'DICE_ROLLED', player: prep.player, values });
@@ -85,35 +85,31 @@ function execute(s: GameState, cmd: Command, events: GameEvent[]): void {
     }
     case 'LOCK_DIE':
     case 'UNLOCK_DIE': {
-      const prep = requireActivePrep(s, cmd.player);
+      const prep = requirePrep(s, cmd.player);
       const locked = cmd.type === 'LOCK_DIE';
       setLocked(prep, cmd.die, locked);
       events.push({ type: 'DIE_LOCK_CHANGED', player: prep.player, die: cmd.die, locked });
       return;
     }
     case 'FINISH_ROLLING': {
-      finishRolling(requireActivePrep(s, cmd.player));
+      finishRolling(requirePrep(s, cmd.player));
       return;
     }
     case 'ALLOCATE_DIE': {
-      const prep = requireActivePrep(s, cmd.player);
+      const prep = requirePrep(s, cmd.player);
       allocate(prep, cmd.die, cmd.slot);
       events.push({ type: 'DIE_ALLOCATED', player: prep.player, die: cmd.die, slot: cmd.slot });
       return;
     }
     case 'UNALLOCATE_DIE': {
-      unallocate(requireActivePrep(s, cmd.player), cmd.slot);
+      unallocate(requirePrep(s, cmd.player), cmd.slot);
       return;
     }
     case 'CONFIRM_ALLOCATION': {
-      const prep = requireActivePrep(s, cmd.player);
+      const prep = requirePrep(s, cmd.player);
       confirmAllocation(prep);
       events.push({ type: 'ALLOCATION_CONFIRMED', player: prep.player });
-      advancePreparation(s, events);
-      return;
-    }
-    case 'BEGIN_COMBAT': {
-      beginCombat(s, events);
+      onPlayerReady(s, events);
       return;
     }
     case 'COMBAT_TICK': {

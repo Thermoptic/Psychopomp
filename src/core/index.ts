@@ -7,7 +7,7 @@ export { applyCommand, applyCommands, type CommandResult } from './state/applyCo
 export { getLegalMoves, findLegalMove, getMovableCreatures, type LegalMove } from './board/movement';
 export { creatureAt, livingCreatures, powerPointAt, otherPlayer } from './board/queries';
 export { evaluateVictory } from './rules/victory';
-export { activePrep } from './battle/battle';
+export { prepFor, isReady } from './battle/battle';
 export {
   buildSlots,
   categoryOrder,

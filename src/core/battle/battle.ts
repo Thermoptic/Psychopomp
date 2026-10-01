@@ -1,6 +1,11 @@
 // Battle state machine:
 //
-//   dice (attacker prepares -> defender prepares) -> reveal -> combat -> result
+//   dice (both players prepare simultaneously) -> countdown -> combat -> result
+//
+// Each player has an independent DicePrep (roll -> allocate -> done/READY).
+// One player's state never blocks the other's. The countdown is entered only
+// from the CONFIRM_ALLOCATION that makes the *second* player READY, so it can
+// start exactly once; after that no dice command is accepted.
 //
 // Leaving `result` (END_BATTLE) writes the fighters' remaining HP back to the
 // board creatures. This is the persistent-HP rule: nothing heals them.
@@ -8,10 +13,18 @@
 import { rule } from '../errors';
 import { createCombat, stepCombat } from '../combat/simulation';
 import { computeBuild } from '../combat/stats';
-import { createDicePrep } from '../dice/dice';
+import { createDicePrep, roll } from '../dice/dice';
 import type { BattleSide, BattleState, Cell, DicePrep, FighterInput, GameEvent, GameState, PlayerId } from '../types';
+import { BATTLE_SIDES } from '../types';
 
-export function startBattle(state: GameState, attackerId: string, defenderId: string, from: Cell, cell: Cell): BattleState {
+export function startBattle(
+  state: GameState,
+  attackerId: string,
+  defenderId: string,
+  from: Cell,
+  cell: Cell,
+  events: GameEvent[],
+): BattleState {
   const attacker = state.creatures[attackerId];
   const defender = state.creatures[defenderId];
   const battle: BattleState = {
@@ -20,82 +33,99 @@ export function startBattle(state: GameState, attackerId: string, defenderId: st
     from: { x: from.x, y: from.y },
     cell: { x: cell.x, y: cell.y },
     stage: 'dice',
-    preparing: 'attacker',
     prep: {
       attacker: createDicePrep(attackerId, attacker.owner, state.creatureDefs[attacker.defId], state.ruleset),
       defender: createDicePrep(defenderId, defender.owner, state.creatureDefs[defender.defId], state.ruleset),
     },
     builds: null,
+    countdown: 0,
     combat: null,
     result: null,
   };
   state.battle = battle;
   state.phase = 'battle';
+  // Both players receive their dice when preparation starts (fixed order for determinism).
+  for (const side of BATTLE_SIDES) {
+    const prep = battle.prep[side];
+    events.push({ type: 'DICE_ROLLED', player: prep.player, values: roll(prep, state.rng) });
+  }
   return battle;
 }
 
-/** The DicePrep that dice commands currently apply to. */
-export function activePrep(state: GameState): DicePrep | null {
+/** The given player's DicePrep while preparation is open, else null. */
+export function prepFor(state: GameState, player: PlayerId): DicePrep | null {
   const b = state.battle;
-  if (!b || b.stage !== 'dice' || !b.preparing) return null;
-  return b.prep[b.preparing];
+  if (!b || b.stage !== 'dice') return null;
+  return BATTLE_SIDES.map((side) => b.prep[side]).find((p) => p.player === player) ?? null;
 }
 
-export function requireActivePrep(state: GameState, player: PlayerId | undefined): DicePrep {
-  const prep = activePrep(state);
-  rule(prep, 'No dice preparation in progress');
-  rule(player === undefined || player === prep.player, `It is ${prep.player}'s dice phase`);
+/** For dice commands: the player's own prep, still editable (not READY). */
+export function requirePrep(state: GameState, player: PlayerId): DicePrep {
+  rule(player === 'P1' || player === 'P2', 'Dice commands must name the player');
+  rule(state.battle && state.battle.stage === 'dice', 'No dice preparation in progress');
+  const prep = prepFor(state, player);
+  rule(prep, `${player} is not in this battle`);
+  rule(prep.stage !== 'done', `${player} is READY - the build is locked`);
   return prep;
 }
 
-/** Called after the preparing side confirmed its allocation. */
-export function advancePreparation(state: GameState, events: GameEvent[]): void {
+export function isReady(prep: DicePrep): boolean {
+  return prep.stage === 'done';
+}
+
+/**
+ * Called after a player pressed APPLY. Starts the countdown only when both
+ * players are READY and preparation is still open (so at most once).
+ */
+export function onPlayerReady(state: GameState, events: GameEvent[]): void {
   const b = state.battle!;
-  if (b.preparing === 'attacker') {
-    b.preparing = 'defender';
-    return;
-  }
-  b.preparing = null;
-  const sides: BattleSide[] = ['attacker', 'defender'];
-  const builds = {} as BattleState['builds'] & object;
-  for (const side of sides) {
+  if (b.stage !== 'dice' || !BATTLE_SIDES.every((side) => isReady(b.prep[side]))) return;
+  const builds = {} as Record<BattleSide, ReturnType<typeof computeBuild>>;
+  for (const side of BATTLE_SIDES) {
     const prep = b.prep[side];
-    const cr = state.creatures[prep.creatureId];
-    const build = computeBuild(state.creatureDefs[cr.defId], prep);
-    builds[side] = build;
+    builds[side] = computeBuild(state.creatureDefs[state.creatures[prep.creatureId].defId], prep);
   }
   b.builds = builds;
-  b.stage = 'reveal';
   events.push({ type: 'BUILDS_REVEALED' });
-  for (const side of sides) {
+  for (const side of BATTLE_SIDES) {
     const build = builds[side];
     if (build.specialActive && build.specialName) {
       events.push({ type: 'SPECIAL_ACTIVATED', creatureId: build.creatureId, name: build.specialName });
     }
   }
+  b.stage = 'countdown';
+  b.countdown = state.ruleset.combat.countdownTicks;
+  events.push({ type: 'COUNTDOWN_STARTED', ticks: b.countdown });
+  if (b.countdown <= 0) beginCombat(state, events);
 }
 
-export function beginCombat(state: GameState, events: GameEvent[]): void {
-  const b = state.battle;
-  rule(b && b.stage === 'reveal' && b.builds, 'Builds are not revealed yet');
+function beginCombat(state: GameState, events: GameEvent[]): void {
+  const b = state.battle!;
   const fighter = (id: string, side: BattleSide) => {
     const creature = state.creatures[id];
     return { creature, maxHp: state.creatureDefs[creature.defId].stats.maxHp, build: b.builds![side] };
   };
   b.combat = createCombat(fighter(b.attackerId, 'attacker'), fighter(b.defenderId, 'defender'), state.ruleset.combat, state.board);
+  b.countdown = 0;
   b.stage = 'combat';
   events.push({ type: 'COMBAT_STARTED' });
 }
 
 export function combatTick(state: GameState, inputs: Record<BattleSide, FighterInput>, events: GameEvent[]): void {
   const b = state.battle;
-  rule(b && b.stage === 'combat' && b.combat, 'No combat in progress');
-  const outcome = stepCombat(b.combat, inputs, state.ruleset.combat, events);
+  rule(b && (b.stage === 'countdown' || b.stage === 'combat'), 'No combat in progress');
+  if (b.stage === 'countdown') {
+    // Inputs are ignored while counting down; nothing can change the builds.
+    b.countdown--;
+    if (b.countdown <= 0) beginCombat(state, events);
+    return;
+  }
+  const outcome = stepCombat(b.combat!, inputs, state.ruleset.combat, events);
   if (outcome) {
     b.result = {
       outcome,
-      attackerHp: b.combat.fighters.attacker.hp,
-      defenderHp: b.combat.fighters.defender.hp,
+      attackerHp: b.combat!.fighters.attacker.hp,
+      defenderHp: b.combat!.fighters.defender.hp,
     };
     b.stage = 'result';
     events.push({ type: 'COMBAT_ENDED', outcome });

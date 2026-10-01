@@ -75,8 +75,12 @@ export function finishRolling(prep: DicePrep): void {
   prep.stage = 'allocate';
 }
 
-/** Places a die in an empty slot. A die already placed elsewhere is moved. */
+/**
+ * Places a die in an empty slot. A die already placed elsewhere is moved.
+ * Placing the first die ends rolling (REROLL -> APPLY): no rerolls after that.
+ */
 export function allocate(prep: DicePrep, die: number, slot: number): void {
+  if (prep.stage === 'roll' && prep.rollsUsed > 0) finishRolling(prep);
   rule(prep.stage === 'allocate', 'Not allocating dice');
   rule(Number.isInteger(die) && die >= 0 && die < prep.dice.length, `No die #${die}`);
   rule(Number.isInteger(slot) && slot >= 0 && slot < prep.slots.length, `No slot #${slot}`);

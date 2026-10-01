@@ -20,6 +20,7 @@
     "guardTicks": 24,
     "blockChargeDivisor": 2,
     "minDamage": 1,
-    "timeoutTicks": 5400
+    "timeoutTicks": 5400,
+    "countdownTicks": 180
   }
 }

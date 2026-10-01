@@ -63,8 +63,8 @@ unless marked *code*.
 | PP capture | A PP belongs to the last player whose creature stood on it (ownership persists after leaving) | *code* (`board/powerPoints.ts`) |
 | Roster | 3 creatures per side (P1: 3× Glubber, P2: 3× Shroud) | `boards/classic.json` placements |
 | No legal moves | Player may `PASS_TURN` only if no creature has a legal move | *code* |
-| Dice preparation order | Sequential: attacker first, then defender | *code* |
-| Special activation | Automatic at reveal, lasts the whole battle | *code* |
+| Dice preparation | Simultaneous: both players get their first roll automatically and prepare in their own side panel (P1 left, P2 right) on the battle view. Per player: REROLL -> APPLY (enabled when every die is placed) -> READY (build locked). Placing the first die ends rolling. When both are READY a 3-2-1 countdown starts (exactly once), then combat. | *code* `core/battle/battle.ts`, ruleset `combat.countdownTicks` |
+| Special activation | Automatic when both players are READY, lasts the whole battle | *code* |
 | Dice → stats | Additive: battle stat = base + sum of dice in category + Special | `combat/stats.ts` |
 | Damage | `max(minDamage, power − shield)` | ruleset `combat.minDamage` |
 | Speed in combat | Faster movement and shorter attack cooldown | ruleset `combat.*` |

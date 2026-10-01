@@ -98,7 +98,7 @@ export function drawDebug(ctx: Ctx, state: GameState, ui: MatchUi, fps: number):
     `seed ${state.rng.seed}  rng ${state.rng.state}`,
     `phase ${state.phase}  turn ${state.currentTurn.number} ${state.currentTurn.player}  result ${state.matchResult}`,
     `selected ${ui.selected ?? '-'}  movable ${getMovableCreatures(state).length}`,
-    `battle ${state.battle ? `${state.battle.stage} prep:${state.battle.preparing ?? '-'}` : '-'}`,
+    `battle ${state.battle ? `${state.battle.stage} att:${state.battle.prep.attacker.stage} def:${state.battle.prep.defender.stage} cd:${state.battle.countdown}` : '-'}`,
     state.battle?.combat ? `tick ${state.battle.combat.tick}` : '',
     `PP ${state.powerPoints.map((p) => p.owner ?? '-').join(' ')}`,
     `fps ${fps.toFixed(0)}`,

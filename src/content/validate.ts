@@ -120,7 +120,7 @@ export function validateRuleset(raw: unknown): ValidationResult {
     ]) {
       intIn(errors, `ruleset.combat.${k}`, c[k], 1, 100000);
     }
-    for (const k of ['cooldownPerSpeed', 'minDamage', 'timeoutTicks']) intIn(errors, `ruleset.combat.${k}`, c[k], 0, 1000000);
+    for (const k of ['cooldownPerSpeed', 'minDamage', 'timeoutTicks', 'countdownTicks']) intIn(errors, `ruleset.combat.${k}`, c[k], 0, 1000000);
   }
   return { ok: errors.length === 0, errors };
 }
