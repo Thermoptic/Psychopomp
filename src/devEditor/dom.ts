@@ -83,6 +83,43 @@ export function segmented<T extends string>(options: Array<{ value: T; label: st
   );
 }
 
+/** One cell of a board grid: how it looks and what a click does. */
+export interface GridCell {
+  text?: string;
+  cls?: string;
+  title?: string;
+  disabled?: boolean;
+  onClick?: () => void;
+}
+
+/**
+ * A board-style grid with column numbers (1..) and row letters (A..), shared by
+ * the Position picker and the Movement pattern editor. The caller decides each
+ * cell's look and click behaviour.
+ */
+export function boardGrid(width: number, height: number, cell: (x: number, y: number) => GridCell): HTMLElement {
+  const grid = h('div', { class: 'grid9' });
+  grid.style.gridTemplateColumns = `18px repeat(${width}, 28px)`;
+  grid.append(h('span', { class: 'hdr' }), ...Array.from({ length: width }, (_, x) => h('span', { class: 'hdr', text: String(x + 1) })));
+  for (let y = 0; y < height; y++) {
+    grid.append(h('span', { class: 'hdr', text: String.fromCharCode(65 + y) }));
+    for (let x = 0; x < width; x++) {
+      const c = cell(x, y);
+      grid.append(
+        h('button', {
+          type: 'button',
+          class: `${(x + y) % 2 ? 'b' : 'a'} ${c.cls ?? ''}`,
+          text: c.text ?? '',
+          title: c.title ?? '',
+          disabled: !!c.disabled,
+          on: c.onClick ? { click: c.onClick } : undefined,
+        }),
+      );
+    }
+  }
+  return grid;
+}
+
 export function downloadText(filename: string, text: string): void {
   const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
   const a = h('a', { href: url, download: filename });

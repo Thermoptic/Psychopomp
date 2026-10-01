@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ContentLibrary, memoryStorage } from '../src/content/library';
-import { MONSTER_FORMAT, POWERUP_FORMAT, parseContentFile, parseSave } from '../src/content/saveFormat';
+import { MONSTER_FORMAT, MONSTER_FORMAT_VERSION, POWERUP_FORMAT, SAVE_VERSION, parseContentFile, parseSave } from '../src/content/saveFormat';
 import {
   applyCommand,
   cellCode,
@@ -319,7 +319,7 @@ describe('Content save format v2', () => {
     expect(basePack().creatures.every((c) => !c.modifiers)).toBe(true); // Glubber/Shroud start at 0: dice give the values
     // The library rewrites an old save in the current version.
     const { storage } = fresh(v1);
-    expect(JSON.parse(storage.text!).saveVersion).toBe(3);
+    expect(JSON.parse(storage.text!).saveVersion).toBe(SAVE_VERSION);
     // ...and the old SPECIAL dice slot became DASH.
     expect(r.ok && r.value.monsters[0].dice.slots).toEqual({ speed: 1, power: 1, shield: 1, dash: 1, block: 1 });
   });
@@ -327,7 +327,7 @@ describe('Content save format v2', () => {
   it('exports/imports monster and powerup files and refuses newer versions', () => {
     const { lib } = fresh();
     const m = lib.serialize('monster', lib.get('monster', 'glubber')!.item);
-    expect(JSON.parse(m)).toMatchObject({ format: MONSTER_FORMAT, formatVersion: 3 });
+    expect(JSON.parse(m)).toMatchObject({ format: MONSTER_FORMAT, formatVersion: MONSTER_FORMAT_VERSION });
     const p = lib.serialize('powerup', lib.get('powerup', 'plasma_bolt')!.item);
     expect(JSON.parse(p)).toMatchObject({ format: POWERUP_FORMAT, formatVersion: 1 });
     const back = parseContentFile(p, rules());

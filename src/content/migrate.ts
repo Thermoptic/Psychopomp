@@ -8,10 +8,12 @@
 //       are `modifiers` relative to the ruleset's `creatureBase` (default 0)
 //   v3  the SPECIAL dice slot is now DASH (its die sets dash distance); dice
 //       slots, slot order and requirement targets named "special" become "dash"
+//   v4  `movement` rule: { type: "default" } (the original N-step cardinal
+//       movement) or { type: "pattern", cells }; missing = default
 
 import type { Ruleset } from '../core/types';
 
-export const MONSTER_FORMAT_VERSION = 3;
+export const MONSTER_FORMAT_VERSION = 4;
 export const POWERUP_FORMAT_VERSION = 1;
 
 type Obj = Record<string, unknown>;
@@ -24,6 +26,7 @@ export function migrateMonster(raw: Obj, ruleset: Ruleset): Obj {
   const m: Obj = structuredClone(raw);
   if (m.special === undefined) m.special = null;
   if (!isObj(m.art)) m.art = {};
+  if (m.movement === undefined) m.movement = { type: 'default' };
   renameSpecialSlot(m);
   const stats = m.stats;
   if (isObj(stats) && STAT_KEYS.some((k) => k in stats)) {

@@ -6,6 +6,7 @@ import { baseBattleStats, creatureAt, describeRequirement, getLegalMoves, living
 import { badge, hpBar, panel, rect, strokeRect, text, wrapText, type Ctx } from './draw';
 import { HEADER, LEFT_PANEL, MESSAGE_BAR, RIGHT_PANEL, boardLayout, cellRect, type BoardLayout, type Rect } from './layout';
 import { aimReticle, boardUnits, combatToScreen, isBattleView, isCombatView, type BoardUnit } from './boardUnits';
+import { movementText } from './movementText';
 import { drawCreature } from './sprites';
 import { C, playerColor, playerLabel } from './theme';
 
@@ -67,7 +68,7 @@ export function drawPlayerPanel(ctx: Ctx, state: GameState, ui: MatchUi, player:
     hpBar(ctx, { x: r.x + 106, y: y + 44, w: r.w - 120, h: 10 }, cr.hp, def.stats.maxHp, color);
     text(ctx, cr === state.creatures[ui.selected ?? ''] ? 'SELECTED' : '', r.x + 106, y + 74, { size: 11, color: C.pp });
     y += 106;
-    statLine(ctx, r.x + 14, y, 'MOVEMENT', String(def.stats.movement));
+    statLine(ctx, r.x + 14, y, 'MOVEMENT', movementText(def));
     const base = baseBattleStats(def, state.ruleset);
     statLine(ctx, r.x + 14, (y += 20), 'POWER', String(base.power));
     statLine(ctx, r.x + 14, (y += 20), 'SPEED', String(base.speed));

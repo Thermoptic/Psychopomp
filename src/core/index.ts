@@ -5,6 +5,7 @@ export { RuleError } from './errors';
 export { createMatch, type MatchSetup } from './state/createMatch';
 export { applyCommand, applyCommands, type CommandResult } from './state/applyCommand';
 export { getLegalMoves, findLegalMove, getMovableCreatures, type LegalMove } from './board/movement';
+export { MOVE_PRESETS, PATTERN_RADIUS, isPatternMovement, patternCells, type MovePreset } from './board/movementPresets';
 export { creatureAt, livingCreatures, powerPointAt, otherPlayer } from './board/queries';
 export { evaluateVictory } from './rules/victory';
 export { prepFor, isReady } from './battle/battle';

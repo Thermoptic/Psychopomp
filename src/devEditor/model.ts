@@ -6,7 +6,8 @@
 import type { ContentKind, ContentLibrary, Entry } from '../content/library';
 import { DEFAULT_CATEGORIES } from '../core/types';
 import { defaultSpecial } from '../content/library';
-import { powerupMapping as M, type CreatureDef, type PowerupDef, type Ruleset, type SlotCondition, type WeaponSettings } from '../core';
+import { MOVE_PRESETS, PATTERN_RADIUS, isPatternMovement, patternCells } from '../core/board/movementPresets';
+import { powerupMapping as M, type Cell, type CreatureDef, type PowerupDef, type Ruleset, type SlotCondition, type WeaponSettings } from '../core';
 
 type ItemOf<K extends ContentKind> = K extends 'monster' ? CreatureDef : PowerupDef;
 
@@ -183,6 +184,49 @@ export function setModifier(def: CreatureDef, key: ModifierKey, value: number): 
 
 export function modifier(def: CreatureDef, key: ModifierKey): number {
   return def.modifiers?.[key] ?? 0;
+}
+
+// --- movement ---------------------------------------------------------------------------
+//
+// Pattern presets and helpers live in core/board/movementPresets.ts (shared with
+// the game's rendering); re-exported here for the editor.
+
+export { MOVE_PRESETS, PATTERN_RADIUS, isPatternMovement, patternCells } from '../core/board/movementPresets';
+
+const cellKey = (c: Cell) => `${c.x},${c.y}`;
+const sameCells = (a: Cell[], b: Cell[]) => a.length === b.length && new Set(a.map(cellKey)).size === new Set([...a, ...b].map(cellKey)).size;
+
+/** The cells DEFAULT movement reaches on an empty board: N cardinal steps (for the preview). */
+export function defaultReach(steps: number): Cell[] {
+  const out: Cell[] = [];
+  for (let y = -PATTERN_RADIUS; y <= PATTERN_RADIUS; y++)
+    for (let x = -PATTERN_RADIUS; x <= PATTERN_RADIUS; x++) if ((x || y) && Math.abs(x) + Math.abs(y) <= steps) out.push({ x, y });
+  return out;
+}
+
+/** "DEFAULT — 3 steps", a preset name, or "CUSTOM — n cells". */
+export function movementLabel(def: CreatureDef): string {
+  if (!isPatternMovement(def)) return `DEFAULT — ${def.stats.movement} steps`;
+  const cells = patternCells(def);
+  const preset = MOVE_PRESETS.find((p) => sameCells(p.cells(), cells));
+  return preset ? preset.label.split(' — ')[0] : `CUSTOM — ${cells.length} cells`;
+}
+
+export function setDefaultMovement(def: CreatureDef): void {
+  def.movement = { type: 'default' };
+}
+
+export function setPatternMovement(def: CreatureDef, cells: Cell[]): void {
+  def.movement = { type: 'pattern', cells: cells.filter((c) => c.x || c.y).map((c) => ({ x: c.x, y: c.y })) };
+}
+
+/** Toggles one relative cell. The monster's own cell (0,0) can never be a destination. */
+export function toggleMovementCell(def: CreatureDef, x: number, y: number): boolean {
+  if (x === 0 && y === 0) return false;
+  const cells = patternCells(def);
+  const has = cells.some((c) => c.x === x && c.y === y);
+  setPatternMovement(def, has ? cells.filter((c) => !(c.x === x && c.y === y)) : [...cells, { x, y }]);
+  return true;
 }
 
 // --- powerups ------------------------------------------------------------------------

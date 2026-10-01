@@ -119,6 +119,25 @@ export function validateCreature(raw: unknown, ruleset: Ruleset, ctx: CreatureCo
     if (raw.player === undefined) errors.push(`${where}: a position needs a player`);
   }
 
+  // Movement rule: default, or a pattern of relative destination offsets.
+  if (raw.movement !== undefined) {
+    const mv = raw.movement;
+    if (!isObj(mv) || (mv.type !== 'default' && mv.type !== 'pattern')) errors.push(`${where}.movement.type must be "default" or "pattern"`);
+    else if (mv.type === 'pattern') {
+      if (!Array.isArray(mv.cells) || mv.cells.length > 288) errors.push(`${where}.movement.cells must be a list of offsets`);
+      else {
+        const seen = new Set<string>();
+        mv.cells.forEach((c, i) => {
+          const ok = isObj(c) && isInt(c.x) && isInt(c.y) && Math.abs(c.x) <= 8 && Math.abs(c.y) <= 8 && !(c.x === 0 && c.y === 0);
+          if (!ok) return void errors.push(`${where}.movement.cells[${i}] must be an offset {x, y} within -8..8, not 0,0`);
+          const k = `${(c as Obj).x},${(c as Obj).y}`;
+          if (seen.has(k)) errors.push(`${where}.movement.cells has ${k} twice`);
+          seen.add(k);
+        });
+      }
+    }
+  }
+
   // Powerup reference (by id, never a copy).
   if (raw.powerupId !== undefined && raw.powerupId !== null) {
     if (!isStr(raw.powerupId)) errors.push(`${where}.powerupId must be a Powerup id`);

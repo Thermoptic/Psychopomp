@@ -262,6 +262,7 @@ export class ContentLibrary {
       modifiers: { speed: 0, power: 0, shield: 0, dash: 0, block: 0 },
       player: 'P1',
       attack: { type: 'melee', autoFire: false, ...defaultWeaponSettings() },
+      movement: { type: 'default' },
       powerupId: null,
       dice: { slots },
       special: defaultSpecial(count),

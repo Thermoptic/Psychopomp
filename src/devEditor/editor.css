@@ -110,6 +110,13 @@ input[type='range'] { accent-color: var(--pp); width: 100%; }
 .grid9 button.taken.p2 { box-shadow: inset 0 0 0 2px rgba(179, 92, 255, 0.5); }
 .grid9 button.pp { color: var(--pp); }
 .pos-line { margin-top: 6px; }
+/* Movement pattern grid: M = the monster (reference), ■ = allowed destination, · = DEFAULT reach preview. */
+.grid9 button.me { background: var(--text); color: var(--bg); font-size: 12px; cursor: default; }
+.grid9 button.me.p1 { background: var(--p1); }
+.grid9 button.me.p2 { background: var(--p2); }
+.grid9 button.mv { background: var(--pp); color: var(--bg); font-size: 12px; }
+.grid9 button.reach { color: var(--pp); font-size: 16px; cursor: default; }
+.grid9 button:disabled:not(.taken) { cursor: default; }
 
 /* Preview */
 .preview canvas { image-rendering: pixelated; display: block; margin: 0 auto 8px; background: #0c0c10; border: 1px solid var(--faint); }

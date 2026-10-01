@@ -4,9 +4,28 @@
 import { baseBattleStats, cellCode, describeRequirement, parseCell, type CreatureDef, type Effect, type SlotCondition } from '../core';
 import { resolveDash } from '../core/combat/simulation';
 import { drawCreature } from '../rendering/sprites';
-import { group, h, row, segmented, selectBox, slider, textInput } from './dom';
+import { boardGrid, group, h, row, segmented, selectBox, slider, textInput } from './dom';
 import { setWeaponType, weaponSettingsGroup, weaponSummary, weaponTypeSelector } from './weaponFields';
-import { MODIFIER_KEYS, SLOT_OPTIONS, modifier, setModifier, setSlotCondition, slotCategories, slotConditions, slotOptionIndex, type ItemEditor } from './model';
+import {
+  MODIFIER_KEYS,
+  SLOT_OPTIONS,
+  modifier,
+  setModifier,
+  setSlotCondition,
+  slotCategories,
+  slotConditions,
+  slotOptionIndex,
+  type ItemEditor,
+  MOVE_PRESETS,
+  PATTERN_RADIUS,
+  defaultReach,
+  isPatternMovement,
+  movementLabel,
+  patternCells,
+  setDefaultMovement,
+  setPatternMovement,
+  toggleMovementCell,
+} from './model';
 
 const idSanitize = (v: string) => v.toLowerCase().replace(/\s/g, '_').replace(/[^a-z0-9_]/g, '').slice(0, 32);
 const EFFECTS: Array<Exclude<Effect['type'], 'multi'>> = ['addPower', 'addShield', 'addSpeed', 'addBlock', 'addDash'];
@@ -58,27 +77,18 @@ export function monsterForm(ed: ItemEditor<'monster'>, refresh: () => void, rebu
   }
   const pps = new Set(board.powerPoints.map((p) => cellCode(p)));
   const selected = d.position ? cellCode(parseCell(d.position) ?? { x: -1, y: -1 }) : null;
-  const grid = h('div', { class: 'grid9' });
-  grid.style.gridTemplateColumns = `18px repeat(${board.width}, 28px)`;
-  grid.append(h('span', { class: 'hdr' }), ...Array.from({ length: board.width }, (_, x) => h('span', { class: 'hdr', text: String(x + 1) })));
-  for (let y = 0; y < board.height; y++) {
-    grid.append(h('span', { class: 'hdr', text: String.fromCharCode(65 + y) }));
-    for (let x = 0; x < board.width; x++) {
-      const code = cellCode({ x, y });
-      const t = taken.get(code);
-      const isSel = code === selected;
-      grid.append(
-        h('button', {
-          type: 'button',
-          class: `${(x + y) % 2 ? 'b' : 'a'} ${isSel ? `sel ${(d.player ?? 'P1').toLowerCase()}` : ''} ${t ? `taken ${t.owner.toLowerCase()}` : ''} ${pps.has(code) ? 'pp' : ''}`,
-          text: pps.has(code) && !isSel ? '◆' : code,
-          title: t ? `${code}: ${t.who}` : pps.has(code) ? `${code}: Power Point` : code,
-          disabled: !!t,
-          on: { click: () => edit((m) => ((m.position = code), (m.player = m.player ?? 'P1')), true) },
-        }),
-      );
-    }
-  }
+  const grid = boardGrid(board.width, board.height, (x, y) => {
+    const code = cellCode({ x, y });
+    const t = taken.get(code);
+    const isSel = code === selected;
+    return {
+      cls: `${isSel ? `sel ${(d.player ?? 'P1').toLowerCase()}` : ''} ${t ? `taken ${t.owner.toLowerCase()}` : ''} ${pps.has(code) ? 'pp' : ''}`,
+      text: pps.has(code) && !isSel ? '◆' : code,
+      title: t ? `${code}: ${t.who}` : pps.has(code) ? `${code}: Power Point` : code,
+      disabled: !!t,
+      onClick: () => edit((m) => ((m.position = code), (m.player = m.player ?? 'P1')), true),
+    };
+  });
   const position = group(
     'POSITION',
     grid,
@@ -89,6 +99,54 @@ export function monsterForm(ed: ItemEditor<'monster'>, refresh: () => void, rebu
       selected ? h('button', { type: 'button', class: 'btn', text: 'CLEAR', on: { click: () => edit((m) => delete m.position, true) } }) : null,
     ),
     h('div', { class: 'hint dim', text: 'A1 top-left · E5 centre · I9 bottom-right. Outlined cells are taken (hover for who).' }),
+  );
+
+  // --- movement: DEFAULT (N cardinal steps) or a pattern of relative cells ---------------------------
+  const R = PATTERN_RADIUS;
+  const isPattern = isPatternMovement(d);
+  const cells = new Set(patternCells(d).map((c) => `${c.x},${c.y}`));
+  const reach = new Set(defaultReach(d.stats.movement).map((c) => `${c.x},${c.y}`));
+  const patternOptions = [`DEFAULT — ${d.stats.movement} steps`, 'CUSTOM PATTERN', ...MOVE_PRESETS.map((p) => p.label)];
+  const label = movementLabel(d);
+  const selectedOption = !isPattern ? 0 : Math.max(1, MOVE_PRESETS.findIndex((p) => p.label.startsWith(label + ' ')) + 2);
+  const moveGrid = boardGrid(2 * R + 1, 2 * R + 1, (gx, gy) => {
+    const x = gx - R;
+    const y = gy - R;
+    const code = cellCode({ x: gx, y: gy });
+    if (x === 0 && y === 0) return { text: 'M', cls: `me ${(d.player ?? 'P1').toLowerCase()}`, title: `${code}: the monster (reference point)`, disabled: true };
+    const rel = `${x >= 0 ? '+' : ''}${x}, ${y >= 0 ? '+' : ''}${y}`;
+    if (!isPattern) return { cls: reach.has(`${x},${y}`) ? 'reach' : '', text: reach.has(`${x},${y}`) ? '·' : '', title: `${code} (${rel})`, disabled: true };
+    const on = cells.has(`${x},${y}`);
+    return { cls: on ? 'mv' : '', text: on ? '■' : '', title: `${code} (${rel})`, onClick: () => edit((m) => toggleMovementCell(m, x, y), true) };
+  });
+  const movement = group(
+    'MOVEMENT',
+    row(
+      'Pattern',
+      selectBox(patternOptions, selectedOption, (i) =>
+        edit((m) => {
+          if (i === 0) setDefaultMovement(m);
+          // CUSTOM starts from what the monster can do now; presets fill their pattern.
+          else if (i === 1) setPatternMovement(m, isPatternMovement(m) ? patternCells(m) : defaultReach(m.stats.movement));
+          else setPatternMovement(m, MOVE_PRESETS[i - 2].cells());
+        }, true),
+      ),
+    ),
+    !isPattern
+      ? h(
+          'div',
+          {},
+          row(
+            'Steps',
+            h('input', { type: 'number', min: '1', max: '20', value: String(d.stats.movement), on: { input: (e: Event) => edit((m) => (m.stats.movement = Math.max(1, Math.min(20, Math.round(Number((e.target as HTMLInputElement).value) || 1))))) } }),
+            'steps per move, up/down/left/right (a path around obstacles)',
+          ),
+          h('div', { class: 'hint dim', text: `DEFAULT: ${d.stats.movement} steps in all cardinal directions. Preview on an empty board:` }),
+        )
+      : h('div', { class: 'hint dim', text: `${cells.size} destination${cells.size === 1 ? '' : 's'}. Click cells to toggle movement destinations. Straight and diagonal lines need a clear path; other cells are jumps.` }),
+    moveGrid,
+    isPattern && cells.size === 0 ? h('div', { class: 'note', text: 'No destinations: this monster cannot move on the board.' }) : null,
+    isPattern ? h('button', { type: 'button', class: 'btn', text: 'CLEAR PATTERN', on: { click: () => edit((m) => setPatternMovement(m, []), true) } }) : null,
   );
 
   // --- start modifiers ------------------------------------------------------------------------
@@ -231,7 +289,6 @@ export function monsterForm(ed: ItemEditor<'monster'>, refresh: () => void, rebu
     });
   const behaviour = group(
     'BEHAVIOUR',
-    row('Board Movement', h('input', { type: 'number', min: '1', max: '20', value: String(d.stats.movement), on: { input: (e: Event) => edit((m) => (m.stats.movement = Math.round(Number((e.target as HTMLInputElement).value) || 1))) } })),
     h(
       'details',
       {},
@@ -243,7 +300,7 @@ export function monsterForm(ed: ItemEditor<'monster'>, refresh: () => void, rebu
     ),
   );
 
-  return h('div', {}, identity, health, player, position, modifiers, attack, powerup, special, behaviour);
+  return h('div', {}, identity, health, player, position, movement, modifiers, attack, powerup, special, behaviour);
 }
 
 export function monsterPreview(ed: ItemEditor<'monster'>): HTMLElement {
@@ -274,6 +331,7 @@ export function monsterPreview(ed: ItemEditor<'monster'>): HTMLElement {
       tr('Player', d.player ?? '-'),
       tr('Position', d.position ? d.position.toUpperCase() : d.id && ed.lib.board.placements.some((p) => p.creature === d.id) ? 'board lineup' : 'not placed'),
       tr('HP', String(d.stats.maxHp)),
+      tr('Movement', movementLabel(d)),
       tr('Power', mod('power')),
       tr('Speed', mod('speed')),
       tr('Shield', mod('shield')),

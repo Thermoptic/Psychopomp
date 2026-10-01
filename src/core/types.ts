@@ -81,6 +81,8 @@ export interface SpecialDef {
   activation?: 'auto' | 'manual';
 }
 
+export type MovementDef = { type: 'default' } | { type: 'pattern'; cells: Cell[] };
+
 /** Melee weapon settings (designer levels 1-10, see core/combat/powerups.ts). */
 export interface MeleeSettings {
   speed: number;
@@ -175,6 +177,13 @@ export interface CreatureDef {
   position?: string;
   /** Weapon/attack from the Powerups content (by id). None = classic melee. */
   powerupId?: string | null;
+  /**
+   * Board movement rule. Missing or 'default' = up to `stats.movement` steps
+   * in the four cardinal directions (the original rule). 'pattern' = exactly
+   * these destinations, as offsets from the creature's cell (x = columns,
+   * right is +; y = rows, down is +); `stats.movement` is not used then.
+   */
+  movement?: MovementDef;
   dice: {
     /** Die sides for this creature. Defaults to the ruleset's dice.sides. */
     sides?: number;

@@ -4,9 +4,9 @@
 // Payloads are always the game's own definitions (CreatureDef, PowerupDef) —
 // the exact data the game core uses. There is no separate editor representation.
 //
-//   Monster file:  { "format": "psychopomp-monster", "formatVersion": 3, "contentVersion": 1, "monster": CreatureDef }
+//   Monster file:  { "format": "psychopomp-monster", "formatVersion": 4, "contentVersion": 1, "monster": CreatureDef }
 //   Powerup file:  { "format": "psychopomp-powerup", "formatVersion": 1, "contentVersion": 1, "powerup": PowerupDef }
-//   Local save:    { "saveVersion": 3, "contentVersion": 1, "monsters": CreatureDef[], "powerups": PowerupDef[] }
+//   Local save:    { "saveVersion": 4, "contentVersion": 1, "monsters": CreatureDef[], "powerups": PowerupDef[] }
 //
 // Versions: see content/migrate.ts. Monster v0 (bare CreatureDef) and v1
 // (absolute stats) migrate to v2 on load; save v1 (monsters only) migrates to
@@ -19,7 +19,7 @@ import { validateCreature, validatePowerup } from './validate';
 export { MONSTER_FORMAT_VERSION, POWERUP_FORMAT_VERSION };
 export const MONSTER_FORMAT = 'psychopomp-monster';
 export const POWERUP_FORMAT = 'psychopomp-powerup';
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 export type ContentKind = 'monster' | 'powerup';
 
