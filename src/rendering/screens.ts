@@ -7,7 +7,7 @@ import type { Rect } from './layout';
 import { drawCreature } from './sprites';
 import { C, playerColor, VIEW_H, VIEW_W } from './theme';
 
-export const MENU_ITEMS = ['NEW MATCH', 'CONTROLS', 'EDITOR'] as const;
+export const MENU_ITEMS = ['NEW MATCH', 'CONTROLS'] as const;
 
 export function menuItemRect(i: number): Rect {
   return { x: 480 - 130, y: 300 + i * 50, w: 260, h: 38 };
@@ -21,9 +21,8 @@ export function drawMenu(ctx: Ctx, focus: number, now: number): void {
   text(ctx, 'PSYCHOPOMP', 480, 160, { size: 64, color: C.danger, align: 'center' });
   text(ctx, 'BUILD YOUR MONSTER  ·  THEN FIGHT WITH WHAT YOU BUILT', 480, 200, { size: 13, color: C.dim, align: 'center' });
   MENU_ITEMS.forEach((label, i) => {
-    button(ctx, menuItemRect(i), label, { focused: i === focus, disabled: label === 'EDITOR', size: 16 });
+    button(ctx, menuItemRect(i), label, { focused: i === focus, size: 16 });
   });
-  text(ctx, 'EDITOR: NOT IN THIS BUILD YET', 480, 468, { size: 10, color: C.faint, align: 'center' });
   text(ctx, 'VERTICAL SLICE 0.1  ·  OFFLINE  ·  2 LOCAL PLAYERS', 480, 520, { size: 11, color: C.faint, align: 'center' });
 }
 

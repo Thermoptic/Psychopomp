@@ -1,9 +1,10 @@
 // Loads a content pack from already-read JSON data. Platform code decides how
 // the files are read (Vite bundle, filesystem, browser storage…); this module
-// is pure and portable.
+// is pure and portable. Older monster data is migrated before validation.
 
-import type { BoardDef, CreatureDef, Ruleset } from '../core/types';
-import { validateBoard, validateCreature, validateRuleset } from './validate';
+import type { BoardDef, CreatureDef, PowerupDef, Ruleset } from '../core/types';
+import { isObj, migrateMonster } from './migrate';
+import { validateBoard, validateCreature, validatePowerup, validateRuleset } from './validate';
 
 export interface ContentPack {
   id: string;
@@ -12,6 +13,7 @@ export interface ContentPack {
   ruleset: Ruleset;
   boards: BoardDef[];
   creatures: CreatureDef[];
+  powerups: PowerupDef[];
 }
 
 export type LoadResult = { ok: true; pack: ContentPack } | { ok: false; errors: string[] };
@@ -38,17 +40,34 @@ export function loadContentPack(files: Record<string, unknown>): LoadResult {
   if (!rv.ok) return { ok: false, errors: [...errors, ...rv.errors] };
   const ruleset = rulesetRaw as Ruleset;
 
+  const powerups: PowerupDef[] = [];
+  const powerupIds = new Set<string>();
+  for (const path of (manifest.powerups as unknown[]) ?? []) {
+    const raw = get(path, 'powerup');
+    if (raw === undefined) continue;
+    const v = validatePowerup(raw);
+    if (!v.ok) {
+      errors.push(...v.errors.map((e) => `${String(path)}: ${e}`));
+      continue;
+    }
+    const p = raw as PowerupDef;
+    if (powerupIds.has(p.id)) errors.push(`${String(path)}: duplicate powerup id "${p.id}"`);
+    powerupIds.add(p.id);
+    powerups.push(p);
+  }
+
   const creatures: CreatureDef[] = [];
   const ids = new Set<string>();
   for (const path of (manifest.creatures as unknown[]) ?? []) {
     const raw = get(path, 'creature');
     if (raw === undefined) continue;
-    const v = validateCreature(raw, ruleset);
+    const migrated = isObj(raw) ? migrateMonster(raw, ruleset) : raw;
+    const v = validateCreature(migrated, ruleset, { powerupIds });
     if (!v.ok) {
       errors.push(...v.errors.map((e) => `${String(path)}: ${e}`));
       continue;
     }
-    const def = raw as CreatureDef;
+    const def = migrated as unknown as CreatureDef;
     if (ids.has(def.id)) errors.push(`${String(path)}: duplicate creature id "${def.id}"`);
     ids.add(def.id);
     creatures.push(def);
@@ -74,6 +93,7 @@ export function loadContentPack(files: Record<string, unknown>): LoadResult {
       ruleset,
       boards,
       creatures,
+      powerups,
     },
   };
 }

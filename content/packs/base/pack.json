@@ -3,6 +3,15 @@
   "name": "Psychopomp Base Pack",
   "contentVersion": 1,
   "ruleset": "ruleset.json",
-  "boards": ["boards/classic.json"],
-  "creatures": ["monsters/glubber.json", "monsters/shroud.json"]
+  "boards": [
+    "boards/classic.json"
+  ],
+  "creatures": [
+    "monsters/glubber.json",
+    "monsters/shroud.json"
+  ],
+  "powerups": [
+    "powerups/rusty_blade.json",
+    "powerups/plasma_bolt.json"
+  ]
 }

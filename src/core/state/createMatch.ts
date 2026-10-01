@@ -1,12 +1,15 @@
 import { updatePowerPoints } from '../board/powerPoints';
 import { createRng } from '../rng';
-import type { BoardDef, CreatureDef, CreatureState, GameState, Ruleset } from '../types';
+import { cellCode, cellInBoard, parseCell } from '../board/cells';
+import type { BoardDef, CreatureDef, CreatureState, GameState, Placement, PowerupDef, Ruleset } from '../types';
 
 export interface MatchSetup {
   ruleset: Ruleset;
   board: BoardDef;
   /** Validated creature definitions. The match keeps its own snapshot. */
   creatures: CreatureDef[];
+  /** Validated Powerup definitions (referenced by creatures' powerupId). */
+  powerups?: PowerupDef[];
   seed: number;
   playerNames?: { P1?: string; P2?: string };
 }
@@ -18,14 +21,26 @@ export function createMatch(setup: MatchSetup): GameState {
   const defs: Record<string, CreatureDef> = {};
   for (const def of setup.creatures) defs[def.id] = clone(def);
 
+  const powerupDefs: Record<string, PowerupDef> = {};
+  for (const p of setup.powerups ?? []) powerupDefs[p.id] = clone(p);
+
+  // Lineup: the board's placements plus every creature with its own player + position.
+  const lineup: Placement[] = [...setup.board.placements];
+  for (const def of setup.creatures) {
+    if (!def.player || !def.position) continue;
+    const c = parseCell(def.position);
+    if (!c || !cellInBoard(c, setup.board)) throw new Error(`Creature "${def.id}" has invalid position "${def.position}"`);
+    lineup.push({ creature: def.id, owner: def.player, x: c.x, y: c.y });
+  }
+
   const creatures: Record<string, CreatureState> = {};
   const counters: Record<string, number> = {};
   const taken = new Set<string>();
-  for (const p of setup.board.placements) {
+  for (const p of lineup) {
     const def = defs[p.creature];
     if (!def) throw new Error(`Board "${setup.board.id}" places unknown creature "${p.creature}"`);
     const cellKey = `${p.x},${p.y}`;
-    if (taken.has(cellKey)) throw new Error(`Two creatures placed on ${cellKey}`);
+    if (taken.has(cellKey)) throw new Error(`Two creatures placed on ${cellCode(p)}`);
     taken.add(cellKey);
     const n = (counters[`${p.owner}-${p.creature}`] ?? 0) + 1;
     counters[`${p.owner}-${p.creature}`] = n;
@@ -47,6 +62,7 @@ export function createMatch(setup: MatchSetup): GameState {
     ruleset: clone(setup.ruleset),
     board: clone(setup.board),
     creatureDefs: defs,
+    powerupDefs,
     players: {
       P1: { id: 'P1', name: setup.playerNames?.P1 ?? 'PLAYER 1' },
       P2: { id: 'P2', name: setup.playerNames?.P2 ?? 'PLAYER 2' },

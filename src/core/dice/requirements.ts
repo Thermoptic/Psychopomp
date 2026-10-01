@@ -2,12 +2,14 @@
 // Requirement in types.ts); this module evaluates and describes it. No creature
 // is ever referenced here.
 
-import type { DiceTarget, Requirement, StatCategory } from '../types';
+import type { DiceTarget, Requirement, SlotCondition, StatCategory } from '../types';
 
 /** Final dice of a build, grouped for requirement evaluation. */
 export interface DiceView {
   all: number[];
   byCategory: Record<StatCategory, number[]>;
+  /** Die value per dice slot in layout order (0 = slot empty). */
+  bySlot?: number[];
 }
 
 export const REQUIREMENT_TYPES = [
@@ -29,7 +31,16 @@ export const REQUIREMENT_TYPES = [
   'and',
   'or',
   'not',
+  'slots',
 ] as const;
+
+/** Does one die value satisfy a slot condition? */
+export function slotConditionMet(cond: SlotCondition, value: number): boolean {
+  if (!value) return false;
+  if (cond === 'odd') return value % 2 === 1;
+  if (cond === 'even') return value % 2 === 0;
+  return value === cond;
+}
 
 const DEFAULT_TARGET: DiceTarget = 'special';
 
@@ -68,6 +79,12 @@ export function evaluateRequirement(req: Requirement, view: DiceView): boolean {
       return req.of.some((r) => evaluateRequirement(r, view));
     case 'not':
       return !evaluateRequirement(req.of, view);
+    case 'slots': {
+      // Unused slots (null) require nothing; all used ones must hold.
+      const active = req.slots.map((c, i) => [c, i] as const).filter(([c]) => c !== null);
+      if (active.length === 0) return false;
+      return active.every(([c, i]) => slotConditionMet(c as SlotCondition, view.bySlot?.[i] ?? 0));
+    }
   }
 
   const dice = pick(view, req.target);
@@ -110,6 +127,10 @@ function targetLabel(t: DiceTarget | undefined): string {
   return x === 'all' ? 'ALL DICE' : x.toUpperCase();
 }
 
+export function slotConditionLabel(c: SlotCondition): string {
+  return c === 'odd' ? 'ODD' : c === 'even' ? 'EVEN' : String(c);
+}
+
 /** Short human-readable text, e.g. "SPECIAL: ALL ODD". Used by UI and editor. */
 export function describeRequirement(req: Requirement): string {
   switch (req.type) {
@@ -123,6 +144,10 @@ export function describeRequirement(req: Requirement): string {
       return req.of.map(describeRequirement).join(' OR ');
     case 'not':
       return `NOT (${describeRequirement(req.of)})`;
+    case 'slots': {
+      const parts = req.slots.map((c, i) => (c === null ? null : `S${i + 1} ${slotConditionLabel(c)}`)).filter(Boolean);
+      return parts.length ? parts.join(' · ') : 'NO TRIGGER';
+    }
   }
   const t = targetLabel(req.target);
   switch (req.type) {

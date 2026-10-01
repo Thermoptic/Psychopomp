@@ -7,12 +7,12 @@ import { DEFAULT_BINDINGS } from '../src/input/bindings';
 import { aimToward, emptyQueue, queuePresses, toFighterInput } from '../src/input/combatInput';
 import { radialDeadzone, readPad, type PadLike } from '../src/input/gamepad';
 import { aimReticle } from '../src/rendering/boardUnits';
-import { basePack, customMatch, ok, prepareBothAndBegin, testCreature } from './helpers';
+import { basePack, customMatch, ok, prepareBothAndBegin, testCreature, type TestStats } from './helpers';
 
 // --- fixtures ----------------------------------------------------------------
 
 const DICE1 = { sides: 1, slots: { speed: 1, power: 1, shield: 1, special: 1, block: 1 } };
-const mk = (id: string, stats: Partial<CreatureDef['stats']> = {}, extra: Partial<CreatureDef> = {}) =>
+const mk = (id: string, stats: TestStats = {}, extra: Partial<CreatureDef> = {}) =>
   testCreature(id, stats, { dice: DICE1, ...extra });
 
 /** A battle in progress: P1-a-1 (attacker, left) vs P2-b-1 (defender, right). */

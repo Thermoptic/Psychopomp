@@ -26,16 +26,32 @@ export function basePack(): ContentPack {
 
 export function newMatch(seed = 1234): GameState {
   const pack = basePack();
-  return createMatch({ ruleset: pack.ruleset, board: pack.boards[0], creatures: pack.creatures, seed });
+  return createMatch({ ruleset: pack.ruleset, board: pack.boards[0], creatures: pack.creatures, powerups: pack.powerups, seed });
 }
 
 /** A creature def with overridable stats (defaults: Glubber-like, no Special). */
-export function testCreature(id: string, over: Partial<CreatureDef['stats']> = {}, extra: Partial<CreatureDef> = {}): CreatureDef {
+/** Stat values a test creature can set; power/speed/shield/block are absolute battle-stat bases. */
+export type TestStats = Partial<CreatureDef['stats']> & { power?: number; speed?: number; shield?: number; block?: number };
+
+/**
+ * A creature def for tests. Absolute power/speed/shield/block (defaults: the
+ * ruleset base 10/5/4/0, i.e. Glubber-like) are stored as modifiers, exactly
+ * like real content.
+ */
+export function testCreature(id: string, over: TestStats = {}, extra: Partial<CreatureDef> = {}): CreatureDef {
+  const base = basePack().ruleset.creatureBase;
+  const { power, speed, shield, block, ...stats } = over;
+  const modifiers: Record<string, number> = {};
+  if (power !== undefined) modifiers.power = power - base.power;
+  if (speed !== undefined) modifiers.speed = speed - base.speed;
+  if (shield !== undefined) modifiers.shield = shield - base.shield;
+  if (block !== undefined) modifiers.block = block - base.block;
   return {
     id,
     name: id.toUpperCase(),
     art: {},
-    stats: { maxHp: 20, movement: 3, power: 10, speed: 5, shield: 4, ...over },
+    stats: { maxHp: 20, movement: 3, ...stats },
+    modifiers,
     dice: { slots: { speed: 1, power: 1, shield: 1, special: 1, block: 1 } },
     special: null,
     ...extra,

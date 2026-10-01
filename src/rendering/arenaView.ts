@@ -4,7 +4,7 @@
 
 import type { MatchUi } from '../app/ui';
 import { arenaGrid, computeBlockCharges, type GameState, type PlayerId } from '../core';
-import { boardUnits } from './boardUnits';
+import { boardUnits, combatToScreen } from './boardUnits';
 import { drawUnits } from './boardView';
 import { hpBar, measure, panel, rect, text, type Ctx } from './draw';
 import { BOARD_AREA, COMBAT_HUD, arenaLayout, type BoardLayout, type Rect } from './layout';
@@ -57,7 +57,40 @@ export function drawArena(ctx: Ctx, state: GameState, ui: MatchUi, now: number, 
   ctx.fillStyle = 'rgba(57,224,200,0.08)';
   ctx.fillRect(l.ox + Math.floor((g.width * l.cell) / 2) - 1, l.oy, 2, g.height * l.cell);
   drawUnits(ctx, state, ui, l, boardUnits(state, l), now);
+  drawProjectiles(ctx, state, ui, l);
   ctx.restore();
+}
+
+/** Projectiles (from game state) and impact shockwaves (from events). */
+function drawProjectiles(ctx: Ctx, state: GameState, ui: MatchUi, l: BoardLayout): void {
+  const combat = state.battle?.combat;
+  if (!combat) return;
+  const scale = l.cell / state.ruleset.combat.cellUnits;
+  for (const p of combat.projectiles) {
+    const owner = state.creatures[p.side === 'attacker' ? state.battle!.attackerId : state.battle!.defenderId].owner;
+    const s = combatToScreen(state, l, p.x / 256, p.y / 256);
+    const tail = combatToScreen(state, l, (p.x - p.vx * 2) / 256, (p.y - p.vy * 2) / 256);
+    ctx.strokeStyle = playerColor(owner);
+    ctx.globalAlpha = 0.5;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(tail.x, tail.y);
+    ctx.lineTo(s.x, s.y);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    rect(ctx, { x: Math.round(s.x) - 3, y: Math.round(s.y) - 3, w: 6, h: 6 }, '#fff6d8');
+  }
+  for (const im of ui.impacts) {
+    const s = combatToScreen(state, l, im.x, im.y);
+    const t = 1 - im.ms / 350;
+    ctx.strokeStyle = im.color;
+    ctx.globalAlpha = 1 - t;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, Math.max(2, im.radius * scale * (0.4 + 0.6 * t)), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
 }
 
 interface HudData {

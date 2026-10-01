@@ -1,0 +1,276 @@
+// The content library: bundled base content + content saved by the developer
+// editor (/editor), merged into the one set of definitions the game uses.
+// Saved items override base items with the same id; new ids are added.
+// Pure — storage is injected by the platform.
+//
+// Content kinds share one generic store; adding a kind later (dice, upgrades,
+// abilities, …) means adding a collection + its validator here and a section
+// in the editor — the save format already keeps collections by name.
+
+import { cellCode, cellInBoard, parseCell } from '../core/board/cells';
+import { DEFAULT_CATEGORIES, type CreatureDef, type PowerupDef, type Ruleset } from '../core/types';
+import type { ContentPack } from './loader';
+import {
+  emptySave,
+  parseContentFile,
+  parseSave,
+  serializeMonster,
+  serializePowerup,
+  serializeSave,
+  type ContentKind,
+  type ParsedItem,
+  type SaveData,
+} from './saveFormat';
+import { validateCreature, validatePowerup } from './validate';
+
+export type { ContentKind };
+
+/** Where the platform keeps the save text (browser storage, a file, memory in tests). */
+export interface SaveStorage {
+  read(): string | null;
+  write(text: string): void;
+}
+
+export function memoryStorage(initial: string | null = null): SaveStorage & { text: string | null } {
+  const s = {
+    text: initial,
+    read: () => s.text,
+    write: (t: string) => {
+      s.text = t;
+    },
+  };
+  return s;
+}
+
+export type ItemOrigin = 'base' | 'modified' | 'custom';
+type ItemOf<K extends ContentKind> = K extends 'monster' ? CreatureDef : PowerupDef;
+
+export interface Entry<T> {
+  item: T;
+  origin: ItemOrigin;
+}
+
+export type SaveResult<T> = { ok: true; item: T } | { ok: false; errors: string[] };
+
+const ID_RE = /^[a-z0-9_]+$/;
+const COLLECTION = { monster: 'monsters', powerup: 'powerups' } as const;
+
+/** Default Special for new monsters: five unused trigger slots (never triggers until one is set). */
+export function defaultSpecial(slotCount: number): NonNullable<CreatureDef['special']> {
+  return {
+    name: 'Special',
+    description: '',
+    requirement: { type: 'slots', slots: new Array(slotCount).fill(null) },
+    effect: { type: 'addPower', value: 2 },
+    activation: 'auto',
+  };
+}
+
+export class ContentLibrary {
+  private save: SaveData;
+  /** Problems found while loading the save (shown in the editor). */
+  readonly loadWarnings: string[] = [];
+
+  constructor(
+    private readonly base: ContentPack,
+    private readonly storage: SaveStorage,
+  ) {
+    this.save = emptySave(base.contentVersion);
+    const text = storage.read();
+    if (text) {
+      const r = parseSave(text, base.ruleset);
+      if (r.ok) {
+        this.save = r.value;
+        this.loadWarnings.push(...r.warnings);
+        if (r.migratedFrom !== null) this.persist(); // write back in the current version
+      } else {
+        this.loadWarnings.push(...r.errors.map((e) => `Local save ignored: ${e}`));
+      }
+    }
+  }
+
+  get ruleset(): Ruleset {
+    return this.base.ruleset;
+  }
+
+  /** The board new matches use (for positions and lineup checks). */
+  get board() {
+    return this.base.boards[0];
+  }
+
+  get contentVersion(): number {
+    return this.base.contentVersion;
+  }
+
+  // --- reading --------------------------------------------------------------------------
+
+  private baseItems<K extends ContentKind>(kind: K): ItemOf<K>[] {
+    return (kind === 'monster' ? this.base.creatures : this.base.powerups) as ItemOf<K>[];
+  }
+
+  private savedItems<K extends ContentKind>(kind: K): ItemOf<K>[] {
+    return this.save[COLLECTION[kind]] as ItemOf<K>[];
+  }
+
+  /** All items of a kind as the game sees them (base order first, then custom). */
+  entries<K extends ContentKind>(kind: K): Entry<ItemOf<K>>[] {
+    const saved = new Map(this.savedItems(kind).map((m) => [m.id, m]));
+    const base = this.baseItems(kind);
+    const out: Entry<ItemOf<K>>[] = base.map((b) => (saved.has(b.id) ? { item: saved.get(b.id)!, origin: 'modified' as const } : { item: b, origin: 'base' as const }));
+    const baseIds = new Set(base.map((b) => b.id));
+    for (const m of this.savedItems(kind)) if (!baseIds.has(m.id)) out.push({ item: m, origin: 'custom' });
+    return out;
+  }
+
+  get<K extends ContentKind>(kind: K, id: string): Entry<ItemOf<K>> | undefined {
+    return this.entries(kind).find((e) => e.item.id === id);
+  }
+
+  creatures(): CreatureDef[] {
+    return this.entries('monster').map((e) => e.item);
+  }
+
+  powerups(): PowerupDef[] {
+    return this.entries('powerup').map((e) => e.item);
+  }
+
+  /** The content pack with saved content merged in — what a new match uses. */
+  pack(): ContentPack {
+    return { ...this.base, creatures: this.creatures(), powerups: this.powerups() };
+  }
+
+  isBase(kind: ContentKind, id: string): boolean {
+    return this.baseItems(kind).some((b) => b.id === id);
+  }
+
+  /** Monsters that use a Powerup (a Powerup is referenced, never copied). */
+  monstersUsing(powerupId: string): CreatureDef[] {
+    return this.creatures().filter((m) => m.powerupId === powerupId);
+  }
+
+  // --- validation --------------------------------------------------------------------------
+
+  private commonChecks(kind: ContentKind, item: { id?: string; name?: string }, originalId: string | null): string[] {
+    const errors: string[] = [];
+    const id = item.id ?? '';
+    if (!ID_RE.test(id)) errors.push('ID: use a-z, 0-9 and _ only (not empty)');
+    if (!item.name || !String(item.name).trim()) errors.push('NAME: must not be empty');
+    if (this.entries(kind).some((e) => e.item.id === id && e.item.id !== originalId)) errors.push(`ID: "${id}" is already used`);
+    return errors;
+  }
+
+  validateMonster(def: CreatureDef, originalId: string | null): string[] {
+    const errors = this.commonChecks('monster', def, originalId);
+    const v = validateCreature(def, this.ruleset, { powerupIds: new Set(this.powerups().map((p) => p.id)), board: this.board });
+    errors.push(...v.errors.map((e) => e.replace(/^creature "[^"]*"[.:]?\s*/, '')));
+    // Position must be free: not used by the board lineup or another placed monster.
+    const cell = def.position ? parseCell(def.position) : null;
+    if (cell && def.player && cellInBoard(cell, this.board)) {
+      if (this.board.placements.some((p) => p.x === cell.x && p.y === cell.y)) errors.push(`POSITION: ${cellCode(cell)} is taken by the board lineup`);
+      const other = this.creatures().find((m) => m.id !== originalId && m.id !== def.id && m.player && m.position && parseCell(m.position)?.x === cell.x && parseCell(m.position)?.y === cell.y);
+      if (other) errors.push(`POSITION: ${cellCode(cell)} is taken by ${other.name}`);
+    }
+    return [...new Set(errors)];
+  }
+
+  validatePowerup(def: PowerupDef, originalId: string | null): string[] {
+    const errors = this.commonChecks('powerup', def, originalId);
+    errors.push(...validatePowerup(def).errors.map((e) => e.replace(/^powerup "[^"]*"[.:]?\s*/, '')));
+    // Renaming a Powerup's id would break monsters that reference it.
+    if (originalId && def.id !== originalId && this.monstersUsing(originalId).length) {
+      errors.push(`ID: used by ${this.monstersUsing(originalId).map((m) => m.name).join(', ')} - keep the id`);
+    }
+    return [...new Set(errors)];
+  }
+
+  validate<K extends ContentKind>(kind: K, item: ItemOf<K>, originalId: string | null): string[] {
+    return kind === 'monster' ? this.validateMonster(item as CreatureDef, originalId) : this.validatePowerup(item as PowerupDef, originalId);
+  }
+
+  // --- writing -------------------------------------------------------------------------------
+
+  /**
+   * Saves an item. `originalId` is the id it was loaded under (null = new).
+   * Renaming a custom item replaces it; renaming a base item saves a new one.
+   */
+  saveItem<K extends ContentKind>(kind: K, item: ItemOf<K>, originalId: string | null): SaveResult<ItemOf<K>> {
+    const errors = this.validate(kind, item, originalId);
+    if (errors.length) return { ok: false, errors };
+    const clean = structuredClone(item);
+    let list = this.savedItems(kind).filter((m) => m.id !== clean.id);
+    if (originalId && originalId !== clean.id && !this.isBase(kind, originalId)) list = list.filter((m) => m.id !== originalId);
+    list.push(clean);
+    this.save = { ...this.save, [COLLECTION[kind]]: list };
+    this.persist();
+    return { ok: true, item: clean };
+  }
+
+  /** Removes the local version: deletes a custom item, restores a modified base item. */
+  removeItem(kind: ContentKind, id: string): { ok: true } | { ok: false; error: string } {
+    if (kind === 'powerup' && !this.isBase('powerup', id)) {
+      const users = this.monstersUsing(id);
+      if (users.length) return { ok: false, error: `Used by ${users.map((m) => m.name).join(', ')}` };
+    }
+    const list = this.savedItems(kind);
+    if (!list.some((m) => m.id === id)) return { ok: false, error: 'Nothing saved locally for this item' };
+    this.save = { ...this.save, [COLLECTION[kind]]: list.filter((m) => m.id !== id) };
+    this.persist();
+    return { ok: true };
+  }
+
+  serialize<K extends ContentKind>(kind: K, item: ItemOf<K>): string {
+    return kind === 'monster' ? serializeMonster(item as CreatureDef, this.contentVersion) : serializePowerup(item as PowerupDef, this.contentVersion);
+  }
+
+  /** Parses an exported file (any kind/version) without saving it. */
+  importFile(text: string): { ok: true; value: ParsedItem; migratedFrom: number | null } | { ok: false; errors: string[] } {
+    const r = parseContentFile(text, this.ruleset);
+    return r.ok ? { ok: true, value: r.value, migratedFrom: r.migratedFrom } : r;
+  }
+
+  // --- new items (defaults from the existing model) -----------------------------------------------
+
+  private freeId(kind: ContentKind, prefix: string): number {
+    const ids = new Set(this.entries(kind).map((e) => e.item.id));
+    let n = 1;
+    while (ids.has(`${prefix}_${n}`)) n++;
+    return n;
+  }
+
+  newMonster(): CreatureDef {
+    const n = this.freeId('monster', 'monster');
+    const template = this.base.creatures[0];
+    const count = this.ruleset.dice.count;
+    // Spread the ruleset's dice over the default categories (one each for 5 dice).
+    const slots: Record<string, number> = Object.fromEntries(DEFAULT_CATEGORIES.map((c) => [c, 0]));
+    for (let i = 0; i < count; i++) slots[DEFAULT_CATEGORIES[i % DEFAULT_CATEGORIES.length]]++;
+    return {
+      id: `monster_${n}`,
+      name: `Monster ${n}`,
+      description: '',
+      art: {},
+      stats: { maxHp: template?.stats.maxHp ?? 20, movement: template?.stats.movement ?? 3 },
+      // No start bonus or penalty by default.
+      modifiers: { speed: 0, power: 0, shield: 0, dash: 0, block: 0 },
+      player: 'P1',
+      powerupId: null,
+      dice: { slots },
+      special: defaultSpecial(count),
+    };
+  }
+
+  newPowerup(type: PowerupDef['type'] = 'melee'): PowerupDef {
+    const n = this.freeId('powerup', 'powerup');
+    return {
+      id: `powerup_${n}`,
+      name: `Powerup ${n}`,
+      type,
+      melee: { speed: 2, knockback: 1, range: 3 },
+      ranged: { speed: 5, range: 5, rateOfFire: 2, impactSize: 2, impactDamage: 10, homing: 1, trajectory: 1, bounce: 1 },
+    };
+  }
+
+  private persist(): void {
+    this.storage.write(serializeSave(this.save));
+  }
+}

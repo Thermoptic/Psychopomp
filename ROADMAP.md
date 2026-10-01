@@ -65,19 +65,19 @@
 - [x] Content validation
 - [ ] Content packs
 - [ ] External assets
-- [ ] Versioning
+- [x] Versioning
 
 ## Milestone 7 — Editor
 
-- [ ] Creature creation
+- [x] Creature creation
 - [ ] Artwork upload
-- [ ] Stats
-- [ ] Dice layout
-- [ ] Special requirements
-- [ ] Special effects
-- [ ] Save
-- [ ] Test Battle
-- [ ] Import/export
+- [x] Stats
+- [x] Dice layout
+- [x] Special requirements
+- [x] Special effects
+- [x] Save
+- [x] Test Battle
+- [x] Import/export
 
 ## Milestone 8 — Production presentation
 

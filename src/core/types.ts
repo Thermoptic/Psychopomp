@@ -48,7 +48,16 @@ export type Requirement =
   | { type: 'straight'; length?: number; target?: DiceTarget }
   | { type: 'sumAtLeast' | 'sumAtMost'; value: number; target?: DiceTarget }
   | { type: 'and' | 'or'; of: Requirement[] }
-  | { type: 'not'; of: Requirement };
+  | { type: 'not'; of: Requirement }
+  /**
+   * Per-slot conditions: entry i applies to the die placed in the creature's
+   * i-th dice slot (layout order). null = slot not used (no requirement).
+   * All non-null entries must hold; with no active entries it never holds.
+   */
+  | { type: 'slots'; slots: Array<SlotCondition | null> };
+
+/** One dice-slot condition: 'odd' (1,3,5), 'even' (2,4,6) or an exact face. */
+export type SlotCondition = 'odd' | 'even' | number;
 
 export type RequirementType = Requirement['type'];
 
@@ -89,16 +98,25 @@ export interface DashDef {
 }
 
 export interface CreatureStats {
+  /** Starting (and maximum) health. */
   maxHp: number;
   /** HP the creature starts the match with. Defaults to maxHp. */
   startHp?: number;
   /** Board movement allowance (steps per turn). */
   movement: number;
-  power: number;
-  speed: number;
-  shield: number;
-  /** Optional base block; block normally comes only from dice. */
+}
+
+/**
+ * Per-creature start bonus/penalty on top of the ruleset's `creatureBase`
+ * (all default 0). Battle stats = creatureBase + modifiers + dice + Special.
+ * `dash` changes dash distance (see resolveDash).
+ */
+export interface CreatureModifiers {
+  power?: number;
+  speed?: number;
+  shield?: number;
   block?: number;
+  dash?: number;
 }
 
 export interface CreatureDef {
@@ -114,6 +132,15 @@ export interface CreatureDef {
     icon?: string;
   };
   stats: CreatureStats;
+  modifiers?: CreatureModifiers;
+  /**
+   * Optional start placement: the creature joins the match lineup for this
+   * player on this board cell (cell code "A1".."I9", see core/board/cells).
+   */
+  player?: PlayerId;
+  position?: string;
+  /** Weapon/attack from the Powerups content (by id). None = classic melee. */
+  powerupId?: string | null;
   dice: {
     /** Die sides for this creature. Defaults to the ruleset's dice.sides. */
     sides?: number;
@@ -125,6 +152,27 @@ export interface CreatureDef {
   special: SpecialDef | null;
   attack?: AttackDef;
   dash?: DashDef;
+}
+
+/**
+ * A Powerup (weapon) definition. Values are designer levels (1-10, impact
+ * damage 1-100); core/combat/powerups.ts maps them to gameplay values.
+ */
+export interface PowerupDef {
+  id: string;
+  name: string;
+  type: 'melee' | 'ranged';
+  melee?: { speed: number; knockback: number; range: number };
+  ranged?: {
+    speed: number;
+    range: number;
+    rateOfFire: number;
+    impactSize: number;
+    impactDamage: number;
+    homing: number;
+    trajectory: number;
+    bounce: number;
+  };
 }
 
 export interface CombatRules {
@@ -177,6 +225,8 @@ export interface CombatRules {
 export interface Ruleset {
   id: string;
   firstPlayer: PlayerId;
+  /** Battle stats every creature starts from before its modifiers. */
+  creatureBase: { power: number; speed: number; shield: number; block: number };
   dice: {
     count: number;
     sides: number;
@@ -308,6 +358,56 @@ export interface Fighter {
   dashHit: boolean;
   /** 'none' | 'passive' (auto, already applied) | 'ready' (manual, unlocked) | 'used'. */
   special: 'none' | 'passive' | 'ready' | 'used';
+  /** The fighter's attack, resolved from its Powerup (or the classic melee). */
+  weapon: Weapon;
+}
+
+/** Gameplay values of an attack (combat units / ticks), see core/combat/powerups.ts. */
+export type Weapon =
+  | {
+      kind: 'melee';
+      powerupId: string | null;
+      /** null = classic melee: cooldown from the Speed stat. */
+      cooldownTicks: number | null;
+      range: number;
+      knockback: number;
+    }
+  | {
+      kind: 'ranged';
+      powerupId: string;
+      cooldownTicks: number;
+      /** Projectile speed, combat units per tick. */
+      speed: number;
+      /** Max travel distance before it fizzles, combat units. */
+      range: number;
+      impactRadius: number;
+      impactDamage: number;
+      /** Steering towards the opponent per tick, percent of speed. */
+      homing: number;
+      /** Magnus curve per tick at full sideways movement, angle × 65536 (radians). */
+      curve: number;
+      bounces: number;
+    };
+
+/** A projectile in flight. Positions/velocity in combat units × 256 (fixed point). */
+export interface Projectile {
+  id: number;
+  side: BattleSide;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  /** Speed (fixed point) the velocity is kept at. */
+  speed: number;
+  travelled: number;
+  maxTravel: number;
+  bouncesLeft: number;
+  homing: number;
+  /** Curve rotation per tick as fixed-point cos/sin (×65536); sin 0 = straight. */
+  curveCos: number;
+  curveSin: number;
+  impactRadius: number;
+  impactDamage: number;
 }
 
 export interface CombatState {
@@ -315,6 +415,8 @@ export interface CombatState {
   /** Playable area in combat units = arena grid × cellUnits. */
   arena: { width: number; height: number };
   fighters: Record<BattleSide, Fighter>;
+  projectiles: Projectile[];
+  nextProjectileId: number;
 }
 
 export type BattleOutcome = 'ATTACKER_WINS' | 'DEFENDER_WINS' | 'DRAW' | 'TIMEOUT';
@@ -359,6 +461,8 @@ export interface GameState {
   board: BoardDef;
   /** Snapshot of the content used by this match, keyed by def id. */
   creatureDefs: Record<string, CreatureDef>;
+  /** Snapshot of the Powerups used by this match, keyed by id. */
+  powerupDefs: Record<string, PowerupDef>;
   players: Record<PlayerId, PlayerState>;
   creatures: Record<string, CreatureState>;
   powerPoints: PowerPointState[];
@@ -444,6 +548,11 @@ export type GameEvent =
   | { type: 'DASH_DENIED'; side: BattleSide; reason: 'noDirection' | 'blocked' | 'cooldown' }
   | { type: 'DASH_HIT'; side: BattleSide; damage: number }
   | { type: 'SPECIAL_TRIGGERED'; side: BattleSide; name: string }
+  | { type: 'PROJECTILE_FIRED'; side: BattleSide }
+  | { type: 'PROJECTILE_BOUNCED'; side: BattleSide }
+  /** A projectile impact (x, y in combat units); `hit` = the opponent was inside the shockwave. */
+  | { type: 'IMPACT'; side: BattleSide; x: number; y: number; radius: number; hit: boolean }
+  | { type: 'KNOCKBACK'; side: BattleSide; distance: number }
   | { type: 'COMBAT_ENDED'; outcome: BattleOutcome }
   | { type: 'CREATURE_DIED'; creatureId: string }
   | { type: 'POWER_POINT_CAPTURED'; x: number; y: number; owner: PlayerId }

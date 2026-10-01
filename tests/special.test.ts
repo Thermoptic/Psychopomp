@@ -73,23 +73,23 @@ describe('Special activation from content', () => {
   });
 
   it('Glubber (ODD) activates with an odd die in SPECIAL and gains Power', () => {
-    const on = computeBuild(glubber, prepWith([2, 6, 3, 5, 1]));
+    const on = computeBuild(glubber, prepWith([2, 6, 3, 5, 1]), pack.ruleset);
     expect(on.specialActive).toBe(true);
     expect(on.stats.power).toBe(10 + 6 + 4);
-    const off = computeBuild(glubber, prepWith([2, 6, 3, 4, 1]));
+    const off = computeBuild(glubber, prepWith([2, 6, 3, 4, 1]), pack.ruleset);
     expect(off.specialActive).toBe(false);
     expect(off.stats.power).toBe(10 + 6);
   });
 
   it('Shroud (EVEN) activates with an even die in SPECIAL and gains Shield', () => {
-    const on = computeBuild(shroud, prepWith([2, 6, 3, 4, 1]));
+    const on = computeBuild(shroud, prepWith([2, 6, 3, 4, 1]), pack.ruleset);
     expect(on.specialActive).toBe(true);
     expect(on.stats.shield).toBe(4 + 3 + 4);
-    expect(computeBuild(shroud, prepWith([2, 6, 3, 5, 1])).specialActive).toBe(false);
+    expect(computeBuild(shroud, prepWith([2, 6, 3, 5, 1]), pack.ruleset).specialActive).toBe(false);
   });
 
   it('dice add to base stats; the special die adds to no stat', () => {
-    const b = computeBuild(glubber, prepWith([2, 6, 3, 4, 1]));
+    const b = computeBuild(glubber, prepWith([2, 6, 3, 4, 1]), pack.ruleset);
     expect(b.stats).toEqual({ speed: 5 + 2, power: 10 + 6, shield: 4 + 3, block: 1 });
     expect(b.diceByCategory).toEqual({ speed: 2, power: 6, shield: 3, special: 4, block: 1 });
   });

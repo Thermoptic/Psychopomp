@@ -124,5 +124,6 @@ export function diceView(prep: DicePrep): DiceView {
     const d = prep.slotDice[i];
     if (d !== null) byCategory[s.category].push(prep.dice[d]);
   });
-  return { all: prep.dice.filter((v) => v > 0), byCategory };
+  const bySlot = prep.slotDice.map((d) => (d === null ? 0 : prep.dice[d]));
+  return { all: prep.dice.filter((v) => v > 0), byCategory, bySlot };
 }

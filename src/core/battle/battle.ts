@@ -83,7 +83,7 @@ export function onPlayerReady(state: GameState, events: GameEvent[]): void {
   const builds = {} as Record<BattleSide, ReturnType<typeof computeBuild>>;
   for (const side of BATTLE_SIDES) {
     const prep = b.prep[side];
-    builds[side] = computeBuild(state.creatureDefs[state.creatures[prep.creatureId].defId], prep);
+    builds[side] = computeBuild(state.creatureDefs[state.creatures[prep.creatureId].defId], prep, state.ruleset);
   }
   b.builds = builds;
   events.push({ type: 'BUILDS_REVEALED' });
@@ -105,7 +105,7 @@ function beginCombat(state: GameState, events: GameEvent[]): void {
     const creature = state.creatures[id];
     return { creature, def: state.creatureDefs[creature.defId], build: b.builds![side] };
   };
-  b.combat = createCombat(fighter(b.attackerId, 'attacker'), fighter(b.defenderId, 'defender'), state.ruleset.combat);
+  b.combat = createCombat(fighter(b.attackerId, 'attacker'), fighter(b.defenderId, 'defender'), state.ruleset.combat, state.powerupDefs);
   b.countdown = 0;
   b.stage = 'combat';
   events.push({ type: 'COMBAT_STARTED' });

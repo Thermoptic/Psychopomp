@@ -9,10 +9,7 @@
   "art": {},
   "stats": {
     "maxHp": 20,
-    "movement": 3,
-    "power": 10,
-    "speed": 5,
-    "shield": 4
+    "movement": 3
   },
   "dice": {
     "slots": {
@@ -27,8 +24,14 @@
     "name": "Odd Surge",
     "description": "+4 Power",
     "requirement": {
-      "type": "allOdd",
-      "target": "special"
+      "type": "slots",
+      "slots": [
+        null,
+        null,
+        null,
+        "odd",
+        null
+      ]
     },
     "effect": {
       "type": "addPower",

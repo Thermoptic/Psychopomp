@@ -2,7 +2,7 @@
 // Legal moves are *queried* from the core; nothing here decides legality.
 
 import type { MatchUi } from '../app/ui';
-import { creatureAt, describeRequirement, getLegalMoves, livingCreatures, type GameState, type PlayerId } from '../core';
+import { baseBattleStats, creatureAt, describeRequirement, getLegalMoves, livingCreatures, type GameState, type PlayerId } from '../core';
 import { badge, hpBar, panel, rect, strokeRect, text, wrapText, type Ctx } from './draw';
 import { HEADER, LEFT_PANEL, MESSAGE_BAR, RIGHT_PANEL, boardLayout, cellRect, type BoardLayout, type Rect } from './layout';
 import { aimReticle, boardUnits, combatToScreen, isBattleView, isCombatView, type BoardUnit } from './boardUnits';
@@ -68,9 +68,10 @@ export function drawPlayerPanel(ctx: Ctx, state: GameState, ui: MatchUi, player:
     text(ctx, cr === state.creatures[ui.selected ?? ''] ? 'SELECTED' : '', r.x + 106, y + 74, { size: 11, color: C.pp });
     y += 106;
     statLine(ctx, r.x + 14, y, 'MOVEMENT', String(def.stats.movement));
-    statLine(ctx, r.x + 14, (y += 20), 'POWER', String(def.stats.power));
-    statLine(ctx, r.x + 14, (y += 20), 'SPEED', String(def.stats.speed));
-    statLine(ctx, r.x + 14, (y += 20), 'SHIELD', String(def.stats.shield));
+    const base = baseBattleStats(def, state.ruleset);
+    statLine(ctx, r.x + 14, (y += 20), 'POWER', String(base.power));
+    statLine(ctx, r.x + 14, (y += 20), 'SPEED', String(base.speed));
+    statLine(ctx, r.x + 14, (y += 20), 'SHIELD', String(base.shield));
     y += 26;
     if (def.special) {
       text(ctx, 'SPECIAL', r.x + 14, y, { size: 11, color: C.dim });

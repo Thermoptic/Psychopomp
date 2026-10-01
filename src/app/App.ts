@@ -2,7 +2,7 @@
 // core Commands. It never changes GameState except through applyCommand.
 
 import { Sfx } from '../audio/Sfx';
-import type { ContentPack } from '../content/loader';
+import type { ContentLibrary } from '../content/library';
 import {
   applyCommand,
   creatureAt,
@@ -54,12 +54,16 @@ export class App {
   private acc = 0;
   private fps = 60;
 
+  /**
+   * @param library bundled content + content saved by the developer editor
+   *                (/editor) in this browser. New matches always read it.
+   */
   constructor(
-    private pack: ContentPack | null,
+    private library: ContentLibrary | null,
     private errors: string[],
     readonly sfx: Sfx,
   ) {
-    if (!pack) this.screen = 'error';
+    if (!library) this.screen = 'error';
   }
 
   // --- helpers ---------------------------------------------------------------
@@ -91,11 +95,13 @@ export class App {
     return true;
   }
 
+  /** Starts a match with the library's current content (developer-editor content included). */
   newMatch(): void {
-    if (!this.pack) return;
+    if (!this.library) return;
+    const pack = this.library.pack();
     // Seed comes from the platform clock; everything after it is deterministic.
     const seed = (Date.now() ^ (performance.now() * 1000)) >>> 0;
-    this.state = createMatch({ ruleset: this.pack.ruleset, board: this.pack.boards[0], creatures: this.pack.creatures, seed });
+    this.state = createMatch({ ruleset: pack.ruleset, board: pack.boards[0], creatures: pack.creatures, powerups: pack.powerups, seed });
     const debug = this.ui.debug;
     this.ui = createMatchUi();
     this.ui.debug = debug;
@@ -151,6 +157,9 @@ export class App {
           this.say(`${s.creatureDefs[c.defId].name.toUpperCase()} (${playerLabel(c.owner)}) IS DESTROYED`, C.danger);
           break;
         }
+        case 'IMPACT':
+          this.ui.impacts.push({ x: e.x, y: e.y, radius: e.radius, ms: 350, color: playerColor(s.creatures[e.side === 'attacker' ? s.battle!.attackerId : s.battle!.defenderId].owner) });
+          break;
         case 'DASH_DENIED': {
           const f = s.battle?.combat?.fighters[e.side];
           const label = e.reason === 'noDirection' ? 'NO DIR' : e.reason === 'blocked' ? 'BLOCKED' : 'COOLDOWN';
@@ -190,6 +199,7 @@ export class App {
     ui.flash.attacker = Math.max(0, ui.flash.attacker - dtMs);
     ui.flash.defender = Math.max(0, ui.flash.defender - dtMs);
     ui.floaters = ui.floaters.filter((f) => (f.ms -= dtMs) > 0);
+    ui.impacts = ui.impacts.filter((f) => (f.ms -= dtMs) > 0);
 
     switch (this.screen) {
       case 'menu':

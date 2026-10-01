@@ -1,0 +1,15 @@
+{
+  "id": "plasma_bolt",
+  "name": "Plasma Bolt",
+  "type": "ranged",
+  "ranged": {
+    "speed": 5,
+    "range": 6,
+    "rateOfFire": 2,
+    "impactSize": 2,
+    "impactDamage": 6,
+    "homing": 2,
+    "trajectory": 5,
+    "bounce": 1
+  }
+}

@@ -7,17 +7,20 @@
 
 import { diceView } from '../dice/dice';
 import { evaluateRequirement } from '../dice/requirements';
-import type { BattleBuild, BattleStats, CombatRules, CreatureDef, DicePrep, Effect, StatCategory } from '../types';
+import type { BattleBuild, BattleStats, CombatRules, CreatureDef, DicePrep, Effect, Ruleset, StatCategory } from '../types';
 
 /** Categories whose dice add directly to a battle stat of the same name. */
 const STAT_CATEGORIES: ReadonlyArray<keyof BattleStats> = ['power', 'shield', 'speed', 'block'];
 
-export function baseBattleStats(def: CreatureDef): BattleStats {
+/** Ruleset base + the creature's start modifiers (before dice and Special). */
+export function baseBattleStats(def: CreatureDef, rules: Ruleset): BattleStats {
+  const m = def.modifiers ?? {};
+  const b = rules.creatureBase;
   return {
-    power: def.stats.power,
-    shield: def.stats.shield,
-    speed: def.stats.speed,
-    block: def.stats.block ?? 0,
+    power: b.power + (m.power ?? 0),
+    shield: b.shield + (m.shield ?? 0),
+    speed: b.speed + (m.speed ?? 0),
+    block: b.block + (m.block ?? 0),
   };
 }
 
@@ -42,14 +45,14 @@ export function applyEffect(stats: BattleStats, effect: Effect): void {
 }
 
 /** Computes the temporary build from a creature's content and its final dice. */
-export function computeBuild(def: CreatureDef, prep: DicePrep): BattleBuild {
+export function computeBuild(def: CreatureDef, prep: DicePrep, rules: Ruleset): BattleBuild {
   const view = diceView(prep);
   const diceByCategory: Record<StatCategory, number> = {};
   for (const [cat, values] of Object.entries(view.byCategory)) {
     diceByCategory[cat] = values.reduce((a, b) => a + b, 0);
   }
 
-  const stats = baseBattleStats(def);
+  const stats = baseBattleStats(def, rules);
   for (const key of STAT_CATEGORIES) stats[key] += diceByCategory[key] ?? 0;
 
   const specialActive = def.special ? evaluateRequirement(def.special.requirement, view) : false;

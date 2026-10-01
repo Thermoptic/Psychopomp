@@ -44,6 +44,8 @@ export interface MatchUi {
   pauseReason: string | null;
   flash: Record<BattleSide, number>;
   floaters: Floater[];
+  /** Projectile shockwaves being shown (combat units), purely visual. */
+  impacts: Array<{ x: number; y: number; radius: number; ms: number; color: string }>;
   /** Queued combat button presses, consumed by the next fixed tick. */
   queued: Record<BattleSide, QueuedPresses>;
   /** Right stick currently deflected (reticle highlighted). */
@@ -66,6 +68,7 @@ export function createMatchUi(): MatchUi {
     pauseReason: null,
     flash: { attacker: 0, defender: 0 },
     floaters: [],
+    impacts: [],
     queued: { attacker: emptyQueue(), defender: emptyQueue() },
     aimActive: { attacker: false, defender: false },
     debug: false,

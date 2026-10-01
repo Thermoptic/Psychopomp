@@ -1,0 +1,10 @@
+{
+  "id": "rusty_blade",
+  "name": "Rusty Blade",
+  "type": "melee",
+  "melee": {
+    "speed": 2,
+    "knockback": 3,
+    "range": 3
+  }
+}

@@ -4,7 +4,7 @@
 // etc.); the panels only send commands, the core decides what is legal.
 
 import type { MatchUi, PrepCursor } from '../app/ui';
-import { computeBuild, type BattleBuild, type BattleSide, type BattleStats, type GameState, type PlayerId } from '../core';
+import { baseBattleStats, computeBuild, slotConditionLabel, type BattleBuild, type BattleSide, type BattleStats, type GameState, type PlayerId } from '../core';
 import { die, hpBar, panel, rect, strokeRect, text, wrapText, type Ctx } from './draw';
 import { prepPanelLayout, type Rect } from './layout';
 import { prepButton, prepPhaseLabel, shortRequirement } from './prepModel';
@@ -24,10 +24,10 @@ export function sideOf(state: GameState, owner: PlayerId): BattleSide {
   return state.creatures[state.battle!.attackerId].owner === owner ? 'attacker' : 'defender';
 }
 
-function slotPreview(base: { power: number; shield: number; speed: number; block?: number }, category: string, build: BattleBuild): string {
+function slotPreview(base: BattleStats, category: string, build: BattleBuild): string {
   const key = category as keyof BattleStats;
   if (!['power', 'shield', 'speed', 'block'].includes(category)) return '';
-  const b = key === 'block' ? base.block ?? 0 : base[key];
+  const b = base[key];
   const d = build.diceByCategory[category] ?? 0;
   return `${b}+${d} = ${b + d}`;
 }
@@ -83,7 +83,9 @@ export function drawPrepPanel(ctx: Ctx, state: GameState, ui: MatchUi, owner: Pl
   const barW = 64;
   hpBar(ctx, { x: mirror ? nameX - 84 - barW : nameX + 84, y: P.y + 60, w: barW, h: 8 }, info.cr.hp, info.def.stats.maxHp, info.color);
 
-  const build = computeBuild(info.def, prep);
+  const build = computeBuild(info.def, prep, state.ruleset);
+  const base = baseBattleStats(info.def, state.ruleset);
+  const slotReq = info.def.special?.requirement.type === 'slots' ? info.def.special.requirement.slots : null;
   const focusOn = (kind: 'die' | 'slot', i: number) => editable && cur.row === i && cur.col === kind;
 
   L.rows.forEach((row, i) => {
@@ -112,8 +114,10 @@ export function drawPrepPanel(ctx: Ctx, state: GameState, ui: MatchUi, owner: Pl
     strokeRect(ctx, row.slot, focusOn('slot', i) ? C.text : C.faint, focusOn('slot', i) ? 2 : 1);
     const d = prep.slotDice[i];
     if (d !== null) die(ctx, { x: row.slot.x + 2, y: row.slot.y + 2, w: row.slot.w - 4, h: row.slot.h - 4 }, prep.dice[d]);
-    else if (slot.category === 'special' && info.def.special) {
-      text(ctx, shortRequirement(info.def.special.requirement), row.slot.x + row.slot.w / 2, row.slot.y + row.slot.h / 2, {
+    else if (slotReq ? slotReq[i] !== null && slotReq[i] !== undefined : slot.category === 'special' && info.def.special) {
+      // Special trigger condition for this slot (per-slot conditions, or the classic SPECIAL slot).
+      const label = slotReq ? slotConditionLabel(slotReq[i]!) : shortRequirement(info.def.special!.requirement);
+      text(ctx, label, row.slot.x + row.slot.w / 2, row.slot.y + row.slot.h / 2, {
         size: 10,
         color: C.danger,
         align: 'center',
@@ -122,14 +126,16 @@ export function drawPrepPanel(ctx: Ctx, state: GameState, ui: MatchUi, owner: Pl
     }
     const cc = CATEGORY_COLOR[slot.category] ?? C.text;
     text(ctx, slot.category.toUpperCase(), row.labelX, row.y + row.h / 2 - 2, { size: 13, color: cc, align: row.labelAlign });
-    const preview = slotPreview(info.def.stats, slot.category, build);
+    const preview = slotPreview(base, slot.category, build);
     if (preview) text(ctx, preview, row.labelX, row.y + row.h / 2 + 12, { size: 10, color: C.dim, align: row.labelAlign });
   });
 
   // Special: requirement, effect and live status.
   if (info.def.special) {
     const sx = P.x + 14;
-    const anyInSpecial = prep.slots.some((s, i) => s.category === 'special' && prep.slotDice[i] !== null);
+    const anyInSpecial = slotReq
+      ? slotReq.some((c, i) => c !== null && prep.slotDice[i] !== null)
+      : prep.slots.some((s, i) => s.category === 'special' && prep.slotDice[i] !== null);
     text(ctx, `SPECIAL: ${info.def.special.name.toUpperCase()}`, sx, L.specialY, { size: 11, color: C.ok });
     if (anyInSpecial) {
       text(ctx, build.specialActive ? 'ACTIVE' : 'NOT MET', P.x + P.w - 14, L.specialY, {

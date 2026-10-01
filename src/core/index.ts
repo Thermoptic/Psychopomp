@@ -16,7 +16,17 @@ export {
   rerollsRemaining,
   validateAllocation,
 } from './dice/dice';
-export { evaluateRequirement, describeRequirement, REQUIREMENT_TYPES, type DiceView } from './dice/requirements';
+export {
+  evaluateRequirement,
+  describeRequirement,
+  slotConditionMet,
+  slotConditionLabel,
+  REQUIREMENT_TYPES,
+  type DiceView,
+} from './dice/requirements';
+export { cellCode, parseCell, cellInBoard } from './board/cells';
+export * as powerupMapping from './combat/powerups';
+export { resolveWeapon } from './combat/powerups';
 export {
   computeBuild,
   computeDamage,

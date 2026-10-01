@@ -1,6 +1,12 @@
 {
   "id": "classic",
   "firstPlayer": "P1",
+  "creatureBase": {
+    "power": 10,
+    "speed": 5,
+    "shield": 4,
+    "block": 0
+  },
   "dice": {
     "count": 5,
     "sides": 6,

@@ -2,6 +2,7 @@
 // an imported pack), so everything is checked before it reaches a match.
 // Returns human-readable errors instead of throwing.
 
+import { cellInBoard, parseCell } from '../core/board/cells';
 import { REQUIREMENT_TYPES } from '../core/dice/requirements';
 import type { PlayerId, Ruleset } from '../core/types';
 
@@ -16,7 +17,8 @@ const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isInt
 const isStr = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
 const ID_RE = /^[a-z0-9_]+$/;
 const EFFECT_TYPES = ['addPower', 'addShield', 'addSpeed', 'addBlock', 'multi'];
-const TARGETED = new Set<string>(REQUIREMENT_TYPES.filter((t) => !['always', 'never', 'and', 'or', 'not'].includes(t)));
+const TARGETED = new Set<string>(REQUIREMENT_TYPES.filter((t) => !['always', 'never', 'and', 'or', 'not', 'slots'].includes(t)));
+const MODIFIER_KEYS = ['power', 'speed', 'shield', 'block', 'dash'] as const;
 
 function intIn(errors: string[], where: string, v: unknown, min: number, max: number): void {
   if (!isInt(v) || v < min || v > max) errors.push(`${where} must be an integer ${min}..${max} (got ${JSON.stringify(v)})`);
@@ -32,6 +34,13 @@ function validateRequirement(req: unknown, where: string, errors: string[], dept
     else req.of.forEach((r, i) => validateRequirement(r, `${where}.of[${i}]`, errors, depth + 1));
   } else if (t === 'not') {
     validateRequirement(req.of, `${where}.of`, errors, depth + 1);
+  } else if (t === 'slots') {
+    if (!Array.isArray(req.slots) || req.slots.length === 0 || req.slots.length > 20) errors.push(`${where}: "slots" needs a list of 1..20 conditions`);
+    else
+      req.slots.forEach((c, i) => {
+        const ok = c === null || c === 'odd' || c === 'even' || (isInt(c) && c >= 1 && c <= 100);
+        if (!ok) errors.push(`${where}.slots[${i}] must be null, "odd", "even" or a die face`);
+      });
   } else if (TARGETED.has(t)) {
     if (req.target !== undefined && !isStr(req.target)) errors.push(`${where}: "target" must be a category name or "all"`);
     if (t === 'sumAtLeast' || t === 'sumAtMost') intIn(errors, `${where}.value`, req.value, 0, 1000);
@@ -66,7 +75,15 @@ function validateDash(d: Obj, where: string, errors: string[], required: boolean
   }
 }
 
-export function validateCreature(raw: unknown, ruleset: Ruleset): ValidationResult {
+/** Optional cross-checks (references and board) for a creature. */
+export interface CreatureContext {
+  /** Known Powerup ids; when given, powerupId must be one of them. */
+  powerupIds?: Set<string>;
+  /** Board the position must be on (default 9×9). */
+  board?: { width: number; height: number };
+}
+
+export function validateCreature(raw: unknown, ruleset: Ruleset, ctx: CreatureContext = {}): ValidationResult {
   const errors: string[] = [];
   if (!isObj(raw)) return { ok: false, errors: ['creature must be an object'] };
   const where = isStr(raw.id) ? `creature "${raw.id}"` : 'creature';
@@ -82,10 +99,30 @@ export function validateCreature(raw: unknown, ruleset: Ruleset): ValidationResu
     intIn(errors, `${where}.stats.maxHp`, s.maxHp, 1, 999);
     if (s.startHp !== undefined) intIn(errors, `${where}.stats.startHp`, s.startHp, 1, isInt(s.maxHp) ? s.maxHp : 999);
     intIn(errors, `${where}.stats.movement`, s.movement, 1, 20);
-    intIn(errors, `${where}.stats.power`, s.power, 0, 99);
-    intIn(errors, `${where}.stats.speed`, s.speed, 0, 99);
-    intIn(errors, `${where}.stats.shield`, s.shield, 0, 99);
-    if (s.block !== undefined) intIn(errors, `${where}.stats.block`, s.block, 0, 99);
+  }
+
+  // Start modifiers: positive or negative, default 0. Resulting battle stats are floored at 0 by the core.
+  if (raw.modifiers !== undefined) {
+    if (!isObj(raw.modifiers)) errors.push(`${where}: "modifiers" must be an object`);
+    else
+      for (const k of MODIFIER_KEYS) {
+        const v = raw.modifiers[k];
+        if (v !== undefined) intIn(errors, `${where}.modifiers.${k}`, v, -99, 99);
+      }
+  }
+
+  // Placement: player + board cell ("A1".."I9").
+  if (raw.player !== undefined && raw.player !== 'P1' && raw.player !== 'P2') errors.push(`${where}.player must be "P1" or "P2"`);
+  if (raw.position !== undefined && raw.position !== null) {
+    const cell = typeof raw.position === 'string' ? parseCell(raw.position) : null;
+    if (!cell || !cellInBoard(cell, ctx.board ?? { width: 9, height: 9 })) errors.push(`${where}.position "${String(raw.position)}" is not a board cell`);
+    if (raw.player === undefined) errors.push(`${where}: a position needs a player`);
+  }
+
+  // Powerup reference (by id, never a copy).
+  if (raw.powerupId !== undefined && raw.powerupId !== null) {
+    if (!isStr(raw.powerupId)) errors.push(`${where}.powerupId must be a Powerup id`);
+    else if (ctx.powerupIds && !ctx.powerupIds.has(raw.powerupId)) errors.push(`${where}: unknown Powerup "${raw.powerupId}"`);
   }
 
   if (!isObj(raw.dice) || !isObj(raw.dice.slots)) errors.push(`${where}: missing "dice.slots"`);
@@ -126,10 +163,35 @@ export function validateCreature(raw: unknown, ruleset: Ruleset): ValidationResu
   return { ok: errors.length === 0, errors };
 }
 
+/** Level 1-10 settings (impact damage 1-100), see core/combat/powerups.ts for their meaning. */
+export function validatePowerup(raw: unknown): ValidationResult {
+  const errors: string[] = [];
+  if (!isObj(raw)) return { ok: false, errors: ['powerup must be an object'] };
+  const where = isStr(raw.id) ? `powerup "${raw.id}"` : 'powerup';
+  if (!isStr(raw.id)) errors.push(`${where}: missing "id"`);
+  else if (!ID_RE.test(raw.id)) errors.push(`${where}: id must use a-z, 0-9 and _ only`);
+  if (!isStr(raw.name) || !String(raw.name).trim()) errors.push(`${where}: missing "name"`);
+  if (raw.type !== 'melee' && raw.type !== 'ranged') errors.push(`${where}.type must be "melee" or "ranged"`);
+  const block = (key: 'melee' | 'ranged', fields: string[]) => {
+    const b = raw[key];
+    if (b === undefined) {
+      if (raw.type === key) errors.push(`${where}: a ${key} powerup needs "${key}" settings`);
+      return;
+    }
+    if (!isObj(b)) return void errors.push(`${where}.${key} must be an object`);
+    for (const f of fields) intIn(errors, `${where}.${key}.${f}`, b[f], 1, f === 'impactDamage' ? 100 : 10);
+  };
+  block('melee', ['speed', 'knockback', 'range']);
+  block('ranged', ['speed', 'range', 'rateOfFire', 'impactSize', 'impactDamage', 'homing', 'trajectory', 'bounce']);
+  return { ok: errors.length === 0, errors };
+}
+
 export function validateRuleset(raw: unknown): ValidationResult {
   const errors: string[] = [];
   if (!isObj(raw)) return { ok: false, errors: ['ruleset must be an object'] };
   if (!isStr(raw.id)) errors.push('ruleset: missing "id"');
+  if (!isObj(raw.creatureBase)) errors.push('ruleset: missing "creatureBase"');
+  else for (const k of ['power', 'speed', 'shield', 'block']) intIn(errors, `ruleset.creatureBase.${k}`, raw.creatureBase[k], 0, 99);
   if (raw.firstPlayer !== 'P1' && raw.firstPlayer !== 'P2') errors.push('ruleset.firstPlayer must be "P1" or "P2"');
   if (!isObj(raw.dice)) errors.push('ruleset: missing "dice"');
   else {

@@ -24,7 +24,10 @@ import type {
   FighterInput,
   GameEvent,
   PlayerId,
+  PowerupDef,
+  Projectile,
 } from '../types';
+import { PROJECTILE_RADIUS, resolveWeapon, smallAngleCosSin } from './powerups';
 import { applyEffect, computeAttackCooldown, computeBlockCharges, computeDamage, computeMoveSpeed } from './stats';
 
 /** The combat arena grid (columns × rows) from the ruleset. */
@@ -60,7 +63,9 @@ const clampAxis = (v: number | undefined) => (v === undefined ? 0 : Math.max(-10
 /** Dash settings for a creature: its own `dash` data over the ruleset default. */
 export function resolveDash(def: CreatureDef, rules: CombatRules) {
   const d = { ...rules.dash, ...(def.dash ?? {}) };
-  const total = Math.round(d.distance * rules.cellUnits);
+  // The creature's dash modifier adds/removes half a cell of distance per point.
+  const distance = Math.max(0.5, d.distance + (def.modifiers?.dash ?? 0) * 0.5);
+  const total = Math.round(distance * rules.cellUnits);
   return {
     cooldownTicks: Math.max(0, Math.round(d.cooldown * rules.tickRate)),
     step: Math.max(1, Math.round(total / Math.max(1, rules.dash.durationTicks))),
@@ -69,7 +74,14 @@ export function resolveDash(def: CreatureDef, rules: CombatRules) {
   };
 }
 
-function createFighter(side: BattleSide, creature: CreatureState, def: CreatureDef, build: BattleBuild, rules: CombatRules): Fighter {
+function createFighter(
+  side: BattleSide,
+  creature: CreatureState,
+  def: CreatureDef,
+  build: BattleBuild,
+  rules: CombatRules,
+  powerups: Record<string, PowerupDef>,
+): Fighter {
   const spawn = cellCentre(combatSpawnCell(arenaGrid(rules), creature.owner), rules);
   const dash = resolveDash(def, rules);
   const facing = creature.owner === 'P1' ? 1 : -1;
@@ -102,6 +114,7 @@ function createFighter(side: BattleSide, creature: CreatureState, def: CreatureD
     dashDealsDamage: dash.dealsDamage,
     dashHit: false,
     special: !build.specialName || !build.specialActive ? 'none' : build.specialManual ? 'ready' : 'passive',
+    weapon: resolveWeapon(def, powerups, rules),
   };
 }
 
@@ -111,16 +124,150 @@ export interface CombatantSetup {
   build: BattleBuild;
 }
 
-export function createCombat(attacker: CombatantSetup, defender: CombatantSetup, rules: CombatRules): CombatState {
+export function createCombat(
+  attacker: CombatantSetup,
+  defender: CombatantSetup,
+  rules: CombatRules,
+  powerups: Record<string, PowerupDef> = {},
+): CombatState {
   const grid = arenaGrid(rules);
   return {
     tick: 0,
     arena: { width: grid.width * rules.cellUnits, height: grid.height * rules.cellUnits },
     fighters: {
-      attacker: createFighter('attacker', attacker.creature, attacker.def, attacker.build, rules),
-      defender: createFighter('defender', defender.creature, defender.def, defender.build, rules),
+      attacker: createFighter('attacker', attacker.creature, attacker.def, attacker.build, rules, powerups),
+      defender: createFighter('defender', defender.creature, defender.def, defender.build, rules, powerups),
     },
+    projectiles: [],
+    nextProjectileId: 1,
   };
+}
+
+// --- projectiles (ranged Powerups) -----------------------------------------------------
+// Fixed point: positions and velocities are combat units × 256.
+
+const FP = 256;
+
+/** Spawns a projectile in the aim direction; Magnus curve only if the shooter is moving. */
+function fireProjectile(combat: CombatState, f: Fighter, input: FighterInput, rules: CombatRules): void {
+  const w = f.weapon;
+  if (w.kind !== 'ranged') return;
+  const aimLen = isqrt(f.aim.x * f.aim.x + f.aim.y * f.aim.y) || 1;
+  const speed = w.speed * FP;
+  const off = (rules.fighterRadius + PROJECTILE_RADIUS + 2) * FP;
+  let angle = 0;
+  const mx = clampAxis(input.dx);
+  const my = clampAxis(input.dy);
+  const moveLen = isqrt(mx * mx + my * my);
+  if (moveLen >= 20) {
+    // sin(angle between aim and movement), signed: moving sideways curves the shot that way.
+    const cross = f.aim.x * my - f.aim.y * mx;
+    angle = Math.trunc((w.curve * cross) / (aimLen * moveLen));
+  }
+  const { cos, sin } = smallAngleCosSin(angle);
+  combat.projectiles.push({
+    id: combat.nextProjectileId++,
+    side: f.side,
+    x: f.x * FP + Math.trunc((off * f.aim.x) / aimLen),
+    y: f.y * FP + Math.trunc((off * f.aim.y) / aimLen),
+    vx: Math.trunc((speed * f.aim.x) / aimLen),
+    vy: Math.trunc((speed * f.aim.y) / aimLen),
+    speed,
+    travelled: 0,
+    maxTravel: w.range * FP,
+    bouncesLeft: w.bounces,
+    homing: w.homing,
+    curveCos: cos,
+    curveSin: sin,
+    impactRadius: w.impactRadius,
+    impactDamage: w.impactDamage,
+  });
+}
+
+/** Shockwave at the projectile's position: damages the opponent inside the radius. */
+function impact(p: Projectile, target: Fighter, rules: CombatRules, damage: Record<BattleSide, number>, events: GameEvent[]): void {
+  const x = Math.trunc(p.x / FP);
+  const y = Math.trunc(p.y / FP);
+  const dx = target.x - x;
+  const dy = target.y - y;
+  const reach = p.impactRadius + rules.fighterRadius;
+  const hit = dx * dx + dy * dy <= reach * reach;
+  events.push({ type: 'IMPACT', side: p.side, x, y, radius: p.impactRadius, hit });
+  if (!hit) return;
+  if (target.guard > 0) events.push({ type: 'BLOCKED', side: target.side });
+  else {
+    damage[target.side] += p.impactDamage;
+    events.push({ type: 'HIT', side: p.side, damage: p.impactDamage });
+  }
+}
+
+function stepProjectiles(combat: CombatState, rules: CombatRules, damage: Record<BattleSide, number>, events: GameEvent[]): void {
+  const r = PROJECTILE_RADIUS * FP;
+  const W = combat.arena.width * FP;
+  const H = combat.arena.height * FP;
+  const keep: Projectile[] = [];
+  for (const p of combat.projectiles) {
+    const target = combat.fighters[p.side === 'attacker' ? 'defender' : 'attacker'];
+    // Homing: steer a fraction of the way towards the opponent each tick.
+    if (p.homing > 0) {
+      const tx = target.x * FP - p.x;
+      const ty = target.y * FP - p.y;
+      const tl = isqrt(tx * tx + ty * ty);
+      if (tl > 0) {
+        p.vx += Math.trunc(((Math.trunc((p.speed * tx) / tl) - p.vx) * p.homing) / 100);
+        p.vy += Math.trunc(((Math.trunc((p.speed * ty) / tl) - p.vy) * p.homing) / 100);
+      }
+    }
+    // Magnus curve: rotate the velocity a little every tick.
+    if (p.curveSin !== 0) {
+      const vx = Math.trunc((p.vx * p.curveCos - p.vy * p.curveSin) / 65536);
+      const vy = Math.trunc((p.vx * p.curveSin + p.vy * p.curveCos) / 65536);
+      p.vx = vx;
+      p.vy = vy;
+    }
+    // Keep the projectile's speed constant.
+    const vl = isqrt(p.vx * p.vx + p.vy * p.vy);
+    if (vl > 0) {
+      p.vx = Math.trunc((p.vx * p.speed) / vl);
+      p.vy = Math.trunc((p.vy * p.speed) / vl);
+    }
+    p.x += p.vx;
+    p.y += p.vy;
+    p.travelled += p.speed;
+
+    // Walls: bounce while bounces are left; the next wall hit is the impact.
+    let wall = false;
+    if (p.x < r || p.x > W - r) {
+      p.x = p.x < r ? r : W - r;
+      p.vx = -p.vx;
+      wall = true;
+    }
+    if (p.y < r || p.y > H - r) {
+      p.y = p.y < r ? r : H - r;
+      p.vy = -p.vy;
+      wall = true;
+    }
+    if (wall) {
+      if (p.bouncesLeft > 0) {
+        p.bouncesLeft--;
+        events.push({ type: 'PROJECTILE_BOUNCED', side: p.side });
+      } else {
+        impact(p, target, rules, damage, events);
+        continue;
+      }
+    }
+    // Direct hit on the opponent.
+    const hx = target.x * FP - p.x;
+    const hy = target.y * FP - p.y;
+    const reach = (rules.fighterRadius + PROJECTILE_RADIUS) * FP;
+    if (hx * hx + hy * hy <= reach * reach) {
+      impact(p, target, rules, damage, events);
+      continue;
+    }
+    if (p.travelled >= p.maxTravel) continue; // out of range: fizzles
+    keep.push(p);
+  }
+  combat.projectiles = keep;
 }
 
 export function distanceSq(a: Fighter, b: Fighter): number {
@@ -293,10 +440,17 @@ export function stepCombat(
         events.push({ type: 'DASH', side: f.side });
       }
     } else if (wantsAttack && !busy && f.cooldown === 0) {
-      f.windup = rules.windupTicks;
-      f.cooldown = f.attackCooldownTicks;
-      f.swingAim = { ...f.aim };
-      events.push({ type: 'ATTACK_STARTED', side: f.side });
+      if (f.weapon.kind === 'ranged') {
+        fireProjectile(combat, f, input, rules);
+        f.cooldown = f.weapon.cooldownTicks;
+        events.push({ type: 'PROJECTILE_FIRED', side: f.side });
+      } else {
+        f.windup = rules.windupTicks;
+        // A melee Powerup sets its own attack interval; classic melee uses the Speed stat.
+        f.cooldown = f.weapon.cooldownTicks ?? f.attackCooldownTicks;
+        f.swingAim = { ...f.aim };
+        events.push({ type: 'ATTACK_STARTED', side: f.side });
+      }
     }
 
     if (f.dashTicks > 0) {
@@ -333,7 +487,8 @@ export function stepCombat(
     if (f.windup === 0) continue;
     f.windup--;
     if (f.windup > 0) continue;
-    if (!inAttackRange(f, other, rules)) continue;
+    const range = f.weapon.kind === 'melee' ? f.weapon.range : rules.attackRange;
+    if (distanceSq(f, other) > range * range) continue;
     if (!inAimCone(f, other, f.swingAim, rules.attackConeCos)) continue;
     if (other.guard > 0) {
       events.push({ type: 'BLOCKED', side: other.side });
@@ -342,7 +497,17 @@ export function stepCombat(
     const dmg = computeDamage(f.stats, other.stats, rules);
     damage[other.side] += dmg;
     events.push({ type: 'HIT', side: f.side, damage: dmg });
+    // Knockback: push the target along the attack direction (stops at walls).
+    if (f.weapon.kind === 'melee' && f.weapon.knockback > 0) {
+      const { sx, sy } = along(f.swingAim.x, f.swingAim.y, f.weapon.knockback);
+      const x0 = other.x;
+      const y0 = other.y;
+      tryMove(other, f, sx, sy, rules, combat.arena);
+      const moved = isqrt((other.x - x0) * (other.x - x0) + (other.y - y0) * (other.y - y0));
+      events.push({ type: 'KNOCKBACK', side: f.side, distance: moved });
+    }
   }
+  stepProjectiles(combat, rules, damage, events);
   a.hp = Math.max(0, a.hp - damage.attacker);
   d.hp = Math.max(0, d.hp - damage.defender);
 

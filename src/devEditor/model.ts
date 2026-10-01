@@ -1,0 +1,240 @@
+// Developer editor logic (no DOM): a generic draft editor per content kind plus
+// helpers that edit monster/powerup data. Everything edits the game's own
+// definitions (CreatureDef / PowerupDef) through the ContentLibrary, so what
+// is saved here is exactly what the game core plays with.
+
+import type { ContentKind, ContentLibrary, Entry } from '../content/library';
+import { defaultSpecial } from '../content/library';
+import { powerupMapping as M, type CreatureDef, type PowerupDef, type Ruleset, type SlotCondition } from '../core';
+
+type ItemOf<K extends ContentKind> = K extends 'monster' ? CreatureDef : PowerupDef;
+
+/** Draft editing for one content kind: select, new, duplicate, edit, save, revert, delete, export, import. */
+export class ItemEditor<K extends ContentKind> {
+  draft: ItemOf<K>;
+  /** Id the draft was loaded/saved under; null = new and never saved. */
+  originalId: string | null = null;
+  dirty = false;
+
+  constructor(
+    readonly lib: ContentLibrary,
+    readonly kind: K,
+  ) {
+    const first = lib.entries(kind)[0];
+    this.draft = first ? structuredClone(first.item) : this.blank();
+    this.originalId = first ? first.item.id : null;
+  }
+
+  private blank(): ItemOf<K> {
+    return (this.kind === 'monster' ? this.lib.newMonster() : this.lib.newPowerup()) as ItemOf<K>;
+  }
+
+  list(): Entry<ItemOf<K>>[] {
+    return this.lib.entries(this.kind);
+  }
+
+  origin() {
+    return this.originalId ? this.lib.get(this.kind, this.originalId)?.origin ?? null : null;
+  }
+
+  errors(): string[] {
+    return this.lib.validate(this.kind, this.draft, this.originalId);
+  }
+
+  select(id: string): boolean {
+    const e = this.lib.get(this.kind, id);
+    if (!e) return false;
+    this.draft = structuredClone(e.item);
+    this.originalId = id;
+    this.dirty = false;
+    return true;
+  }
+
+  newItem(): void {
+    this.draft = this.blank();
+    this.originalId = null;
+    this.dirty = true;
+  }
+
+  duplicate(): void {
+    const ids = new Set(this.list().map((e) => e.item.id));
+    let id = `${this.draft.id}_copy`;
+    for (let n = 2; ids.has(id); n++) id = `${this.draft.id}_copy${n}`;
+    const copy = structuredClone(this.draft) as ItemOf<K> & { position?: string };
+    copy.id = id;
+    copy.name = `${this.draft.name} Copy`;
+    if (this.kind === 'monster') delete copy.position; // a copy cannot share the same board cell
+    this.draft = copy;
+    this.originalId = null;
+    this.dirty = true;
+  }
+
+  /** Applies an edit to a copy of the draft. */
+  update(edit: (draft: ItemOf<K>) => void): void {
+    const next = structuredClone(this.draft);
+    edit(next);
+    if (JSON.stringify(next) !== JSON.stringify(this.draft)) {
+      this.draft = next;
+      this.dirty = true;
+    }
+  }
+
+  save(): { ok: true } | { ok: false; errors: string[] } {
+    const r = this.lib.saveItem(this.kind, this.draft, this.originalId);
+    if (!r.ok) return r;
+    this.draft = structuredClone(r.item);
+    this.originalId = r.item.id;
+    this.dirty = false;
+    return { ok: true };
+  }
+
+  revert(): void {
+    if (this.originalId && this.select(this.originalId)) return;
+    this.newItem();
+    this.dirty = false;
+  }
+
+  /** Deletes a custom item or restores a modified base item. */
+  remove(): { ok: true; restored: boolean } | { ok: false; error: string } {
+    if (!this.originalId) {
+      this.revert();
+      return { ok: true, restored: false };
+    }
+    if (this.origin() === 'base') return { ok: false, error: 'Base content cannot be deleted' };
+    const id = this.originalId;
+    const r = this.lib.removeItem(this.kind, id);
+    if (!r.ok) return r;
+    if (this.select(id)) return { ok: true, restored: true };
+    const first = this.list()[0];
+    if (first) this.select(first.item.id);
+    else this.newItem();
+    return { ok: true, restored: false };
+  }
+
+  exportText(): { ok: true; filename: string; text: string } | { ok: false; error: string } {
+    const errors = this.errors();
+    if (errors.length) return { ok: false, error: errors[0] };
+    return { ok: true, filename: `${this.draft.id}.psychopomp-${this.kind}.json`, text: this.lib.serialize(this.kind, this.draft) };
+  }
+
+  /** Loads a parsed item of this kind as an unsaved draft (saving replaces an item with the same id). */
+  load(item: ItemOf<K>): void {
+    this.draft = structuredClone(item);
+    this.originalId = this.lib.get(this.kind, item.id) ? item.id : null;
+    this.dirty = true;
+  }
+}
+
+// --- monsters -----------------------------------------------------------------------
+
+export const MODIFIER_KEYS = ['speed', 'power', 'shield', 'dash', 'block'] as const;
+export type ModifierKey = (typeof MODIFIER_KEYS)[number];
+
+/** Slot dropdown options, in display order. */
+export const SLOT_OPTIONS: Array<{ label: string; value: SlotCondition | null }> = [
+  { label: 'None', value: null },
+  { label: 'ODD', value: 'odd' },
+  { label: 'EVEN', value: 'even' },
+  ...[1, 2, 3, 4, 5, 6].map((n) => ({ label: String(n), value: n })),
+];
+
+export function slotOptionIndex(c: SlotCondition | null): number {
+  return SLOT_OPTIONS.findIndex((o) => o.value === c);
+}
+
+/** The creature's dice slots in layout order (slot i = Special trigger slot i). */
+export function slotCategories(def: CreatureDef): string[] {
+  const order = def.dice.order ?? ['speed', 'power', 'shield', 'special', 'block'];
+  const cats = [...order.filter((c) => (def.dice.slots[c] ?? 0) > 0), ...Object.keys(def.dice.slots).filter((c) => !order.includes(c) && def.dice.slots[c] > 0)];
+  return cats.flatMap((c) => new Array(def.dice.slots[c]).fill(c));
+}
+
+/**
+ * Per-slot Special conditions of a monster. Older requirement types that only
+ * look at one category slot (e.g. "SPECIAL: ALL ODD") are shown as that slot's
+ * condition; anything more complex is reported as `legacy`.
+ */
+export function slotConditions(def: CreatureDef, count: number): { slots: Array<SlotCondition | null>; legacy: boolean } {
+  const empty = new Array(count).fill(null) as Array<SlotCondition | null>;
+  const req = def.special?.requirement;
+  if (!req) return { slots: empty, legacy: false };
+  if (req.type === 'slots') return { slots: [...req.slots, ...empty].slice(0, count), legacy: false };
+  const cats = slotCategories(def);
+  if ((req.type === 'allOdd' || req.type === 'allEven') && req.target && req.target !== 'all') {
+    const idx = cats.map((c, i) => (c === req.target ? i : -1)).filter((i) => i >= 0);
+    idx.forEach((i) => (empty[i] = req.type === 'allOdd' ? 'odd' : 'even'));
+    return { slots: empty, legacy: false };
+  }
+  return { slots: empty, legacy: true };
+}
+
+/** Sets one slot condition (null = None). Creates a Special if the monster has none. */
+export function setSlotCondition(def: CreatureDef, index: number, cond: SlotCondition | null, count: number): void {
+  const { slots } = slotConditions(def, count);
+  slots[index] = cond;
+  if (!def.special) def.special = defaultSpecial(count);
+  def.special.requirement = { type: 'slots', slots };
+}
+
+export function setModifier(def: CreatureDef, key: ModifierKey, value: number): void {
+  def.modifiers = { ...(def.modifiers ?? {}), [key]: Math.max(-99, Math.min(99, Math.round(value))) };
+}
+
+export function modifier(def: CreatureDef, key: ModifierKey): number {
+  return def.modifiers?.[key] ?? 0;
+}
+
+// --- powerups ------------------------------------------------------------------------
+
+export const MELEE_FIELDS = [
+  { key: 'speed', label: 'Speed', hint: 'time between attacks' },
+  { key: 'knockback', label: 'Knockback', hint: 'push on hit' },
+  { key: 'range', label: 'Range', hint: 'reach' },
+] as const;
+
+export const RANGED_FIELDS = [
+  { key: 'speed', label: 'Speed', hint: 'projectile speed' },
+  { key: 'range', label: 'Range', hint: 'travel distance' },
+  { key: 'rateOfFire', label: 'Rate of Fire', hint: 'time between shots' },
+  { key: 'impactSize', label: 'Impact Size', hint: 'shockwave radius' },
+  { key: 'impactDamage', label: 'Impact Damage', hint: 'shockwave damage (1-100)' },
+  { key: 'homing', label: 'Homing', hint: 'steering towards the opponent' },
+  { key: 'trajectory', label: 'Trajectory', hint: 'Magnus curve when moving while firing' },
+  { key: 'bounce', label: 'Bounce', hint: 'wall bounces' },
+] as const;
+
+export type MeleeKey = (typeof MELEE_FIELDS)[number]['key'];
+export type RangedKey = (typeof RANGED_FIELDS)[number]['key'];
+
+export function fieldMax(key: string): number {
+  return key === 'impactDamage' ? 100 : 10;
+}
+
+export function setPowerupLevel(def: PowerupDef, group: 'melee' | 'ranged', key: string, value: number): void {
+  const v = Math.max(1, Math.min(fieldMax(key), Math.round(value)));
+  const block = (def[group] ?? {}) as Record<string, number>;
+  (def as unknown as Record<string, unknown>)[group] = { ...block, [key]: v };
+}
+
+const cells = (units: number, rules: Ruleset) => (units / rules.combat.cellUnits).toFixed(units % rules.combat.cellUnits === 0 ? 0 : 1);
+const secs = (ticks: number, rules: Ruleset) => `${(ticks / rules.combat.tickRate).toFixed(1)} s`;
+
+/** What a level means in game terms (shown next to each slider). */
+export function levelMeaning(group: 'melee' | 'ranged', key: string, level: number, rules: Ruleset): string {
+  const c = rules.combat;
+  if (group === 'melee') {
+    if (key === 'speed') return secs(M.meleeCooldownTicks(level, c), rules);
+    if (key === 'knockback') return `${level * 5} px`;
+    if (key === 'range') return `${cells(M.meleeRange(level), rules)} cells`;
+  } else {
+    if (key === 'speed') return `${M.projectileSpeed(level)} u/tick`;
+    if (key === 'range') return `${cells(M.projectileRange(level, c), rules)} cells`;
+    if (key === 'rateOfFire') return secs(M.rateOfFireTicks(level, c), rules);
+    if (key === 'impactSize') return `r ${cells(M.impactRadius(level), rules)} cells`;
+    if (key === 'impactDamage') return `${M.impactDamage(level)} dmg`;
+    if (key === 'homing') return `${M.homingPercent(level)} %/tick`;
+    if (key === 'trajectory') return `${((M.trajectoryCurve(level) / 65536) * (180 / Math.PI)).toFixed(2)}°/tick`;
+    if (key === 'bounce') return `${M.bounceCount(level)}×`;
+  }
+  return String(level);
+}

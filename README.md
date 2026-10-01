@@ -110,5 +110,12 @@ Every push to `main` runs `.github/workflows/deploy.yml` (npm ci → npm test �
 The Vite `base` is `/Psychopomp/` because this is a GitHub Pages project site. Pages is only hosting:
 the game, its content and all assets are bundled into the build and need no backend or external service.
 
+## Developer editor (/editor)
+
+Internal content tool, not part of the player UI: `npm run dev` then open `/Psychopomp/editor/`.
+MONSTERS (identity, health, P1/P2, 9×9 position, start modifiers, Special slot conditions, Powerup) and
+POWERUPS (melee/ranged settings on 1-10 scales). Saved content lives in this browser and is used by new
+matches; EXPORT/IMPORT move items as versioned JSON files (see `src/content/saveFormat.ts`).
+
 Code layout and the assumptions made for this slice: see `IMPLEMENTATION_PLAN.md`.
 Content lives in `content/packs/base/` (ruleset, board, creatures as JSON).

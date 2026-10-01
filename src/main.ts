@@ -3,9 +3,11 @@
 
 import { App } from './app/App';
 import { Sfx } from './audio/Sfx';
+import { ContentLibrary } from './content/library';
 import { loadContentPack } from './content/loader';
 import { InputManager } from './input/InputManager';
 import { bundledPackFiles } from './platform/web/bundledContent';
+import { browserStorage } from './platform/web/storage';
 import { VIEW_H, VIEW_W } from './rendering/theme';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -29,7 +31,9 @@ resize();
 
 const loaded = loadContentPack(bundledPackFiles().base ?? {});
 const sfx = new Sfx();
-const app = new App(loaded.ok ? loaded.pack : null, loaded.ok ? [] : loaded.errors, sfx);
+// Bundled content + content saved by the developer editor (/editor) in this browser.
+const library = loaded.ok ? new ContentLibrary(loaded.pack, browserStorage()) : null;
+const app = new App(library, loaded.ok ? [] : loaded.errors, sfx);
 const input = new InputManager();
 input.onGamepadDisconnected = (player) => app.pause(player ? `${player === 'P1' ? 'PLAYER 1' : 'PLAYER 2'} CONTROLLER DISCONNECTED` : 'CONTROLLER DISCONNECTED');
 

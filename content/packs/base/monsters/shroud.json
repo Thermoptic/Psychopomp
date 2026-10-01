@@ -9,10 +9,7 @@
   "art": {},
   "stats": {
     "maxHp": 20,
-    "movement": 3,
-    "power": 10,
-    "speed": 5,
-    "shield": 4
+    "movement": 3
   },
   "dice": {
     "slots": {
@@ -27,8 +24,14 @@
     "name": "Even Veil",
     "description": "+4 Shield",
     "requirement": {
-      "type": "allEven",
-      "target": "special"
+      "type": "slots",
+      "slots": [
+        null,
+        null,
+        null,
+        "even",
+        null
+      ]
     },
     "effect": {
       "type": "addShield",
