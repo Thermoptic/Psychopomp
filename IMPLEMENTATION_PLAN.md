@@ -70,7 +70,7 @@ unless marked *code*.
 | Speed in combat | Faster movement and shorter attack cooldown | ruleset `combat.*` |
 | Block | Block dice → guard charges (`floor(block / blockChargeDivisor)`). Pressing BLOCK spends a charge for a short guard window that negates hits. Not an extra HP bar. | ruleset |
 | Combat style | Real-time, 60 ticks/s fixed step, integer maths, melee with wind-up | ruleset `combat.*` |
-| Combat presentation | Fought on the strategic board itself: only the two combatants are shown, at board sprite scale. P1 spawns centre-left (x 0, y 4 on 9×9), P2 centre-right (x 8, y 4). Combat positions are temporary (`battle.combat`); board positions change only through the normal battle result. One cell = `cellUnits` combat units. Blocked board cells do not block combat movement yet. | ruleset `combat.cellUnits`, `core/combat/simulation.ts` |
+| Combat presentation | Preparation happens on the strategic 9×9 board (only the two combatants shown). When both players are READY the view switches to a wide combat arena (`arenaColumns` × `arenaRows`, 20 × 9) with a top HUD; P1 spawns in the leftmost column, P2 in the rightmost, both on the centre row. Arena size is ruleset data (never screen-dependent); the renderer only fits the cell size to the available area. Combat positions are temporary (`battle.combat`). | ruleset `combat.arenaColumns/arenaRows/cellUnits`, `core/combat/simulation.ts`, `rendering/arenaView.ts` |
 | Simultaneous death | Supported → `DRAW`, both removed | *code* |
 | Combat timeout | After `timeoutTicks` (90 s) the attacker withdraws to its origin cell; both keep HP | ruleset |
 | Healing | None anywhere | — |

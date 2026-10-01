@@ -5,8 +5,8 @@
 
 import type { MatchUi, PrepCursor } from '../app/ui';
 import { computeBuild, type BattleBuild, type BattleSide, type BattleStats, type GameState, type PlayerId } from '../core';
-import { badge, die, hpBar, panel, rect, strokeRect, text, wrapText, type Ctx } from './draw';
-import { boardLayout, prepPanelLayout, type Rect } from './layout';
+import { die, hpBar, panel, rect, strokeRect, text, wrapText, type Ctx } from './draw';
+import { prepPanelLayout, type Rect } from './layout';
 import { prepButton, prepPhaseLabel, shortRequirement } from './prepModel';
 import { drawCreature } from './sprites';
 import { C, playerColor, playerLabel } from './theme';
@@ -176,62 +176,6 @@ function drawPrepButton(ctx: Ctx, r: Rect, label: string, kind: string, enabled:
   text(ctx, (focused ? '> ' : '') + label, r.x + r.w / 2, r.y + r.h / 2 + 1, { size: 16, color, align: 'center', baseline: 'middle' });
 }
 
-/** Big 3-2-1 over the board while the countdown runs, then BATTLE!. */
-export function drawCountdown(ctx: Ctx, state: GameState, ui: MatchUi): void {
-  const b = state.battle;
-  const l = boardLayout(state.board);
-  const cx = l.ox + (l.cell * state.board.width) / 2;
-  const cy = l.oy + (l.cell * state.board.height) / 2;
-  let label = '';
-  if (b?.stage === 'countdown') label = String(Math.max(1, Math.ceil(b.countdown / state.ruleset.combat.tickRate)));
-  else if (ui.bannerMs > 0) label = 'BATTLE!';
-  if (!label) return;
-  const size = label.length > 1 ? 44 : 96;
-  text(ctx, label, cx + 3, cy + 3, { size, color: C.edgeDark, align: 'center', baseline: 'middle' });
-  text(ctx, label, cx, cy, { size, color: label.length > 1 ? C.danger : C.text, align: 'center', baseline: 'middle' });
-}
-
-/**
- * Side panel for one combatant during real-time combat. The fight itself is
- * drawn on the strategic board (see drawBoard / boardUnits).
- */
-export function drawCombatPanel(ctx: Ctx, state: GameState, owner: PlayerId, r: Rect): void {
-  const b = state.battle!;
-  const combat = b.combat!;
-  const f = Object.values(combat.fighters).find((x) => state.creatures[x.creatureId].owner === owner);
-  if (!f) return;
-  const info = sideInfo(state, f.side);
-  panel(ctx, r, info.color);
-  badge(ctx, r.x + 20, r.y + 22, 14, owner, info.color);
-  text(ctx, playerLabel(owner), r.x + 34, r.y + 27, { size: 16, color: info.color });
-  text(ctx, f.side.toUpperCase(), r.x + r.w - 14, r.y + 27, { size: 11, color: C.dim, align: 'right' });
-  text(ctx, info.def.name.toUpperCase(), r.x + 14, r.y + 60, { size: 16, color: C.text });
-  text(ctx, `${f.hp}/${f.maxHp}`, r.x + r.w - 14, r.y + 60, { size: 16, align: 'right', color: f.hp <= f.maxHp / 4 ? C.danger : C.text });
-  hpBar(ctx, { x: r.x + 14, y: r.y + 70, w: r.w - 28, h: 12 }, f.hp, f.maxHp, info.color);
-  let y = r.y + 112;
-  for (const [label, v] of [['POWER', f.stats.power], ['SHIELD', f.stats.shield], ['SPEED', f.stats.speed]] as const) {
-    text(ctx, label, r.x + 14, y, { size: 12, color: C.dim });
-    text(ctx, String(v), r.x + 104, y, { size: 14 });
-    y += 20;
-  }
-  text(ctx, 'GUARD', r.x + 14, y, { size: 12, color: C.dim });
-  for (let k = 0; k < f.blockCharges; k++) rect(ctx, { x: r.x + 104 + k * 13, y: y - 10, w: 10, h: 10 }, C.pp);
-  if (f.blockCharges === 0) text(ctx, '-', r.x + 104, y, { size: 14, color: C.faint });
-  y += 20;
-  text(ctx, 'ATTACK', r.x + 14, y, { size: 12, color: C.dim });
-  const ready = f.cooldown === 0 && f.windup === 0;
-  text(ctx, ready ? 'READY' : f.windup > 0 ? 'SWING' : 'RELOAD', r.x + 104, y, { size: 13, color: ready ? C.ok : C.dim });
-  const build = b.builds![f.side];
-  if (build.specialName) {
-    text(ctx, `${build.specialName.toUpperCase()}: ${build.specialActive ? 'ACTIVE' : 'OFF'}`, r.x + 14, y + 32, {
-      size: 12,
-      color: build.specialActive ? C.ok : C.faint,
-    });
-  }
-  const keys = owner === 'P1' ? ['WASD  MOVE', 'SPACE  HIT', 'L-SHIFT  GUARD'] : ['ARROWS  MOVE', 'ENTER  HIT', 'R-SHIFT  GUARD'];
-  keys.forEach((k, i) => text(ctx, k, r.x + 14, r.y + r.h - 56 + i * 18, { size: 11, color: C.dim }));
-}
-
 export function combatTimeLeft(state: GameState): number | null {
   const rules = state.ruleset.combat;
   const combat = state.battle?.combat;
@@ -243,7 +187,7 @@ export function combatHint(state: GameState): string {
   const b = state.battle!;
   const a = state.creatures[b.attackerId].owner;
   const t = combatTimeLeft(state);
-  return `COMBAT ON THE BOARD  ·  ${playerLabel(a)} ATTACKS${t !== null ? `  ·  TIME ${t}` : ''}`;
+  return `COMBAT  ·  ${playerLabel(a)} ATTACKS${t !== null ? `  ·  TIME ${t}` : ''}`;
 }
 
 export function drawResult(ctx: Ctx, state: GameState): void {

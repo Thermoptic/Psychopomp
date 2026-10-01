@@ -7,7 +7,7 @@
 // spawn cells; during combat they are at their temporary combat positions.
 // Board creature positions in GameState are never changed by this.
 
-import { cellCentre, combatSpawnCell } from '../core/combat/simulation';
+import { arenaGrid, cellCentre, combatSpawnCell } from '../core/combat/simulation';
 import type { Fighter, GameState, PlayerId } from '../core/types';
 import type { BoardLayout } from './layout';
 
@@ -36,6 +36,15 @@ export function isCombatView(state: GameState): boolean {
   return !!b && !!b.combat && (b.stage === 'combat' || b.stage === 'result');
 }
 
+/**
+ * Countdown, combat and result are shown on the wide combat arena (a separate
+ * grid). Preparation stays on the strategic board.
+ */
+export function isArenaView(state: GameState): boolean {
+  const s = state.battle?.stage;
+  return s === 'countdown' || s === 'combat' || s === 'result';
+}
+
 /** Any battle stage: only the two combatants are shown on the board. */
 export function isBattleView(state: GameState): boolean {
   return !!state.battle;
@@ -62,9 +71,11 @@ export function boardUnits(state: GameState, l: BoardLayout, battleView = isBatt
   }
   if (battleView && state.battle) {
     const b = state.battle;
+    // Waiting on spawn cells: arena spawns from READY+READY on, board spawns while preparing.
+    const grid = isArenaView(state) ? arenaGrid(state.ruleset.combat) : state.board;
     return [b.attackerId, b.defenderId].map((id) => {
       const cr = state.creatures[id];
-      const c = cellCentre(combatSpawnCell(state.board, cr.owner), state.ruleset.combat);
+      const c = cellCentre(combatSpawnCell(grid, cr.owner), state.ruleset.combat);
       const p = combatToScreen(state, l, c.x, c.y);
       const maxHp = state.creatureDefs[cr.defId].stats.maxHp;
       return { creatureId: cr.id, defId: cr.defId, owner: cr.owner, cx: p.x, cy: p.y, px, hp: cr.hp, maxHp, fighter: null };

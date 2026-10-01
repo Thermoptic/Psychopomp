@@ -33,6 +33,26 @@ export function boardLayout(board: BoardDef): BoardLayout {
   };
 }
 
+// --- Combat arena -------------------------------------------------------------
+//
+// From READY+READY on, the battle uses a top HUD and a wide arena that fills
+// everything between the HUD and the message bar. The arena's column/row count
+// is gameplay data (ruleset); only the on-screen cell size is computed here.
+
+export const COMBAT_HUD: Rect = { x: 12, y: 4, w: 936, h: 50 };
+export const ARENA_AREA: Rect = { x: 12, y: 60, w: 936, h: 414 };
+const ARENA_FRAME = 8;
+
+/** Fits a columns × rows grid of square cells into `area`, centred. */
+export function arenaLayout(columns: number, rows: number, area: Rect = ARENA_AREA): BoardLayout {
+  const cell = Math.floor(Math.min((area.w - 2 * ARENA_FRAME) / columns, (area.h - 2 * ARENA_FRAME) / rows));
+  return {
+    cell,
+    ox: area.x + Math.floor((area.w - cell * columns) / 2),
+    oy: area.y + Math.floor((area.h - cell * rows) / 2),
+  };
+}
+
 export function cellRect(l: BoardLayout, c: Cell): Rect {
   return { x: l.ox + c.x * l.cell, y: l.oy + c.y * l.cell, w: l.cell, h: l.cell };
 }

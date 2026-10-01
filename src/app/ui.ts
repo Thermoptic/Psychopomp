@@ -33,6 +33,8 @@ export interface MatchUi {
   prep: Record<PlayerId, PrepCursor>;
   /** "BATTLE!" banner after the countdown, in ms. */
   bannerMs: number;
+  /** Board -> arena expand transition when both players are READY, in ms. */
+  arenaMs: number;
   /** Battle intro emphasis on the board, in ms. */
   introMs: number;
   message: { text: string; color: string; ms: number } | null;
@@ -53,6 +55,7 @@ export function createMatchUi(): MatchUi {
     hover: null,
     prep: { P1: createPrepCursor(), P2: createPrepCursor() },
     bannerMs: 0,
+    arenaMs: 0,
     introMs: 0,
     message: null,
     paused: false,

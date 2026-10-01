@@ -19,10 +19,11 @@ import {
   type PlayerId,
 } from '../core';
 import type { Action, ActionFrame } from '../input/actions';
-import { combatHint, drawCombatPanel, drawCountdown, drawPrepPanel, drawResult, sideOf } from '../rendering/battleView';
+import { ARENA_EXPAND_MS, drawArena, drawCombatHud, drawCountdown } from '../rendering/arenaView';
+import { combatHint, drawPrepPanel, drawResult, sideOf } from '../rendering/battleView';
 import { drawBoard, drawBoardScreen, drawHeader, drawMessageBar } from '../rendering/boardView';
 import { rect, scanlines, type Ctx } from '../rendering/draw';
-import { LEFT_PANEL, RIGHT_PANEL, cellAtPoint, inRect, prepItemAt, prepPanelLayout, type PrepItem } from '../rendering/layout';
+import { cellAtPoint, inRect, prepItemAt, prepPanelLayout, type PrepItem } from '../rendering/layout';
 import { prepButton } from '../rendering/prepModel';
 import {
   MENU_ITEMS,
@@ -124,6 +125,10 @@ export class App {
           this.ui.prep[e.player].held = null;
           this.say(`${playerLabel(e.player)} IS READY`, playerColor(e.player), 1500);
           break;
+        case 'COUNTDOWN_STARTED':
+          // Both READY: switch to the wide combat arena before the 3-2-1.
+          this.ui.arenaMs = ARENA_EXPAND_MS;
+          break;
         case 'COMBAT_STARTED':
           this.ui.bannerMs = 700;
           this.ui.queued = { attacker: { attack: false, block: false }, defender: { attack: false, block: false } };
@@ -173,6 +178,7 @@ export class App {
     if (ui.message) ui.message.ms -= dtMs;
     ui.introMs = Math.max(0, ui.introMs - dtMs);
     ui.bannerMs = Math.max(0, ui.bannerMs - dtMs);
+    ui.arenaMs = Math.max(0, ui.arenaMs - dtMs);
     ui.flash.attacker = Math.max(0, ui.flash.attacker - dtMs);
     ui.flash.defender = Math.max(0, ui.flash.defender - dtMs);
     ui.floaters = ui.floaters.filter((f) => (f.ms -= dtMs) > 0);
@@ -581,22 +587,19 @@ export class App {
       if (s.phase === 'gameOver') drawGameOver(ctx, s);
     } else {
       drawHeader(ctx, s);
-      if (b.stage === 'dice' || b.stage === 'countdown') {
-        // Preparation on the battle view: both panels live, combatants on the board.
+      if (b.stage === 'dice') {
+        // Preparation: both panels live, combatants on the strategic board.
         drawPrepPanel(ctx, s, ui, 'P1');
         drawPrepPanel(ctx, s, ui, 'P2');
         drawBoard(ctx, s, ui, now);
-        drawCountdown(ctx, s, ui);
         const msg = ui.message && ui.message.ms > 0 ? ui.message : null;
-        const text = b.stage === 'countdown' ? 'BOTH READY - BATTLE STARTS' : this.prepHint();
-        drawMessageBar(ctx, msg ? msg.text : text, msg ? msg.color : C.dim);
+        drawMessageBar(ctx, msg ? msg.text : this.prepHint(), msg ? msg.color : C.dim);
       } else {
-        // Combat happens on the strategic board itself.
-        drawCombatPanel(ctx, s, 'P1', LEFT_PANEL);
-        drawCombatPanel(ctx, s, 'P2', RIGHT_PANEL);
-        drawBoard(ctx, s, ui, now);
-        drawMessageBar(ctx, combatHint(s), C.dim);
-        drawCountdown(ctx, s, ui);
+        // Both READY: wide combat arena + top HUD for countdown, combat and result.
+        drawCombatHud(ctx, s);
+        drawArena(ctx, s, ui, now, ui.arenaMs);
+        if (ui.arenaMs <= 0) drawCountdown(ctx, s, ui);
+        drawMessageBar(ctx, b.stage === 'countdown' ? 'BOTH READY - BATTLE STARTS' : combatHint(s), C.dim);
         if (b.stage === 'result') drawResult(ctx, s);
       }
     }

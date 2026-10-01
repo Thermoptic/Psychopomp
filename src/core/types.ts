@@ -105,10 +105,14 @@ export interface CreatureDef {
 export interface CombatRules {
   tickRate: number;
   /**
-   * Combat is fought on the strategic board itself. Positions are integer
-   * combat units; one board cell is `cellUnits` units wide and high.
+   * Combat is fought on its own grid arena (wider than the strategic board),
+   * `arenaColumns` × `arenaRows` cells. Positions are integer combat units;
+   * one cell is `cellUnits` units wide and high. These are gameplay data, so
+   * they never depend on the screen size.
    */
   cellUnits: number;
+  arenaColumns: number;
+  arenaRows: number;
   fighterRadius: number;
   /** Max centre-to-centre distance at which an attack connects. */
   attackRange: number;
@@ -248,7 +252,7 @@ export interface Fighter {
 
 export interface CombatState {
   tick: number;
-  /** Playable area in combat units = board size × cellUnits. */
+  /** Playable area in combat units = arena grid × cellUnits. */
   arena: { width: number; height: number };
   fighters: Record<BattleSide, Fighter>;
 }

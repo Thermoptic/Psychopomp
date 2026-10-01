@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { cellCentre, combatSpawnCell, type GameState } from '../src/core';
-import { boardLayout } from '../src/rendering/layout';
-import { boardSpritePx, boardUnits, isCombatView } from '../src/rendering/boardUnits';
-import { customMatch, fightToResult, ok, prepareBothAndBegin, testCreature, tick } from './helpers';
+import { arenaGrid, cellCentre, combatSpawnCell, type GameState } from '../src/core';
+import { ARENA_AREA, arenaLayout, boardLayout } from '../src/rendering/layout';
+import { boardSpritePx, boardUnits, isArenaView, isCombatView } from '../src/rendering/boardUnits';
+import { customMatch, fightToResult, ok, prepareBothAndBegin, quickPrepare, testCreature, tick } from './helpers';
 
 const fixed = (id: string, stats: Parameters<typeof testCreature>[1] = {}) =>
   testCreature(id, stats, { dice: { sides: 1, slots: { speed: 1, power: 1, shield: 1, special: 1, block: 1 } } });
@@ -26,15 +26,67 @@ function board9(): GameState {
   });
 }
 
+const arenaOf = (s: GameState) => {
+  const g = arenaGrid(s.ruleset.combat);
+  return arenaLayout(g.width, g.height);
+};
 const cellCentrePx = (s: GameState, x: number, y: number) => {
-  const l = boardLayout(s.board);
+  const l = arenaOf(s);
   return { cx: l.ox + x * l.cell + l.cell / 2, cy: l.oy + y * l.cell + l.cell / 2 };
 };
 
-describe('combat on the strategic board', () => {
-  it('spawn cells: P1 centre-left (col 1, row 5), P2 centre-right (col 9, row 5)', () => {
-    expect(combatSpawnCell({ width: 9, height: 9 }, 'P1')).toEqual({ x: 0, y: 4 });
+describe('combat arena', () => {
+  it('the arena is wider than the strategic board and its size is ruleset data', () => {
+    const s = board9();
+    const g = arenaGrid(s.ruleset.combat);
+    expect(g).toEqual({ width: 20, height: 9 });
+    expect(g.width).toBeGreaterThan(s.board.width * 2);
+  });
+
+  it('spawn cells: P1 leftmost column, P2 rightmost column, both on the centre row', () => {
+    expect(combatSpawnCell({ width: 20, height: 9 }, 'P1')).toEqual({ x: 0, y: 4 });
+    expect(combatSpawnCell({ width: 20, height: 9 }, 'P2')).toEqual({ x: 19, y: 4 });
     expect(combatSpawnCell({ width: 9, height: 9 }, 'P2')).toEqual({ x: 8, y: 4 });
+    expect(combatSpawnCell({ width: 30, height: 11 }, 'P2')).toEqual({ x: 29, y: 5 });
+  });
+
+  it('arena cells keep roughly the strategic board cell size (not stretched)', () => {
+    const s = board9();
+    const arena = arenaOf(s);
+    const board = boardLayout(s.board);
+    const g = arenaGrid(s.ruleset.combat);
+    expect(Math.abs(arena.cell - board.cell)).toBeLessThanOrEqual(4);
+    // Uses (almost) the full available width.
+    expect(arena.cell * g.width).toBeGreaterThan(ARENA_AREA.w * 0.9);
+    expect(arena.cell * g.height).toBeLessThanOrEqual(ARENA_AREA.h);
+  });
+
+  it('the wide arena is only used once both players are READY', () => {
+    let s = ok(board9(), { type: 'MOVE_CREATURE', creatureId: 'P1-a-1', to: { x: 5, y: 2 } });
+    expect(isArenaView(s)).toBe(false);
+    s = quickPrepare(s, 'P1');
+    expect(isArenaView(s)).toBe(false); // only P1 READY: still preparing on the board
+    s = quickPrepare(s, 'P2');
+    expect(s.battle!.stage).toBe('countdown');
+    expect(isArenaView(s)).toBe(true);
+    // During the countdown the combatants already wait on the arena spawn cells.
+    const units = boardUnits(s, arenaOf(s));
+    const p1 = units.find((u) => u.owner === 'P1')!;
+    const p2 = units.find((u) => u.owner === 'P2')!;
+    expect({ cx: p1.cx, cy: p1.cy }).toEqual(cellCentrePx(s, 0, 4));
+    expect({ cx: p2.cx, cy: p2.cy }).toEqual(cellCentrePx(s, 19, 4));
+  });
+
+  it('movement covers the whole arena (corner to corner)', () => {
+    let s = ok(board9(), { type: 'MOVE_CREATURE', creatureId: 'P1-a-1', to: { x: 5, y: 2 } });
+    s = prepareBothAndBegin(s);
+    const arena = s.battle!.combat!.arena;
+    const r = s.ruleset.combat.fighterRadius;
+    for (let i = 0; i < 400; i++) s = tick(s, { dx: 0, dy: -1, attack: false, block: false });
+    for (let i = 0; i < 1000; i++) s = tick(s, { dx: 1, dy: 0, attack: false, block: false }, { dx: 0, dy: 1, attack: false, block: false });
+    const a = s.battle!.combat!.fighters.attacker;
+    expect(a.y).toBe(r);
+    expect(a.x).toBe(arena.width - r);
   });
 
   it('P1 combatant starts centre-left and P2 combatant centre-right (P1 attacking)', () => {
@@ -43,8 +95,8 @@ describe('combat on the strategic board', () => {
     const rules = s.ruleset.combat;
     const { attacker, defender } = s.battle!.combat!.fighters;
     expect({ x: attacker.x, y: attacker.y }).toEqual(cellCentre({ x: 0, y: 4 }, rules));
-    expect({ x: defender.x, y: defender.y }).toEqual(cellCentre({ x: 8, y: 4 }, rules));
-    expect(s.battle!.combat!.arena).toEqual({ width: 9 * rules.cellUnits, height: 9 * rules.cellUnits });
+    expect({ x: defender.x, y: defender.y }).toEqual(cellCentre({ x: 19, y: 4 }, rules));
+    expect(s.battle!.combat!.arena).toEqual({ width: 20 * rules.cellUnits, height: 9 * rules.cellUnits });
   });
 
   it('sides follow the player, not attacker/defender (P2 attacking)', () => {
@@ -54,7 +106,7 @@ describe('combat on the strategic board', () => {
     const rules = s.ruleset.combat;
     const { attacker, defender } = s.battle!.combat!.fighters;
     expect(attacker.creatureId).toBe('P2-b-1');
-    expect({ x: attacker.x, y: attacker.y }).toEqual(cellCentre({ x: 8, y: 4 }, rules));
+    expect({ x: attacker.x, y: attacker.y }).toEqual(cellCentre({ x: 19, y: 4 }, rules));
     expect({ x: defender.x, y: defender.y }).toEqual(cellCentre({ x: 0, y: 4 }, rules));
   });
 
@@ -67,17 +119,18 @@ describe('combat on the strategic board', () => {
     let s = ok(s0, { type: 'MOVE_CREATURE', creatureId: 'P1-a-1', to: { x: 5, y: 2 } });
     s = prepareBothAndBegin(s);
     expect(isCombatView(s)).toBe(true);
-    const units = boardUnits(s, l);
+    const al = arenaOf(s);
+    const units = boardUnits(s, al);
     expect(units.map((u) => u.creatureId).sort()).toEqual(['P1-a-1', 'P2-b-1']);
-    // Same scale as on the strategic board.
+    // Same creature scale as on the strategic board.
     for (const u of units) {
-      expect(u.px).toBe(boardSpritePx(l));
+      expect(u.px).toBe(boardSpritePx(al));
       expect(u.px).toBe(boardMode[0].px);
     }
     const p1 = units.find((u) => u.owner === 'P1')!;
     const p2 = units.find((u) => u.owner === 'P2')!;
     expect({ cx: p1.cx, cy: p1.cy }).toEqual(cellCentrePx(s, 0, 4));
-    expect({ cx: p2.cx, cy: p2.cy }).toEqual(cellCentrePx(s, 8, 4));
+    expect({ cx: p2.cx, cy: p2.cy }).toEqual(cellCentrePx(s, 19, 4));
   });
 
   it('non-combatants are hidden during combat and the result screen, visible again after', () => {

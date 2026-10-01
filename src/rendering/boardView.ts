@@ -4,8 +4,8 @@
 import type { MatchUi } from '../app/ui';
 import { creatureAt, describeRequirement, getLegalMoves, livingCreatures, type GameState, type PlayerId } from '../core';
 import { badge, hpBar, panel, rect, strokeRect, text, wrapText, type Ctx } from './draw';
-import { HEADER, LEFT_PANEL, MESSAGE_BAR, RIGHT_PANEL, boardLayout, cellRect, type Rect } from './layout';
-import { boardUnits, combatToScreen, isBattleView, isCombatView } from './boardUnits';
+import { HEADER, LEFT_PANEL, MESSAGE_BAR, RIGHT_PANEL, boardLayout, cellRect, type BoardLayout, type Rect } from './layout';
+import { boardUnits, combatToScreen, isBattleView, isCombatView, type BoardUnit } from './boardUnits';
 import { drawCreature } from './sprites';
 import { C, playerColor, playerLabel } from './theme';
 
@@ -157,7 +157,6 @@ export function drawBoard(ctx: Ctx, state: GameState, ui: MatchUi, now: number, 
   // Battle emphasis (board mode only; in combat mode the board is cleared).
   const b = state.battle;
   const pulse = Math.floor(now / 150) % 2 === 0;
-  const combatView = battleView && isCombatView(state);
   if (b && !battleView) {
     for (const c of [b.from, b.cell]) {
       const r = cellRect(l, c);
@@ -165,53 +164,9 @@ export function drawBoard(ctx: Ctx, state: GameState, ui: MatchUi, now: number, 
     }
   }
 
-  // Creatures: all living ones in board mode, only the two combatants in
-  // combat mode, always at the same board sprite scale.
-  const rules = state.ruleset.combat;
-  const unitScale = l.cell / rules.cellUnits;
-  for (const u of boardUnits(state, l, battleView)) {
-    const color = playerColor(u.owner);
-    const f = u.fighter;
-    if (f) {
-      // Attack reach, wind-up and guard, scaled to the board.
-      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(u.cx, u.cy, rules.attackRange * unitScale, 0, Math.PI * 2);
-      ctx.stroke();
-      if (f.windup > 0) {
-        const t = 1 - f.windup / rules.windupTicks;
-        ctx.strokeStyle = C.danger;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(u.cx, u.cy, l.cell * 0.45, -Math.PI / 2, -Math.PI / 2 + t * Math.PI * 2);
-        ctx.stroke();
-      }
-      if (f.guard > 0) {
-        ctx.strokeStyle = C.pp;
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        const a0 = f.facing > 0 ? 0 : Math.PI;
-        ctx.arc(u.cx, u.cy, l.cell * 0.5, a0 - 1, a0 + 1);
-        ctx.stroke();
-      }
-    }
-    const flash = f && ui.flash[f.side] > 0 && Math.floor(now / 60) % 2 === 0 ? '#ffffff' : undefined;
-    drawCreature(ctx, u.defId, u.owner, u.cx, u.cy - 3, u.px, { flip: f ? f.facing < 0 : false, flash });
-    const left = u.cx - l.cell / 2;
-    const top = u.cy - l.cell / 2;
-    badge(ctx, left + 8, top + 8, 9, u.owner, color);
-    hpBar(ctx, { x: left + 5, y: top + l.cell - 9, w: l.cell - 10, h: 5 }, u.hp, u.maxHp, color);
-    if (u.creatureId === ui.selected) {
-      strokeRect(ctx, { x: left + 1, y: top + 1, w: l.cell - 2, h: l.cell - 2 }, pulse ? C.text : color, 2);
-    }
-  }
-  if (combatView) {
-    for (const fl of ui.floaters) {
-      const p = combatToScreen(state, l, fl.x, fl.y);
-      text(ctx, fl.text, p.x, p.y - (800 - fl.ms) / 25, { size: 16, color: fl.color, align: 'center' });
-    }
-  }
+  // Creatures: all living ones in board mode, only the two combatants on
+  // their spawn cells during preparation.
+  drawUnits(ctx, state, ui, l, boardUnits(state, l, battleView), now);
 
   // Cursor of the player to move.
   if (state.phase === 'board') {
@@ -241,4 +196,57 @@ export function drawBoardScreen(ctx: Ctx, state: GameState, ui: MatchUi, now: nu
   drawBoard(ctx, state, ui, now, false);
   if (ui.message && ui.message.ms > 0) drawMessageBar(ctx, ui.message.text, ui.message.color);
   else drawMessageBar(ctx, hint, playerColor(state.currentTurn.player));
+}
+
+/**
+ * Draws creatures at board-sprite scale on any grid layout (strategic board or
+ * combat arena), including combat indicators and damage numbers.
+ */
+export function drawUnits(ctx: Ctx, state: GameState, ui: MatchUi, l: BoardLayout, units: BoardUnit[], now: number): void {
+  const rules = state.ruleset.combat;
+  const unitScale = l.cell / rules.cellUnits;
+  const pulse = Math.floor(now / 150) % 2 === 0;
+  for (const u of units) {
+    const color = playerColor(u.owner);
+    const f = u.fighter;
+    if (f) {
+      // Attack reach, wind-up and guard, scaled to the grid.
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(u.cx, u.cy, rules.attackRange * unitScale, 0, Math.PI * 2);
+      ctx.stroke();
+      if (f.windup > 0) {
+        const t = 1 - f.windup / rules.windupTicks;
+        ctx.strokeStyle = C.danger;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(u.cx, u.cy, l.cell * 0.45, -Math.PI / 2, -Math.PI / 2 + t * Math.PI * 2);
+        ctx.stroke();
+      }
+      if (f.guard > 0) {
+        ctx.strokeStyle = C.pp;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        const a0 = f.facing > 0 ? 0 : Math.PI;
+        ctx.arc(u.cx, u.cy, l.cell * 0.5, a0 - 1, a0 + 1);
+        ctx.stroke();
+      }
+    }
+    const flash = f && ui.flash[f.side] > 0 && Math.floor(now / 60) % 2 === 0 ? '#ffffff' : undefined;
+    drawCreature(ctx, u.defId, u.owner, u.cx, u.cy - 3, u.px, { flip: f ? f.facing < 0 : u.owner === 'P2' && !!state.battle, flash });
+    const left = u.cx - l.cell / 2;
+    const top = u.cy - l.cell / 2;
+    badge(ctx, left + 8, top + 8, 9, u.owner, color);
+    hpBar(ctx, { x: left + 5, y: top + l.cell - 9, w: l.cell - 10, h: 5 }, u.hp, u.maxHp, color);
+    if (u.creatureId === ui.selected) {
+      strokeRect(ctx, { x: left + 1, y: top + 1, w: l.cell - 2, h: l.cell - 2 }, pulse ? C.text : color, 2);
+    }
+  }
+  if (isCombatView(state)) {
+    for (const fl of ui.floaters) {
+      const p = combatToScreen(state, l, fl.x, fl.y);
+      text(ctx, fl.text, p.x, p.y - (800 - fl.ms) / 25, { size: 16, color: fl.color, align: 'center' });
+    }
+  }
 }

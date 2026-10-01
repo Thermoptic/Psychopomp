@@ -6,7 +6,6 @@ import type {
   BattleBuild,
   BattleOutcome,
   BattleSide,
-  BoardDef,
   Cell,
   CombatRules,
   CombatState,
@@ -18,12 +17,17 @@ import type {
 } from '../types';
 import { computeAttackCooldown, computeBlockCharges, computeDamage, computeMoveSpeed } from './stats';
 
+/** The combat arena grid (columns × rows) from the ruleset. */
+export function arenaGrid(rules: CombatRules): { width: number; height: number } {
+  return { width: rules.arenaColumns, height: rules.arenaRows };
+}
+
 /**
- * Board cell where a player's combatant starts: the centre cell of the left
- * edge for P1, of the right edge for P2 (on 9×9: x 0 / 8, y 4).
+ * Grid cell where a player's combatant starts: the vertically centred cell of
+ * the leftmost column for P1 and of the rightmost column for P2.
  */
-export function combatSpawnCell(board: Pick<BoardDef, 'width' | 'height'>, owner: PlayerId): Cell {
-  return { x: owner === 'P1' ? 0 : board.width - 1, y: Math.floor((board.height - 1) / 2) };
+export function combatSpawnCell(grid: { width: number; height: number }, owner: PlayerId): Cell {
+  return { x: owner === 'P1' ? 0 : grid.width - 1, y: Math.floor((grid.height - 1) / 2) };
 }
 
 /** Centre of a board cell in combat units. */
@@ -38,9 +42,8 @@ function createFighter(
   maxHp: number,
   build: BattleBuild,
   rules: CombatRules,
-  board: Pick<BoardDef, 'width' | 'height'>,
 ): Fighter {
-  const spawn = cellCentre(combatSpawnCell(board, creature.owner), rules);
+  const spawn = cellCentre(combatSpawnCell(arenaGrid(rules), creature.owner), rules);
   return {
     creatureId: creature.id,
     side,
@@ -64,14 +67,14 @@ export function createCombat(
   attacker: { creature: CreatureState; maxHp: number; build: BattleBuild },
   defender: { creature: CreatureState; maxHp: number; build: BattleBuild },
   rules: CombatRules,
-  board: Pick<BoardDef, 'width' | 'height'>,
 ): CombatState {
+  const grid = arenaGrid(rules);
   return {
     tick: 0,
-    arena: { width: board.width * rules.cellUnits, height: board.height * rules.cellUnits },
+    arena: { width: grid.width * rules.cellUnits, height: grid.height * rules.cellUnits },
     fighters: {
-      attacker: createFighter('attacker', attacker.creature, attacker.maxHp, attacker.build, rules, board),
-      defender: createFighter('defender', defender.creature, defender.maxHp, defender.build, rules, board),
+      attacker: createFighter('attacker', attacker.creature, attacker.maxHp, attacker.build, rules),
+      defender: createFighter('defender', defender.creature, defender.maxHp, defender.build, rules),
     },
   };
 }
