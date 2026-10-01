@@ -114,7 +114,10 @@ describe('Monster content', () => {
     expect(lib.validateMonster(m, null)).toEqual([]);
     lib.saveItem('monster', m, null);
     expect(lib.get('monster', m.id)!.item.powerupId).toBe('plasma_bolt');
-    expect(JSON.stringify(lib.get('monster', m.id)!.item)).not.toContain('rateOfFire');
+    // Only the id is stored: nothing of the Powerup itself (its name or settings) is copied into the monster.
+    const saved = lib.get('monster', m.id)!.item;
+    expect(JSON.stringify(saved)).not.toContain('Plasma Bolt');
+    expect(saved.attack?.ranged).not.toEqual(lib.get('powerup', 'plasma_bolt')!.item.ranged);
     expect(lib.validateMonster({ ...m, powerupId: 'nope' }, m.id).join()).toMatch(/unknown Powerup/);
     expect(lib.monstersUsing('plasma_bolt').map((x) => x.id)).toEqual([m.id]);
   });
@@ -354,5 +357,69 @@ describe('Content save format v2', () => {
     const s = customMatch({ creatures: [testCreature('a'), testCreature('b')], placements: [{ creature: 'a', owner: 'P1', x: 0, y: 0 }, { creature: 'b', owner: 'P2', x: 1, y: 0 }] });
     expect(Object.keys(s.creatures)).toHaveLength(2);
     expect(s.powerupDefs).toEqual({});
+  });
+});
+
+// --- the monster's own attack (melee/ranged on every monster) ------------------------------------
+
+describe('Monster own attack (melee / ranged settings per monster)', () => {
+  const ownRanged = { type: 'ranged' as const, ranged: { speed: 10, range: 10, rateOfFire: 3, impactSize: 1, impactDamage: 9, homing: 1, trajectory: 4, bounce: 2 } };
+
+  it('a new monster starts with its own melee attack and both settings blocks', () => {
+    const { lib } = fresh();
+    const m = lib.newMonster();
+    expect(m.attack?.type).toBe('melee');
+    expect(m.attack?.melee).toBeDefined();
+    expect(m.attack?.ranged).toBeDefined();
+    expect(lib.validateMonster(m, null)).toEqual([]);
+  });
+
+  it('the core uses the monster\'s own ranged settings (no Powerup needed)', () => {
+    let s = fightWith(null, { attack: ownRanged });
+    const w = F(s).attacker.weapon;
+    expect(w).toMatchObject({ kind: 'ranged', powerupId: null, speed: M.projectileSpeed(10), cooldownTicks: M.rateOfFireTicks(3, s.ruleset.combat), bounces: 2 });
+    const hp = F(s).defender.hp;
+    s = run(s, 1, { attack: true }).s;
+    expect(s.battle!.combat!.projectiles).toHaveLength(1);
+    expect(F(run(s, 60).s).defender.hp).toBe(hp - 9);
+  });
+
+  it('the core uses the monster\'s own melee settings', () => {
+    const s = fightWith(null, { attack: { type: 'melee', melee: { speed: 6, knockback: 2, range: 5 } } });
+    expect(F(s).attacker.weapon).toMatchObject({ kind: 'melee', powerupId: null, cooldownTicks: 180, range: M.meleeRange(5), knockback: 20 });
+  });
+
+  it('an equipped Powerup replaces the own attack; without type the classic melee stays', () => {
+    const blade: PowerupDef = { id: 'blade', name: 'Blade', type: 'melee', melee: { speed: 1, knockback: 1, range: 1 } };
+    expect(F(fightWith(blade, { attack: ownRanged })).attacker.weapon).toMatchObject({ kind: 'melee', powerupId: 'blade' });
+    expect(F(fightWith(null, { attack: { autoFire: true } })).attacker.weapon).toMatchObject({ kind: 'melee', cooldownTicks: null });
+    expect(basePack().creatures.every((c) => !c.attack?.type)).toBe(true); // Glubber/Shroud keep the classic attack
+  });
+
+  it('monster attack settings are validated like Powerups', () => {
+    const { lib } = fresh();
+    const m = lib.newMonster();
+    expect(lib.validateMonster({ ...m, attack: { type: 'ranged', ranged: { ...ownRanged.ranged, homing: 11 } } }, null).join()).toMatch(/homing/);
+    expect(lib.validateMonster({ ...m, attack: { type: 'laser' as never } }, null).join()).toMatch(/type/);
+    expect(lib.validateMonster({ ...m, attack: { type: 'ranged' } }, null).join()).toMatch(/needs "ranged"/);
+  });
+
+  it('editor: switching type keeps the other settings; levels are clamped; saved data is what the game plays', async () => {
+    const { setWeaponType } = await import('../src/devEditor/weaponFields');
+    const { setWeaponLevel } = await import('../src/devEditor/model');
+    const { lib } = fresh();
+    const ed = new ItemEditor(lib, 'monster');
+    ed.newItem();
+    ed.update((m) => setWeaponType(m.attack!, 'ranged'));
+    ed.update((m) => setWeaponLevel(m.attack!, 'ranged', 'trajectory', 9));
+    ed.update((m) => setWeaponLevel(m.attack!, 'ranged', 'homing', 99));
+    ed.update((m) => setWeaponType(m.attack!, 'melee'));
+    ed.update((m) => setWeaponType(m.attack!, 'ranged'));
+    expect(ed.draft.attack!.ranged).toMatchObject({ trajectory: 9, homing: 10 });
+    ed.update((m) => ((m.player = 'P1'), (m.position = 'E4')));
+    expect(ed.save().ok).toBe(true);
+    const pack = lib.pack();
+    const s = createMatch({ ruleset: pack.ruleset, board: pack.boards[0], creatures: pack.creatures, powerups: pack.powerups, seed: 4 });
+    expect(s.creatureDefs[ed.draft.id].attack).toEqual(ed.draft.attack);
   });
 });

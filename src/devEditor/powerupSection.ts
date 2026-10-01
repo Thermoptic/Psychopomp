@@ -2,8 +2,9 @@
 // Edits PowerupDef (levels); core/combat/powerups.ts maps them to gameplay.
 
 import type { PowerupDef } from '../core';
-import { group, h, row, segmented, slider, textInput } from './dom';
-import { MELEE_FIELDS, RANGED_FIELDS, fieldMax, levelMeaning, setPowerupLevel, type ItemEditor } from './model';
+import { group, h, row, textInput } from './dom';
+import { MELEE_FIELDS, RANGED_FIELDS, levelMeaning, type ItemEditor } from './model';
+import { setWeaponType, weaponSettingsGroup, weaponTypeSelector } from './weaponFields';
 
 const idSanitize = (v: string) => v.toLowerCase().replace(/\s/g, '_').replace(/[^a-z0-9_]/g, '').slice(0, 32);
 
@@ -15,8 +16,6 @@ export function powerupForm(ed: ItemEditor<'powerup'>, refresh: () => void, rebu
     if (layout) rebuild();
     else refresh();
   };
-  const fields = d.type === 'melee' ? MELEE_FIELDS : RANGED_FIELDS;
-  const values = (d[d.type] ?? {}) as Record<string, number>;
   return h(
     'div',
     {},
@@ -24,40 +23,10 @@ export function powerupForm(ed: ItemEditor<'powerup'>, refresh: () => void, rebu
       'POWERUP',
       row('ID', textInput(d.id, (v) => edit((p) => (p.id = v)), { sanitize: idSanitize }), 'stable id monsters refer to'),
       row('Name', textInput(d.name, (v) => edit((p) => (p.name = v)))),
-      row(
-        'Type',
-        segmented(
-          [
-            { value: 'melee', label: 'MELEE' },
-            { value: 'ranged', label: 'RANGED' },
-          ],
-          d.type,
-          (v) =>
-            edit((p) => {
-              p.type = v;
-              // Keep the other type's settings (switching back restores them); fill defaults if missing.
-              const fresh = ed.lib.newPowerup(v);
-              if (!p[v]) (p as unknown as Record<string, unknown>)[v] = fresh[v];
-            }, true),
-        ),
-      ),
+      row('Type', weaponTypeSelector(d.type, (t) => edit((p) => setWeaponType(p, t), true))),
     ),
-    group(
-      d.type === 'melee' ? 'MELEE' : 'RANGED',
-      ...fields.map((f) =>
-        row(
-          f.label,
-          slider({
-            min: 1,
-            max: fieldMax(f.key),
-            value: values[f.key] ?? 1,
-            meaning: (v) => levelMeaning(d.type, f.key, v, rules),
-            onInput: (v) => edit((p) => setPowerupLevel(p, p.type, f.key, v)),
-          }),
-          f.hint,
-        ),
-      ),
-    ),
+    weaponSettingsGroup(d, rules, (fn) => edit((p) => fn(p))),
+    h('div', { class: 'hint dim', text: 'A monster with this Powerup equipped uses it instead of its own attack.' }),
   );
 }
 

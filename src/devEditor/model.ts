@@ -5,7 +5,7 @@
 
 import type { ContentKind, ContentLibrary, Entry } from '../content/library';
 import { defaultSpecial } from '../content/library';
-import { powerupMapping as M, type CreatureDef, type PowerupDef, type Ruleset, type SlotCondition } from '../core';
+import { powerupMapping as M, type CreatureDef, type PowerupDef, type Ruleset, type SlotCondition, type WeaponSettings } from '../core';
 
 type ItemOf<K extends ContentKind> = K extends 'monster' ? CreatureDef : PowerupDef;
 
@@ -210,11 +210,14 @@ export function fieldMax(key: string): number {
   return key === 'impactDamage' ? 100 : 10;
 }
 
-export function setPowerupLevel(def: PowerupDef, group: 'melee' | 'ranged', key: string, value: number): void {
+/** Sets one melee/ranged level on any weapon settings (a monster's attack or a Powerup). */
+export function setWeaponLevel(w: WeaponSettings, group: 'melee' | 'ranged', key: string, value: number): void {
   const v = Math.max(1, Math.min(fieldMax(key), Math.round(value)));
-  const block = (def[group] ?? {}) as Record<string, number>;
-  (def as unknown as Record<string, unknown>)[group] = { ...block, [key]: v };
+  const block = (w[group] ?? {}) as Record<string, number>;
+  (w as unknown as Record<string, unknown>)[group] = { ...block, [key]: v };
 }
+
+export const setPowerupLevel = (def: PowerupDef, group: 'melee' | 'ranged', key: string, value: number) => setWeaponLevel(def, group, key, value);
 
 const cells = (units: number, rules: Ruleset) => (units / rules.combat.cellUnits).toFixed(units % rules.combat.cellUnits === 0 ? 0 : 1);
 const secs = (ticks: number, rules: Ruleset) => `${(ticks / rules.combat.tickRate).toFixed(1)} s`;

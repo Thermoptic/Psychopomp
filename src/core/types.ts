@@ -80,8 +80,41 @@ export interface SpecialDef {
   activation?: 'auto' | 'manual';
 }
 
-/** Per-creature attack options (all optional; defaults keep the classic attack). */
-export interface AttackDef {
+/** Melee weapon settings (designer levels 1-10, see core/combat/powerups.ts). */
+export interface MeleeSettings {
+  speed: number;
+  knockback: number;
+  range: number;
+}
+
+/** Ranged weapon settings (levels 1-10; impactDamage 1-100, see core/combat/powerups.ts). */
+export interface RangedSettings {
+  speed: number;
+  range: number;
+  rateOfFire: number;
+  impactSize: number;
+  impactDamage: number;
+  homing: number;
+  trajectory: number;
+  bounce: number;
+}
+
+/**
+ * A weapon: melee or ranged plus its settings. Used by a monster's own attack
+ * and by Powerups. Both settings blocks may be kept; `type` picks the active one.
+ */
+export interface WeaponSettings {
+  type?: 'melee' | 'ranged';
+  melee?: MeleeSettings;
+  ranged?: RangedSettings;
+}
+
+/**
+ * The monster's own attack. Without `type` it is the classic melee (cooldown
+ * from the Speed stat, ruleset reach, no knockback). A Powerup, when equipped,
+ * replaces it.
+ */
+export interface AttackDef extends WeaponSettings {
   /** true: holding the attack input keeps attacking whenever the cooldown allows. */
   autoFire?: boolean;
 }
@@ -158,21 +191,10 @@ export interface CreatureDef {
  * A Powerup (weapon) definition. Values are designer levels (1-10, impact
  * damage 1-100); core/combat/powerups.ts maps them to gameplay values.
  */
-export interface PowerupDef {
+export interface PowerupDef extends WeaponSettings {
   id: string;
   name: string;
   type: 'melee' | 'ranged';
-  melee?: { speed: number; knockback: number; range: number };
-  ranged?: {
-    speed: number;
-    range: number;
-    rateOfFire: number;
-    impactSize: number;
-    impactDamage: number;
-    homing: number;
-    trajectory: number;
-    bounce: number;
-  };
 }
 
 export interface CombatRules {
@@ -366,6 +388,7 @@ export interface Fighter {
 export type Weapon =
   | {
       kind: 'melee';
+      /** The Powerup providing this weapon; null = the monster's own attack. */
       powerupId: string | null;
       /** null = classic melee: cooldown from the Speed stat. */
       cooldownTicks: number | null;
@@ -374,7 +397,7 @@ export type Weapon =
     }
   | {
       kind: 'ranged';
-      powerupId: string;
+      powerupId: string | null;
       cooldownTicks: number;
       /** Projectile speed, combat units per tick. */
       speed: number;

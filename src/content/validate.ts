@@ -154,13 +154,37 @@ export function validateCreature(raw: unknown, ruleset: Ruleset, ctx: CreatureCo
   }
   if (raw.attack !== undefined) {
     if (!isObj(raw.attack)) errors.push(`${where}: "attack" must be an object`);
-    else if (raw.attack.autoFire !== undefined && typeof raw.attack.autoFire !== 'boolean') errors.push(`${where}.attack.autoFire must be true/false`);
+    else {
+      if (raw.attack.autoFire !== undefined && typeof raw.attack.autoFire !== 'boolean') errors.push(`${where}.attack.autoFire must be true/false`);
+      validateWeapon(raw.attack, `${where}.attack`, errors, false);
+    }
   }
   if (raw.dash !== undefined) {
     if (!isObj(raw.dash)) errors.push(`${where}: "dash" must be an object`);
     else validateDash(raw.dash, `${where}.dash`, errors, false);
   }
   return { ok: errors.length === 0, errors };
+}
+
+/**
+ * Melee/ranged weapon settings (levels 1-10, impact damage 1-100; see
+ * core/combat/powerups.ts). `typeRequired`: Powerups must have a type;
+ * a monster's attack may omit it (= classic melee).
+ */
+function validateWeapon(raw: Obj, where: string, errors: string[], typeRequired: boolean): void {
+  const typed = raw.type !== undefined || typeRequired;
+  if (typed && raw.type !== 'melee' && raw.type !== 'ranged') errors.push(`${where}.type must be "melee" or "ranged"`);
+  const block = (key: 'melee' | 'ranged', fields: string[]) => {
+    const b = raw[key];
+    if (b === undefined) {
+      if (raw.type === key) errors.push(`${where}: a ${key} attack needs "${key}" settings`);
+      return;
+    }
+    if (!isObj(b)) return void errors.push(`${where}.${key} must be an object`);
+    for (const f of fields) intIn(errors, `${where}.${key}.${f}`, b[f], 1, f === 'impactDamage' ? 100 : 10);
+  };
+  block('melee', ['speed', 'knockback', 'range']);
+  block('ranged', ['speed', 'range', 'rateOfFire', 'impactSize', 'impactDamage', 'homing', 'trajectory', 'bounce']);
 }
 
 /** Level 1-10 settings (impact damage 1-100), see core/combat/powerups.ts for their meaning. */
@@ -171,18 +195,7 @@ export function validatePowerup(raw: unknown): ValidationResult {
   if (!isStr(raw.id)) errors.push(`${where}: missing "id"`);
   else if (!ID_RE.test(raw.id)) errors.push(`${where}: id must use a-z, 0-9 and _ only`);
   if (!isStr(raw.name) || !String(raw.name).trim()) errors.push(`${where}: missing "name"`);
-  if (raw.type !== 'melee' && raw.type !== 'ranged') errors.push(`${where}.type must be "melee" or "ranged"`);
-  const block = (key: 'melee' | 'ranged', fields: string[]) => {
-    const b = raw[key];
-    if (b === undefined) {
-      if (raw.type === key) errors.push(`${where}: a ${key} powerup needs "${key}" settings`);
-      return;
-    }
-    if (!isObj(b)) return void errors.push(`${where}.${key} must be an object`);
-    for (const f of fields) intIn(errors, `${where}.${key}.${f}`, b[f], 1, f === 'impactDamage' ? 100 : 10);
-  };
-  block('melee', ['speed', 'knockback', 'range']);
-  block('ranged', ['speed', 'range', 'rateOfFire', 'impactSize', 'impactDamage', 'homing', 'trajectory', 'bounce']);
+  validateWeapon(raw, where, errors, true);
   return { ok: errors.length === 0, errors };
 }
 

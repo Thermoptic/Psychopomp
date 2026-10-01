@@ -5,6 +5,7 @@ import { baseBattleStats, cellCode, describeRequirement, parseCell, type Creatur
 import { resolveDash } from '../core/combat/simulation';
 import { drawCreature } from '../rendering/sprites';
 import { group, h, row, segmented, selectBox, slider, textInput } from './dom';
+import { setWeaponType, weaponSettingsGroup, weaponSummary, weaponTypeSelector } from './weaponFields';
 import { MODIFIER_KEYS, SLOT_OPTIONS, modifier, setModifier, setSlotCondition, slotCategories, slotConditions, slotOptionIndex, type ItemEditor } from './model';
 
 const idSanitize = (v: string) => v.toLowerCase().replace(/\s/g, '_').replace(/[^a-z0-9_]/g, '').slice(0, 32);
@@ -166,21 +167,39 @@ export function monsterForm(ed: ItemEditor<'monster'>, refresh: () => void, rebu
       : null,
   );
 
-  // --- Powerup ---------------------------------------------------------------------------------
+  // --- Attack: the monster's own melee/ranged weapon ------------------------------------------
   const pus = lib.powerups();
+  const equipped = d.powerupId ? pus.find((p) => p.id === d.powerupId) : undefined;
+  const attackEdit = (fn: (w: NonNullable<CreatureDef['attack']>) => void, layout = false) =>
+    edit((m) => {
+      m.attack = { ...(m.attack ?? {}) };
+      fn(m.attack);
+    }, layout);
+  const autoFire = h('input', { type: 'checkbox', checked: d.attack?.autoFire === true, on: { change: (e: Event) => attackEdit((a) => (a.autoFire = (e.target as HTMLInputElement).checked)) } });
+  const attack = group(
+    'ATTACK',
+    row('Type', weaponTypeSelector(d.attack?.type, (t) => attackEdit((a) => setWeaponType(a, t), true)), 'choose first, then its settings'),
+    d.attack?.type
+      ? null
+      : h('div', { class: 'note', text: `Classic attack (not configured): cooldown from the Speed stat, reach ${(rules.combat.attackRange / rules.combat.cellUnits).toFixed(1)} cells, no knockback. Choose MELEE or RANGED to configure it.` }),
+    weaponSettingsGroup(d.attack ?? {}, rules, (fn) => attackEdit((a) => fn(a))),
+    row('Auto Fire', autoFire, 'keep attacking while Right Trigger is held'),
+    equipped ? h('div', { class: 'note', text: `Powerup "${equipped.name}" is equipped and replaces this attack in combat.` }) : null,
+  );
+
+  // --- Powerup ---------------------------------------------------------------------------------
   const powerup = group(
     'POWERUP',
     row(
       'Powerup',
-      selectBox(['None (classic melee)', ...pus.map((p) => `${p.name} · ${p.type}`)], d.powerupId ? pus.findIndex((p) => p.id === d.powerupId) + 1 : 0, (i) =>
-        edit((m) => (m.powerupId = i === 0 ? null : pus[i - 1].id)),
+      selectBox(['None (use own attack)', ...pus.map((p) => `${p.name} · ${p.type}`)], d.powerupId ? pus.findIndex((p) => p.id === d.powerupId) + 1 : 0, (i) =>
+        edit((m) => (m.powerupId = i === 0 ? null : pus[i - 1].id), true),
       ),
-      'stored as the Powerup id, never a copy',
+      'stored as the Powerup id, never a copy; replaces the own attack',
     ),
   );
 
   // --- behaviour / advanced --------------------------------------------------------------------
-  const autoFire = h('input', { type: 'checkbox', checked: d.attack?.autoFire === true, on: { change: (e: Event) => edit((m) => (m.attack = { ...(m.attack ?? {}), autoFire: (e.target as HTMLInputElement).checked })) } });
   const dashNum = (key: 'distance' | 'cooldown' | 'damage', step: number) =>
     h('input', {
       type: 'number',
@@ -202,7 +221,6 @@ export function monsterForm(ed: ItemEditor<'monster'>, refresh: () => void, rebu
     });
   const behaviour = group(
     'BEHAVIOUR',
-    row('Auto Fire', autoFire, 'keep attacking while Right Trigger is held'),
     row('Board Movement', h('input', { type: 'number', min: '1', max: '20', value: String(d.stats.movement), on: { input: (e: Event) => edit((m) => (m.stats.movement = Math.round(Number((e.target as HTMLInputElement).value) || 1))) } })),
     h(
       'details',
@@ -215,7 +233,7 @@ export function monsterForm(ed: ItemEditor<'monster'>, refresh: () => void, rebu
     ),
   );
 
-  return h('div', {}, identity, health, player, position, modifiers, special, powerup, behaviour);
+  return h('div', {}, identity, health, player, position, modifiers, attack, powerup, special, behaviour);
 }
 
 export function monsterPreview(ed: ItemEditor<'monster'>): HTMLElement {
@@ -251,7 +269,8 @@ export function monsterPreview(ed: ItemEditor<'monster'>): HTMLElement {
       tr('Shield', mod('shield')),
       tr('Block', mod('block')),
       tr('Dash', `${((dash.step * rules.combat.dash.durationTicks) / rules.combat.cellUnits).toFixed(1)} cells (${signed(modifier(d, 'dash'))})`),
-      tr('Powerup', pu ? `${pu.name} (${pu.type})` : 'classic melee'),
+      tr('Attack', weaponSummary(d.attack, rules)),
+      tr('Powerup', pu ? `${pu.name} (${pu.type}) - replaces attack` : 'none'),
       tr('Auto Fire', d.attack?.autoFire ? 'yes' : 'no'),
       tr('Special', d.special ? `${d.special.name} · ${d.special.activation === 'manual' ? 'LT' : 'auto'}` : 'none'),
       tr('Trigger', d.special ? describeRequirement(d.special.requirement) : '-'),

@@ -28,7 +28,7 @@
 //                                       bends ~90°; faster shots bend less, slower ones more.
 //     bounce     wall bounces           level (1-10); the next wall hit after that is its impact
 
-import type { CombatRules, CreatureDef, PowerupDef, Weapon } from '../types';
+import type { CombatRules, CreatureDef, PowerupDef, Weapon, WeaponSettings } from '../types';
 
 export const PX = 2;
 export const PROJECTILE_RADIUS = 6;
@@ -56,24 +56,33 @@ export function classicWeapon(rules: CombatRules): Weapon {
   return { kind: 'melee', powerupId: null, cooldownTicks: null, range: rules.attackRange, knockback: 0 };
 }
 
-/** Resolves a creature's weapon from its Powerup reference. Unknown ids fall back to classic melee. */
+/**
+ * A creature's weapon: an equipped Powerup replaces the monster's own attack;
+ * otherwise the monster's own attack settings; without those the classic melee.
+ */
 export function resolveWeapon(def: CreatureDef, powerups: Record<string, PowerupDef>, rules: CombatRules): Weapon {
   const p = def.powerupId ? powerups[def.powerupId] : undefined;
-  if (!p) return classicWeapon(rules);
-  if (p.type === 'melee' && p.melee) {
+  if (p) return weaponFromSettings(p, p.id, rules);
+  if (def.attack?.type) return weaponFromSettings(def.attack, null, rules);
+  return classicWeapon(rules);
+}
+
+/** Gameplay values for melee/ranged settings (shared by monster attacks and Powerups). */
+export function weaponFromSettings(w: WeaponSettings, powerupId: string | null, rules: CombatRules): Weapon {
+  if (w.type === 'melee' && w.melee) {
     return {
       kind: 'melee',
-      powerupId: p.id,
-      cooldownTicks: meleeCooldownTicks(p.melee.speed, rules),
-      range: meleeRange(p.melee.range),
-      knockback: meleeKnockback(p.melee.knockback),
+      powerupId,
+      cooldownTicks: meleeCooldownTicks(w.melee.speed, rules),
+      range: meleeRange(w.melee.range),
+      knockback: meleeKnockback(w.melee.knockback),
     };
   }
-  if (p.type === 'ranged' && p.ranged) {
-    const r = p.ranged;
+  if (w.type === 'ranged' && w.ranged) {
+    const r = w.ranged;
     return {
       kind: 'ranged',
-      powerupId: p.id,
+      powerupId,
       cooldownTicks: rateOfFireTicks(r.rateOfFire, rules),
       speed: projectileSpeed(r.speed),
       range: projectileRange(r.range, rules),

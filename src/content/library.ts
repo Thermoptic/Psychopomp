@@ -8,7 +8,7 @@
 // in the editor — the save format already keeps collections by name.
 
 import { cellCode, cellInBoard, parseCell } from '../core/board/cells';
-import { DEFAULT_CATEGORIES, type CreatureDef, type PowerupDef, type Ruleset } from '../core/types';
+import { DEFAULT_CATEGORIES, type CreatureDef, type MeleeSettings, type PowerupDef, type RangedSettings, type Ruleset } from '../core/types';
 import type { ContentPack } from './loader';
 import {
   emptySave,
@@ -63,6 +63,14 @@ export function defaultSpecial(slotCount: number): NonNullable<CreatureDef['spec
     requirement: { type: 'slots', slots: new Array(slotCount).fill(null) },
     effect: { type: 'addPower', value: 2 },
     activation: 'auto',
+  };
+}
+
+/** Starting values for melee and ranged settings (mid-low levels). */
+export function defaultWeaponSettings(): { melee: MeleeSettings; ranged: RangedSettings } {
+  return {
+    melee: { speed: 2, knockback: 1, range: 3 },
+    ranged: { speed: 5, range: 5, rateOfFire: 2, impactSize: 2, impactDamage: 10, homing: 1, trajectory: 1, bounce: 1 },
   };
 }
 
@@ -253,6 +261,7 @@ export class ContentLibrary {
       // No start bonus or penalty by default.
       modifiers: { speed: 0, power: 0, shield: 0, dash: 0, block: 0 },
       player: 'P1',
+      attack: { type: 'melee', autoFire: false, ...defaultWeaponSettings() },
       powerupId: null,
       dice: { slots },
       special: defaultSpecial(count),
@@ -261,13 +270,7 @@ export class ContentLibrary {
 
   newPowerup(type: PowerupDef['type'] = 'melee'): PowerupDef {
     const n = this.freeId('powerup', 'powerup');
-    return {
-      id: `powerup_${n}`,
-      name: `Powerup ${n}`,
-      type,
-      melee: { speed: 2, knockback: 1, range: 3 },
-      ranged: { speed: 5, range: 5, rateOfFire: 2, impactSize: 2, impactDamage: 10, homing: 1, trajectory: 1, bounce: 1 },
-    };
+    return { id: `powerup_${n}`, name: `Powerup ${n}`, type, ...defaultWeaponSettings() };
   }
 
   private persist(): void {
