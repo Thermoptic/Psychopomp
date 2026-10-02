@@ -28,7 +28,7 @@ import type {
   Projectile,
 } from '../types';
 import { PROJECTILE_RADIUS, resolveWeapon, smallAngleCosSin } from './powerups';
-import { applyEffect, computeAttackCooldown, computeBlockCharges, computeDamage, computeMoveSpeed } from './stats';
+import { applyEffect, computeAttackCooldown, computeBlockCharges, computeDamage, computeDashCooldown, computeMoveSpeed } from './stats';
 
 /** The combat arena grid (columns × rows) from the ruleset. */
 export function arenaGrid(rules: CombatRules): { width: number; height: number } {
@@ -61,16 +61,19 @@ export function isqrt(n: number): number {
 const clampAxis = (v: number | undefined) => (v === undefined ? 0 : Math.max(-100, Math.min(100, Math.trunc(v))));
 
 /**
- * Dash settings. Distance = base distance (creature `dash.distance` or the
- * ruleset's) + dash points × dash.distancePerPoint cells, where dash points =
- * the DASH die + dash modifier (+ Special). No distance = no dash (step 0).
+ * Dash settings. The distance is fixed (creature `dash.distance` or the
+ * ruleset's) and does not depend on the DASH die. The dash value (DASH die +
+ * Dash Cooldown Modifier + Special) only sets the cooldown, see
+ * computeDashCooldown. No distance = no dash (step 0).
  */
-export function resolveDash(def: CreatureDef, rules: CombatRules, dashPoints: number) {
+export function resolveDash(def: CreatureDef, rules: CombatRules, dashValue: number) {
   const d = { ...rules.dash, ...(def.dash ?? {}) };
-  const distance = Math.max(0, d.distance + Math.max(0, dashPoints) * rules.dash.distancePerPoint);
+  const distance = Math.max(0, d.distance);
   const total = Math.round(distance * rules.cellUnits);
+  const cooldown = computeDashCooldown(dashValue, rules);
   return {
-    cooldownTicks: Math.max(0, Math.round(d.cooldown * rules.tickRate)),
+    cooldown,
+    cooldownTicks: Math.round(cooldown * rules.tickRate),
     distance,
     step: total > 0 ? Math.max(1, Math.round(total / Math.max(1, rules.dash.durationTicks))) : 0,
     damage: d.damage,
@@ -369,8 +372,9 @@ function triggerSpecial(f: Fighter, def: CreatureDef, rules: CombatRules): void 
   if (!def.special) return;
   const before = computeBlockCharges(f.stats, rules);
   applyEffect(f.stats, def.special.effect);
-  for (const k of ['power', 'shield', 'speed', 'block', 'dash'] as const) f.stats[k] = Math.max(0, f.stats[k]);
-  f.dashStep = resolveDash(def, rules, f.stats.dash).step;
+  for (const k of ['power', 'shield', 'speed', 'block'] as const) f.stats[k] = Math.max(0, f.stats[k]);
+  // A + Dash effect shortens the cooldown of the next dash (the distance stays fixed).
+  f.dashCooldownTicks = resolveDash(def, rules, f.stats.dash).cooldownTicks;
   f.moveSpeed = computeMoveSpeed(f.stats, rules);
   f.attackCooldownTicks = computeAttackCooldown(f.stats, rules);
   f.blockCharges = Math.max(0, f.blockCharges + computeBlockCharges(f.stats, rules) - before);

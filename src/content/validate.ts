@@ -68,8 +68,11 @@ function validateDash(d: Obj, where: string, errors: string[], required: boolean
     if (typeof v !== 'number' || !Number.isFinite(v) || v < min || v > max) errors.push(`${where}.${k} must be a number ${min}..${max}`);
   };
   num('distance', 0, 30);
-  num('cooldown', 0, 120);
   num('damage', 0, 999);
+  if (required) {
+    num('baseCooldown', 0, 120);
+    num('minCooldown', 0, 120);
+  } else if (d.cooldown !== undefined) errors.push(`${where}.cooldown is no longer used (the dash cooldown comes from the DASH die + Dash Cooldown Modifier)`);
   if (d.dealsDamage !== undefined || required) {
     if (typeof d.dealsDamage !== 'boolean') errors.push(`${where}.dealsDamage must be true/false`);
   }
@@ -246,8 +249,6 @@ export function validateRuleset(raw: unknown): ValidationResult {
     else {
       validateDash(c.dash, 'ruleset.combat.dash', errors, true);
       intIn(errors, 'ruleset.combat.dash.durationTicks', c.dash.durationTicks, 1, 600);
-      const pp = c.dash.distancePerPoint;
-      if (typeof pp !== 'number' || !Number.isFinite(pp) || pp < 0 || pp > 10) errors.push('ruleset.combat.dash.distancePerPoint must be a number 0..10');
       intIn(errors, 'ruleset.combat.dash.minInput', c.dash.minInput, 1, 100);
     }
   }

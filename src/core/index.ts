@@ -34,6 +34,7 @@ export {
   computeMoveSpeed,
   computeAttackCooldown,
   computeBlockCharges,
+  computeDashCooldown,
   baseBattleStats,
 } from './combat/stats';
 export { inAttackRange, combatSpawnCell, cellCentre, arenaGrid } from './combat/simulation';

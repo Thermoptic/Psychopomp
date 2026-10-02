@@ -4,9 +4,9 @@
 // Payloads are always the game's own definitions (CreatureDef, PowerupDef) —
 // the exact data the game core uses. There is no separate editor representation.
 //
-//   Monster file:  { "format": "psychopomp-monster", "formatVersion": 4, "contentVersion": 1, "monster": CreatureDef }
+//   Monster file:  { "format": "psychopomp-monster", "formatVersion": 5, "contentVersion": 1, "monster": CreatureDef }
 //   Powerup file:  { "format": "psychopomp-powerup", "formatVersion": 1, "contentVersion": 1, "powerup": PowerupDef }
-//   Local save:    { "saveVersion": 4, "contentVersion": 1, "monsters": CreatureDef[], "powerups": PowerupDef[] }
+//   Local save:    { "saveVersion": 5, "contentVersion": 1, "monsters": CreatureDef[], "powerups": PowerupDef[] }
 //
 // Versions: see content/migrate.ts. Monster v0 (bare CreatureDef) and v1
 // (absolute stats) migrate to v2 on load; save v1 (monsters only) migrates to
@@ -19,7 +19,7 @@ import { validateCreature, validatePowerup } from './validate';
 export { MONSTER_FORMAT_VERSION, POWERUP_FORMAT_VERSION };
 export const MONSTER_FORMAT = 'psychopomp-monster';
 export const POWERUP_FORMAT = 'psychopomp-powerup';
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 export type ContentKind = 'monster' | 'powerup';
 
@@ -57,7 +57,7 @@ export function serializePowerup(def: PowerupDef, contentVersion: number): strin
 /** Monster objects of any version -> current, validated CreatureDef (references not checked). */
 export function parseMonster(raw: unknown, ruleset: Ruleset, fromVersion: number | null = null): ParseResult<CreatureDef> {
   if (!isObj(raw)) return { ok: false, errors: ['Monster must be a JSON object'] };
-  const m = migrateMonster(raw, ruleset);
+  const m = migrateMonster(raw, ruleset, fromVersion);
   const v = validateCreature(m, ruleset);
   if (!v.ok) return { ok: false, errors: v.errors };
   return { ok: true, value: m as unknown as CreatureDef, migratedFrom: fromVersion, warnings: [] };
@@ -145,7 +145,8 @@ export function parseSave(input: string | unknown, ruleset: Ruleset): ParseResul
     }
     return out;
   };
-  const monsters = collect(raw.monsters, (x) => parseMonster(x, ruleset), 'monster');
+  // Save and monster versions move together, so a save older than v5 holds v<5 monsters.
+  const monsters = collect(raw.monsters, (x) => parseMonster(x, ruleset, v < SAVE_VERSION ? v : null), 'monster');
   const powerups = collect(
     raw.powerups,
     (x): ParseResult<PowerupDef> => {

@@ -25,6 +25,15 @@ export function baseBattleStats(def: CreatureDef, rules: Ruleset): BattleStats {
   };
 }
 
+/**
+ * Dash cooldown in seconds: base cooldown (7 s) minus the dash value (DASH die
+ * + Dash Cooldown Modifier + Special), never below the minimum (1 s).
+ * The single formula used by the game and the Monster Editor.
+ */
+export function computeDashCooldown(dash: number, rules: CombatRules): number {
+  return Math.max(rules.dash.minCooldown, rules.dash.baseCooldown - dash);
+}
+
 export function applyEffect(stats: BattleStats, effect: Effect): void {
   switch (effect.type) {
     case 'addPower':
@@ -64,7 +73,8 @@ export function computeBuild(def: CreatureDef, prep: DicePrep, rules: Ruleset): 
   // 'auto' Specials apply now; 'manual' ones are only unlocked and applied in combat.
   if (def.special && specialActive && !specialManual) applyEffect(stats, def.special.effect);
 
-  for (const key of STAT_CATEGORIES) stats[key] = Math.max(0, stats[key]);
+  // Dash is not floored: a negative Dash Cooldown Modifier lengthens the cooldown.
+  for (const key of STAT_CATEGORIES) if (key !== 'dash') stats[key] = Math.max(0, stats[key]);
 
   return {
     creatureId: prep.creatureId,

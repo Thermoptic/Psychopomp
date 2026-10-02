@@ -90,7 +90,7 @@ describe('Special activation from content', () => {
     expect(computeBuild(shroud, prepWith([2, 6, 3, 5, 1]), pack.ruleset).specialActive).toBe(false);
   });
 
-  it('dice add to base stats; the DASH die gives dash points', () => {
+  it('dice add to base stats; the DASH die gives the dash value (cooldown)', () => {
     const b = computeBuild(glubber, prepWith([2, 6, 3, 4, 1]), pack.ruleset);
     // Everything starts at 0; the placed dice give the values.
     expect(b.stats).toEqual({ speed: 2, power: 6, shield: 3, block: 1, dash: 4 });

@@ -4,7 +4,7 @@
 // etc.); the panels only send commands, the core decides what is legal.
 
 import type { MatchUi, PrepCursor } from '../app/ui';
-import { baseBattleStats, computeBuild, slotConditionLabel, type BattleBuild, type BattleSide, type BattleStats, type GameState, type PlayerId } from '../core';
+import { baseBattleStats, computeBuild, computeDashCooldown, slotConditionLabel, type BattleBuild, type BattleSide, type BattleStats, type CombatRules, type GameState, type PlayerId } from '../core';
 import { die, hpBar, panel, rect, strokeRect, text, wrapText, type Ctx } from './draw';
 import { prepPanelLayout, type Rect } from './layout';
 import { prepButton, prepPhaseLabel, shortRequirement } from './prepModel';
@@ -24,11 +24,12 @@ export function sideOf(state: GameState, owner: PlayerId): BattleSide {
   return state.creatures[state.battle!.attackerId].owner === owner ? 'attacker' : 'defender';
 }
 
-function slotPreview(base: BattleStats, category: string, build: BattleBuild): string {
+function slotPreview(base: BattleStats, category: string, build: BattleBuild, rules: CombatRules): string {
   const key = category as keyof BattleStats;
   if (!['power', 'shield', 'speed', 'block', 'dash'].includes(category)) return '';
   const b = base[key];
   const d = build.diceByCategory[category] ?? 0;
+  if (key === 'dash') return `${b}+${d} → CD ${computeDashCooldown(b + d, rules)}s`;
   return `${b}+${d} = ${b + d}`;
 }
 
@@ -127,7 +128,7 @@ export function drawPrepPanel(ctx: Ctx, state: GameState, ui: MatchUi, owner: Pl
     }
     const cc = CATEGORY_COLOR[slot.category] ?? C.text;
     text(ctx, slot.category.toUpperCase(), row.labelX, row.y + row.h / 2 - 2, { size: 13, color: cc, align: row.labelAlign });
-    const preview = slotPreview(base, slot.category, build);
+    const preview = slotPreview(base, slot.category, build, state.ruleset.combat);
     if (preview) text(ctx, preview, row.labelX, row.y + row.h / 2 + 12, { size: 10, color: C.dim, align: row.labelAlign });
   });
 

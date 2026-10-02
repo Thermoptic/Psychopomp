@@ -1,7 +1,7 @@
 // MONSTERS section: identity, health, player, 9×9 position, start modifiers,
 // Special slot conditions, Powerup reference, behaviour. Edits CreatureDef.
 
-import { baseBattleStats, cellCode, describeRequirement, parseCell, type CreatureDef, type Effect, type SlotCondition } from '../core';
+import { baseBattleStats, cellCode, computeDashCooldown, describeRequirement, parseCell, type CreatureDef, type Effect, type SlotCondition } from '../core';
 import { resolveDash } from '../core/combat/simulation';
 import { drawCreature } from '../rendering/sprites';
 import { boardGrid, group, h, row, segmented, selectBox, slider, textInput } from './dom';
@@ -29,7 +29,7 @@ import {
 
 const idSanitize = (v: string) => v.toLowerCase().replace(/\s/g, '_').replace(/[^a-z0-9_]/g, '').slice(0, 32);
 const EFFECTS: Array<Exclude<Effect['type'], 'multi'>> = ['addPower', 'addShield', 'addSpeed', 'addBlock', 'addDash'];
-const EFFECT_LABELS = ['+ Power', '+ Shield', '+ Speed', '+ Block', '+ Dash'];
+const EFFECT_LABELS = ['+ Power', '+ Shield', '+ Speed', '+ Block', '+ Dash (-1 s cooldown each)'];
 const signed = (n: number) => (n > 0 ? `+${n}` : String(n));
 
 export function monsterForm(ed: ItemEditor<'monster'>, refresh: () => void, rebuild: () => void): HTMLElement {
@@ -151,16 +151,17 @@ export function monsterForm(ed: ItemEditor<'monster'>, refresh: () => void, rebu
 
   // --- start modifiers ------------------------------------------------------------------------
   const base = rules.creatureBase;
+  const cd = (dash: number) => computeDashCooldown(dash, rules.combat);
   const modRows = MODIFIER_KEYS.map((k) =>
     row(
-      k[0].toUpperCase() + k.slice(1),
+      k === 'dash' ? 'Dash Cooldown Modifier' : k[0].toUpperCase() + k.slice(1),
       slider({
         min: -10,
         max: 10,
         numberMin: -99,
         numberMax: 99,
         value: modifier(d, k),
-        meaning: (v) => (k === 'dash' ? `${signed(v)} → +${Math.max(0, base.dash + v) * rules.combat.dash.distancePerPoint} cells` : `${signed(v)} → ${Math.max(0, base[k] + v)}`),
+        meaning: (v) => (k === 'dash' ? `${signed(v)} → CD ${cd(base.dash + v)}…${cd(base.dash + v + 6)} s` : `${signed(v)} → ${Math.max(0, base[k] + v)}`),
         onInput: (v) => edit((m) => setModifier(m, k, v)),
       }),
     ),
@@ -171,7 +172,7 @@ export function monsterForm(ed: ItemEditor<'monster'>, refresh: () => void, rebu
     h('div', {
       class: 'hint dim',
       text: baseIsZero
-        ? `Everything starts at 0: the dice placed in battle give the values (a 6 on POWER = Power 6; a die on DASH = ${rules.combat.dash.distancePerPoint} cell of dash per pip). A modifier adds to that.`
+        ? `Everything starts at 0: the dice placed in battle give the values (a 6 on POWER = Power 6; a die on DASH shortens the dash cooldown by 1 s per pip: cooldown = ${rules.combat.dash.baseCooldown} s − DASH die − Dash Cooldown Modifier, min ${rules.combat.dash.minCooldown} s; the dash distance is fixed). A modifier adds to that.`
         : `Added to the ruleset base (Power ${base.power}, Speed ${base.speed}, Shield ${base.shield}, Block ${base.block}) before dice.`,
     }),
     ...modRows,
@@ -268,7 +269,7 @@ export function monsterForm(ed: ItemEditor<'monster'>, refresh: () => void, rebu
   );
 
   // --- behaviour / advanced --------------------------------------------------------------------
-  const dashNum = (key: 'distance' | 'cooldown' | 'damage', step: number) =>
+  const dashNum = (key: 'distance' | 'damage', step: number) =>
     h('input', {
       type: 'number',
       step: String(step),
@@ -292,9 +293,8 @@ export function monsterForm(ed: ItemEditor<'monster'>, refresh: () => void, rebu
     h(
       'details',
       {},
-      h('summary', { text: 'Advanced dash (overrides the ruleset; empty = default)' }),
-      row('Base dash cells', dashNum('distance', 0.5)),
-      row('Dash cooldown s', dashNum('cooldown', 0.5)),
+      h('summary', { text: 'Advanced dash (overrides the ruleset; empty = default). Cooldown: see Dash Cooldown Modifier' }),
+      row('Dash distance cells', dashNum('distance', 0.5), 'fixed, not affected by the DASH die'),
       row('Dash damage', dashNum('damage', 1)),
       row('Hit on dash', h('input', { type: 'checkbox', checked: d.dash?.dealsDamage === true, on: { change: (e: Event) => edit((m) => (m.dash = { ...(m.dash ?? {}), dealsDamage: (e.target as HTMLInputElement).checked })) } })),
     ),
@@ -315,7 +315,6 @@ export function monsterPreview(ed: ItemEditor<'monster'>): HTMLElement {
   }
   const stats = baseBattleStats(d, rules);
   const pu = d.powerupId ? ed.lib.get('powerup', d.powerupId)?.item : undefined;
-  const dashPts = stats.dash;
   const tr = (k: string, v: string) => h('tr', {}, h('td', { class: 'k', text: k }), h('td', { text: v }));
   const mod = (k: 'power' | 'speed' | 'shield' | 'block') => `${stats[k]} (${signed(modifier(d, k))})`;
   const origin = ed.originalId === null ? 'NEW' : ed.origin() === 'base' ? 'BASE' : ed.origin() === 'modified' ? 'MODIFIED BASE' : 'CUSTOM';
@@ -336,7 +335,7 @@ export function monsterPreview(ed: ItemEditor<'monster'>): HTMLElement {
       tr('Speed', mod('speed')),
       tr('Shield', mod('shield')),
       tr('Block', mod('block')),
-      tr('Dash', `die × ${rules.combat.dash.distancePerPoint} cells${dashPts ? ` +${resolveDash(d, rules.combat, dashPts).distance}` : ''} (${signed(modifier(d, 'dash'))})`),
+      tr('Dash', `cooldown ${computeDashCooldown(stats.dash, rules.combat)} s no die · ${computeDashCooldown(stats.dash + 6, rules.combat)} s die 6 (${signed(modifier(d, 'dash'))}) · ${resolveDash(d, rules.combat, stats.dash).distance} cells`),
       tr('Attack', weaponSummary(d.attack, rules)),
       tr('Powerup', pu ? `${pu.name} (${pu.type}) - replaces attack` : 'none'),
       tr('Auto Fire', d.attack?.autoFire ? 'yes' : 'no'),

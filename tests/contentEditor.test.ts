@@ -5,6 +5,7 @@ import {
   applyCommand,
   cellCode,
   computeBuild,
+  computeDashCooldown,
   createMatch,
   evaluateRequirement,
   parseCell,
@@ -89,11 +90,11 @@ describe('Monster content', () => {
     const prep: DicePrep = { creatureId: 'x', player: 'P1', sides: 6, dice: [1, 1, 1, 1, 1], locked: [false, false, false, false, false], rollsUsed: 1, maxRolls: 3, stage: 'done', slots: ['speed', 'power', 'shield', 'dash', 'block'].map((category) => ({ category })), slotDice: [0, 1, 2, 3, 4] };
     const b = computeBuild(def, prep, r);
     expect(b.stats).toEqual({ speed: r.creatureBase.speed + 2 + 1, power: r.creatureBase.power - 1 + 1, shield: r.creatureBase.shield + 3 + 1, block: 0, dash: r.creatureBase.dash + 1 }); // block 0-2+1 -> floored at 0; dash = the DASH die
-    // Dash modifier: half a cell of dash distance per point.
-    // Dash: each dash point (DASH die + dash modifier) = distancePerPoint cells; 0 points = no dash.
-    expect(resolveDash(def, r.combat, 0).step).toBe(0);
-    expect(resolveDash(def, r.combat, 6).distance).toBe(6 * r.combat.dash.distancePerPoint);
-    expect(resolveDash(def, r.combat, 8).distance - resolveDash(def, r.combat, 6).distance).toBe(2 * r.combat.dash.distancePerPoint);
+    // Dash value (DASH die + Dash Cooldown Modifier) sets the cooldown; the distance is fixed.
+    expect(resolveDash(def, r.combat, 0).cooldown).toBe(7);
+    expect(resolveDash(def, r.combat, 6).cooldown).toBe(1);
+    expect(resolveDash(def, r.combat, 0).distance).toBe(resolveDash(def, r.combat, 6).distance);
+    expect(computeDashCooldown(4, r.combat)).toBe(3);
     expect(new ContentLibrary(basePack(), memoryStorage()).validateMonster({ ...testCreature('q'), modifiers: { power: 120 } }, null).join()).toMatch(/modifiers.power/);
   });
 
@@ -429,7 +430,7 @@ describe('Monster own attack (melee / ranged settings per monster)', () => {
   });
 });
 
-// --- DASH dice slot (formerly SPECIAL): the die sets dash distance -----------------------------------
+// --- DASH dice slot (formerly SPECIAL): the die sets the dash cooldown -----------------------------------
 
 describe('DASH dice slot', () => {
   /** P1 with one-sided dice (every die shows 1, so the DASH die = 1) plus a dash modifier. */
@@ -440,26 +441,27 @@ describe('DASH dice slot', () => {
     return prepareBothAndBegin(s);
   };
 
-  it('the dash distance comes from the DASH die (+ modifier): die 1 = half a cell', () => {
+  it('the DASH die sets the cooldown: die 1 = 7 - 1 = 6 s; the dash covers the fixed distance', () => {
     const s = dashFight();
     const r = rules().combat;
     const before = F(s).attacker.x;
     const after = run(s, 12, { dx: 100, dash: true }).s;
-    expect(F(s).attacker.dashStep * r.dash.durationTicks).toBe(r.dash.distancePerPoint * r.cellUnits); // 1 point = 0.5 cell
-    expect(F(after).attacker.x - before).toBeGreaterThan(30);
+    expect(F(s).attacker.dashCooldownTicks).toBe(6 * r.tickRate);
+    expect(F(s).attacker.dashStep * r.dash.durationTicks).toBe(r.dash.distance * r.cellUnits);
+    expect(F(after).attacker.x - before).toBeGreaterThanOrEqual(r.dash.distance * r.cellUnits); // dash + normal movement while held
   });
 
-  it('a bigger DASH value dashes further (modifier +5 with die 1 = 6 points = 3 cells)', () => {
-    const s = dashFight(5);
+  it('a bigger DASH value only shortens the cooldown (modifier +5 with die 1 = 1 s), never the distance', () => {
     const r = rules().combat;
-    expect(F(s).attacker.dashStep * r.dash.durationTicks).toBe(3 * r.cellUnits);
+    expect(F(dashFight(5)).attacker.dashCooldownTicks).toBe(1 * r.tickRate);
+    expect(F(dashFight(5)).attacker.dashStep).toBe(F(dashFight()).attacker.dashStep);
   });
 
-  it('0 dash points = no dash (NO DASH), no cooldown spent', () => {
-    const s = dashFight(-1); // die 1 + modifier -1 = 0
+  it('a dash value of 0 or less still dashes, with a longer cooldown', () => {
+    const s = dashFight(-3); // die 1 + modifier -3 = -2 -> 7 + 2 = 9 s
     const r = run(s, 1, { dx: 100, dash: true });
-    expect(r.events).toContainEqual({ type: 'DASH_DENIED', side: 'attacker', reason: 'noDash' });
-    expect(F(r.s).attacker.dashCooldown).toBe(0);
+    expect(r.events).toContainEqual({ type: 'DASH', side: 'attacker' });
+    expect(F(r.s).attacker.dashCooldown).toBe(9 * rules().combat.tickRate);
   });
 
   it('old content with a SPECIAL slot migrates to DASH (incl. requirement targets)', () => {

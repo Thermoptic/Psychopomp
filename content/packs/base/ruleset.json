@@ -33,9 +33,9 @@
     "countdownTicks": 180,
     "attackConeCos": 50,
     "dash": {
-      "distance": 0,
-      "distancePerPoint": 0.5,
-      "cooldown": 4,
+      "distance": 3,
+      "baseCooldown": 7,
+      "minCooldown": 1,
       "damage": 0,
       "dealsDamage": false,
       "durationTicks": 8,

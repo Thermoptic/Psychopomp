@@ -12,7 +12,7 @@ import { basePack, customMatch, ok, prepareBothAndBegin, testCreature, type Test
 // --- fixtures ----------------------------------------------------------------
 
 const DICE1 = { sides: 1, slots: { speed: 1, power: 1, shield: 1, dash: 1, block: 1 } };
-// Dash 5 + the DASH die (always 1 here) = 6 points = a 3-cell dash.
+// Dash modifier 5 + the DASH die (always 1 here) = 6 -> 1 s dash cooldown.
 const mk = (id: string, stats: TestStats = {}, extra: Partial<CreatureDef> = {}) =>
   testCreature(id, { dash: 5, ...stats }, { dice: DICE1, ...extra });
 
@@ -204,17 +204,17 @@ describe('twin-stick: dash (Right Bumper)', () => {
     expect(F(r.s).attacker.dashTicks).toBe(0);
   });
 
-  it('13. default dash cooldown is 4 seconds', () => {
-    const s0 = fight();
+  it('13. dash cooldown = 7 s - DASH die - modifier (die 1, modifier 0 -> 6 s), enforced to the tick', () => {
+    const s0 = fight(mk('a', { dash: 0 }));
     const rules = s0.ruleset.combat;
-    expect(rules.dash.cooldown).toBe(4);
-    expect(F(s0).attacker.dashCooldownTicks).toBe(4 * rules.tickRate);
+    expect(rules.dash.baseCooldown).toBe(7);
+    expect(F(s0).attacker.dashCooldownTicks).toBe(6 * rules.tickRate);
     let s = step(s0, { dx: 0, dy: -100, dash: true }).s;
-    expect(F(s).attacker.dashCooldown).toBe(4 * rules.tickRate);
-    s = run(s, 4 * rules.tickRate - 2, {}).s;
-    let r = step(s, { dx: 0, dy: 100, dash: true }); // 4 s minus one tick: still cooling down
+    expect(F(s).attacker.dashCooldown).toBe(6 * rules.tickRate);
+    s = run(s, 6 * rules.tickRate - 2, {}).s;
+    let r = step(s, { dx: 0, dy: 100, dash: true }); // 6 s minus one tick: still cooling down
     expect(r.events.some((e) => e.type === 'DASH')).toBe(false);
-    r = step(r.s, { dx: 0, dy: 100, dash: true }); // exactly 4 s later
+    r = step(r.s, { dx: 0, dy: 100, dash: true }); // exactly 6 s later
     expect(r.events).toContainEqual({ type: 'DASH', side: 'attacker' });
   });
 
@@ -229,11 +229,12 @@ describe('twin-stick: dash (Right Bumper)', () => {
 
   it('dash settings come from creature data (prepared for the Monster Editor)', () => {
     const rules = basePack().ruleset.combat;
-    const fast = mk('fast', {}, { dash: { distance: 5, cooldown: 2, damage: 3, dealsDamage: true } });
-    expect(resolveDash(fast, rules, 6)).toMatchObject({ cooldownTicks: 2 * rules.tickRate, damage: 3, dealsDamage: true, distance: 5 + 6 * rules.dash.distancePerPoint });
-    expect(resolveDash(mk('plain'), rules, 6)).toMatchObject({ cooldownTicks: 4 * rules.tickRate, dealsDamage: false, distance: 3 });
+    const fast = mk('fast', {}, { dash: { distance: 5, damage: 3, dealsDamage: true } });
+    expect(resolveDash(fast, rules, 6)).toMatchObject({ cooldownTicks: 1 * rules.tickRate, damage: 3, dealsDamage: true, distance: 5 });
+    expect(resolveDash(mk('plain'), rules, 6)).toMatchObject({ cooldownTicks: 1 * rules.tickRate, dealsDamage: false, distance: 3 });
     expect(validateCreature(fast, basePack().ruleset).ok).toBe(true);
-    expect(validateCreature(mk('bad', {}, { dash: { cooldown: -1 } }), basePack().ruleset).ok).toBe(false);
+    // A per-creature cooldown no longer exists (it comes from the DASH value).
+    expect(validateCreature(mk('bad', {}, { dash: { cooldown: 2 } as never }), basePack().ruleset).ok).toBe(false);
     // A damaging dash into the opponent deals its damage once.
     let s = fight(fast, mk('b', { maxHp: 50 }));
     while (F(s).defender.x - F(s).attacker.x > 200) s = step(s, { dx: 100 }).s;

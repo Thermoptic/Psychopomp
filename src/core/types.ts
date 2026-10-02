@@ -20,7 +20,7 @@ export interface Cell {
 
 /** A dice stat category. Default categories are listed below; content may add more. */
 export type StatCategory = string;
-/** Default dice slots. A die on DASH sets how far the creature dashes (formerly the SPECIAL slot). */
+/** Default dice slots. A die on DASH shortens the dash cooldown (formerly the SPECIAL slot). */
 export const DEFAULT_CATEGORIES: readonly StatCategory[] = ['speed', 'power', 'shield', 'dash', 'block'];
 
 // ---------------------------------------------------------------------------
@@ -122,12 +122,14 @@ export interface AttackDef extends WeaponSettings {
   autoFire?: boolean;
 }
 
-/** Per-creature dash options. Missing fields fall back to ruleset combat.dash. */
+/**
+ * Per-creature dash options. Missing fields fall back to ruleset combat.dash.
+ * The cooldown is not set here: it comes from the dash value (see
+ * computeDashCooldown in combat/stats.ts).
+ */
 export interface DashDef {
-  /** Base distance in arena cells, added to the dash points' distance. */
+  /** Fixed dash distance in arena cells (not affected by the DASH die). */
   distance?: number;
-  /** Cooldown in seconds. */
-  cooldown?: number;
   /** Damage dealt when the dash runs into the opponent (only if dealsDamage). */
   damage?: number;
   dealsDamage?: boolean;
@@ -145,7 +147,8 @@ export interface CreatureStats {
 /**
  * Per-creature start bonus/penalty on top of the ruleset's `creatureBase`
  * (all default 0). Battle stats = creatureBase + modifiers + dice + Special.
- * `dash` adds dash points (dash distance, see resolveDash).
+ * `dash` is the Dash Cooldown Modifier: each point shortens the dash cooldown
+ * by 1 s, like a pip on the DASH die (negative = slower; see computeDashCooldown).
  */
 export interface CreatureModifiers {
   power?: number;
@@ -244,8 +247,10 @@ export interface CombatRules {
   attackConeCos: number;
   /** Default dash for creatures without their own `dash` data. */
   dash: Required<DashDef> & {
-    /** Cells of dash distance per dash point (the DASH die + dash modifier). */
-    distancePerPoint: number;
+    /** Cooldown in seconds with a dash value of 0 (no DASH die, modifier 0). */
+    baseCooldown: number;
+    /** The cooldown never goes below this many seconds. */
+    minCooldown: number;
     /** How many ticks a dash lasts (the distance is covered over these ticks). */
     durationTicks: number;
     /**
@@ -346,7 +351,10 @@ export interface BattleStats {
   shield: number;
   speed: number;
   block: number;
-  /** Dash points: dash distance = ruleset dash.distance + dash × dash.distancePerPoint cells. */
+  /**
+   * Dash value = DASH die + Dash Cooldown Modifier (+ Special). Sets the dash
+   * cooldown: max(minCooldown, baseCooldown - dash) seconds. May be negative.
+   */
   dash: number;
 }
 
