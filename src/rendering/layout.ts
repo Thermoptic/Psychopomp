@@ -58,14 +58,14 @@ export function boardLayout(board: BoardDef): BoardLayout {
 
 // --- Combat -------------------------------------------------------------------
 //
-// From READY+READY on, combat runs on the same 9×9 board in the same place (the
-// ruleset's arena is 9×9), with a full-width HUD over the title plaque. The
-// arena's column/row count is gameplay data (ruleset); only the on-screen cell
-// size is computed here.
+// From READY+READY on, combat runs in a wide arena that opens out of the board:
+// as wide as the HUD above it (both span the screen inside SIDE_MARGIN), as tall
+// as the board, covering the side panels. The arena's column/row count is
+// gameplay data (ruleset); only the on-screen cell size is computed here (20×9
+// gives the board's own 43 px cells).
 
 export const COMBAT_HUD: Rect = { x: SIDE_MARGIN, y: GAP, w: VIEW.w - 2 * SIDE_MARGIN, h: TOP_H };
-/** Combat uses the board's own footprint (same frame, same cells). */
-export const ARENA_AREA: Rect = BOARD_AREA;
+export const ARENA_AREA: Rect = { x: SIDE_MARGIN, y: CONTENT_Y, w: VIEW.w - 2 * SIDE_MARGIN, h: CONTENT_H };
 
 /** Fits a columns × rows grid of square cells into `area`, centred. */
 export function arenaLayout(columns: number, rows: number, area: Rect = ARENA_AREA): BoardLayout {

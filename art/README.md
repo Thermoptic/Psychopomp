@@ -56,9 +56,8 @@ P2 blue), so any creature can belong to either player.
   painted Power Point tiles are swapped for a plain lane tile. Power Points are
   then drawn **from the game state** (`drawPowerPointMarker`), never from the
   picture.
-- **Combat**: runs on the same 9×9 board in the same place, with the same tiles,
-  frame and Power Points. (`boardTileSprite` also has an 'arena' mode, a plain
-  checker for grids larger than 9×9, kept for rulesets with a bigger arena.)
+- **Combat arena** (20×9, as wide as the HUD): a plain dark/light checker from
+  the same tiles ('arena' mode), inside the same frame, opening out of the board.
 - **Frame**: a 9-slice of the art's outer frame.
 
 ## environment/ (the chamber around the UI)

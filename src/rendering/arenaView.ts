@@ -1,6 +1,7 @@
 // Combat presentation, used from the moment both players are READY
-// (countdown, combat, result): the same board in the same place, below a top
-// HUD. Same grid look and creature scale as the strategic board.
+// (countdown, combat, result): a wide arena that opens out of the board, below
+// a top HUD of the same width. Same stone, frame and creature scale as the
+// strategic board.
 
 import type { MatchUi } from '../app/ui';
 import { arenaGrid, computeBlockCharges, type GameState, type PlayerId } from '../core';
@@ -8,10 +9,10 @@ import { boardUnits, combatToScreen } from './boardUnits';
 import { drawBoardSurface, drawPowerPointMarker } from './boardArt';
 import { drawUnits } from './boardView';
 import { hpBar, measure, panel, rect, text, type Ctx } from './draw';
-import { ARENA_AREA, COMBAT_HUD, arenaLayout, cellRect, type BoardLayout } from './layout';
+import { ARENA_AREA, BOARD_AREA, COMBAT_HUD, arenaLayout, cellRect, type BoardLayout, type Rect } from './layout';
 import { C, playerColor } from './theme';
 
-/** Short pause between both READY and the countdown appearing. */
+/** Length of the board -> arena expand transition. */
 export const ARENA_EXPAND_MS = 450;
 
 export function currentArenaLayout(state: GameState): BoardLayout {
@@ -19,20 +20,30 @@ export function currentArenaLayout(state: GameState): BoardLayout {
   return arenaLayout(g.width, g.height);
 }
 
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
 /**
- * Combat on the strategic board itself: same frame, same tiles and Power
- * Points, only the two combatants (the room does not change).
+ * The wide arena with the two combatants. `expandMs` > 0 animates the arena
+ * opening outward from the strategic board's frame to the full width.
  */
-export function drawArena(ctx: Ctx, state: GameState, ui: MatchUi, now: number): void {
+export function drawArena(ctx: Ctx, state: GameState, ui: MatchUi, now: number, expandMs: number): void {
   const g = arenaGrid(state.ruleset.combat);
   const l = currentArenaLayout(state);
-  drawBoardSurface(ctx, ARENA_AREA, l, g.width, g.height, 'board');
+  const t = expandMs > 0 ? 1 - Math.pow(expandMs / ARENA_EXPAND_MS, 2) : 1;
+  const vis: Rect = {
+    x: Math.round(lerp(BOARD_AREA.x, ARENA_AREA.x, t)),
+    y: ARENA_AREA.y,
+    w: Math.round(lerp(BOARD_AREA.w, ARENA_AREA.w, t)),
+    h: ARENA_AREA.h,
+  };
+  // Same frame and stone as the strategic board: the board opens into the arena.
+  drawBoardSurface(ctx, vis, l, g.width, g.height, g.width === state.board.width ? 'board' : 'arena');
   if (g.width === state.board.width && g.height === state.board.height) {
     for (const pp of state.powerPoints) drawPowerPointMarker(ctx, cellRect(l, pp), pp.owner ?? null);
   }
   ctx.save();
   ctx.beginPath();
-  ctx.rect(ARENA_AREA.x + 10, ARENA_AREA.y + 10, ARENA_AREA.w - 20, ARENA_AREA.h - 20);
+  ctx.rect(vis.x + 10, vis.y + 10, vis.w - 20, vis.h - 20);
   ctx.clip();
   drawUnits(ctx, state, ui, l, boardUnits(state, l), now);
   drawProjectiles(ctx, state, ui, l);

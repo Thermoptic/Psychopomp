@@ -611,11 +611,9 @@ export class App {
         const msg = ui.message && ui.message.ms > 0 ? ui.message : null;
         drawMessageBar(ctx, msg ? msg.text : this.prepHint(), msg ? msg.color : C.dim);
       } else {
-        // Both READY: combat on the same board, locked builds stay beside it, HUD on top.
-        drawPrepPanel(ctx, s, ui, 'P1');
-        drawPrepPanel(ctx, s, ui, 'P2');
+        // Both READY: the board opens into the wide arena (HUD-wide), HUD on top.
         drawCombatHud(ctx, s);
-        drawArena(ctx, s, ui, now);
+        drawArena(ctx, s, ui, now, ui.arenaMs);
         if (ui.arenaMs <= 0) drawCountdown(ctx, s, ui);
         drawMessageBar(ctx, b.stage === 'countdown' ? 'BOTH READY - BATTLE STARTS' : combatHint(s), C.dim);
         if (b.stage === 'result') drawResult(ctx, s);
