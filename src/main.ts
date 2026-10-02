@@ -13,12 +13,15 @@ import { VIEW_H, VIEW_W } from './rendering/theme';
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d', { alpha: false })!;
 
+// Thin black border kept around the game, as a share of the window's shorter side.
+const SCREEN_MARGIN = 0.015;
+
 let scale = 1;
 function resize(): void {
   const dpr = window.devicePixelRatio || 1;
-  const fit = Math.min(window.innerWidth / VIEW_W, window.innerHeight / VIEW_H);
-  // Integer scaling when there is room for it, fractional below 1x.
-  scale = fit >= 1 ? Math.max(1, Math.floor(fit * 4) / 4) : fit;
+  const margin = Math.round(Math.min(window.innerWidth, window.innerHeight) * SCREEN_MARGIN);
+  // Fill the window as far as the 16:9 view allows (free scaling), minus the margin.
+  scale = Math.max(0.1, Math.min((window.innerWidth - 2 * margin) / VIEW_W, (window.innerHeight - 2 * margin) / VIEW_H));
   canvas.style.width = `${Math.floor(VIEW_W * scale)}px`;
   canvas.style.height = `${Math.floor(VIEW_H * scale)}px`;
   canvas.width = Math.floor(VIEW_W * scale * dpr);
