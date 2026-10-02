@@ -70,7 +70,7 @@ export function defaultSpecial(slotCount: number): NonNullable<CreatureDef['spec
 export function defaultWeaponSettings(): { melee: MeleeSettings; ranged: RangedSettings } {
   return {
     melee: { speed: 2, knockback: 1, range: 3 },
-    ranged: { speed: 5, range: 5, rateOfFire: 2, impactSize: 2, impactDamage: 10, homing: 1, trajectory: 1, bounce: 1 },
+    ranged: { speed: 5, range: 5, rateOfFire: 2, impactSize: 2, homing: 1, trajectory: 1, bounce: 1 },
   };
 }
 

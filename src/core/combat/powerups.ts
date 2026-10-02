@@ -46,7 +46,6 @@ export const projectileSpeed = (level: number) => clampLevel(level) * 4;
 export const projectileRange = (level: number, rules: CombatRules) => clampLevel(level) * 2 * rules.cellUnits;
 export const rateOfFireTicks = (level: number, rules: CombatRules) => secondsToTicks(clampLevel(level) * 0.5, rules);
 export const impactRadius = (level: number) => clampLevel(level) * 16;
-export const impactDamage = (value: number) => Math.max(1, Math.min(100, Math.round(value)));
 export const homingPercent = (level: number) => clampLevel(level) * 2;
 export const trajectoryCurve = (level: number) => clampLevel(level) * CURVE_PER_LEVEL;
 export const bounceCount = (level: number) => clampLevel(level);
@@ -87,7 +86,6 @@ export function weaponFromSettings(w: WeaponSettings, powerupId: string | null, 
       speed: projectileSpeed(r.speed),
       range: projectileRange(r.range, rules),
       impactRadius: impactRadius(r.impactSize),
-      impactDamage: impactDamage(r.impactDamage),
       homing: homingPercent(r.homing),
       curve: trajectoryCurve(r.trajectory),
       bounces: bounceCount(r.bounce),

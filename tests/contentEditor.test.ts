@@ -5,6 +5,7 @@ import {
   applyCommand,
   cellCode,
   computeBuild,
+  computeDamage,
   computeDashCooldown,
   createMatch,
   evaluateRequirement,
@@ -166,12 +167,11 @@ describe('Powerup content and mappings', () => {
     expect(ed.save().ok).toBe(true);
     ed.newItem();
     ed.update((p) => ((p.id = 'spitter'), (p.name = 'Spitter'), (p.type = 'ranged')));
-    setPowerupLevel(ed.draft, 'ranged', 'impactDamage', 42);
-    ed.update((p) => setPowerupLevel(p, 'ranged', 'impactDamage', 42));
+    ed.update((p) => setPowerupLevel(p, 'ranged', 'impactSize', 7));
     expect(ed.save().ok).toBe(true);
     const again = new ContentLibrary(basePack(), storage);
     expect(again.get('powerup', 'cleaver')!.item.type).toBe('melee');
-    expect(again.get('powerup', 'spitter')!.item.ranged!.impactDamage).toBe(42);
+    expect(again.get('powerup', 'spitter')!.item.ranged!.impactSize).toBe(7);
     expect(lib.validatePowerup({ ...ed.draft, ranged: { ...ed.draft.ranged!, homing: 11 } }, 'spitter').join()).toMatch(/homing/);
     expect(lib.validatePowerup({ ...ed.draft, type: 'laser' as never }, 'spitter').join()).toMatch(/type/);
   });
@@ -190,7 +190,6 @@ describe('Powerup content and mappings', () => {
     expect(M.projectileRange(10, c)).toBe(20 * c.cellUnits); // 2 cells per level
     expect([1, 4, 10].map((l) => M.rateOfFireTicks(l, c) / c.tickRate)).toEqual([0.5, 2, 5]);
     expect([1, 10].map(M.impactRadius)).toEqual([16, 160]);
-    expect([0, 42, 500].map(M.impactDamage)).toEqual([1, 42, 100]);
     expect([1, 10].map(M.homingPercent)).toEqual([2, 20]);
     expect(M.trajectoryCurve(10)).toBeGreaterThan(M.trajectoryCurve(1) * 9);
     expect([1, 10].map(M.bounceCount)).toEqual([1, 10]);
@@ -239,15 +238,16 @@ describe('Game core consumes Powerups', () => {
     expect(shots).toBe(3); // ticks 1, 121, 241 (2.0 s apart)
   });
 
-  it('projectiles fly at their speed, hit the opponent and deal impact damage', () => {
-    let s = fightWith(ranged({ speed: 10, impactDamage: 7, homing: 1 }));
+  it('projectiles fly at their speed, hit the opponent and deal Power damage reduced by Shield (like melee)', () => {
+    let s = fightWith(ranged({ speed: 10, homing: 1 }));
     const hp = F(s).defender.hp;
+    const expected = computeDamage(F(s).attacker.stats, F(s).defender.stats, s.ruleset.combat);
     s = run(s, 1, { attack: true }).s;
     const p0 = s.battle!.combat!.projectiles[0];
     expect(p0.vx).toBe(M.projectileSpeed(10) * 256);
     const r = run(s, 60);
     expect(r.events.some((e) => e.type === 'IMPACT' && e.hit)).toBe(true);
-    expect(F(r.s).defender.hp).toBe(hp - 7);
+    expect(F(r.s).defender.hp).toBe(hp - expected);
   });
 
   it('range: a short-range shot fizzles before reaching the far opponent', () => {
@@ -385,9 +385,20 @@ describe('Monster own attack (melee / ranged settings per monster)', () => {
     const w = F(s).attacker.weapon;
     expect(w).toMatchObject({ kind: 'ranged', powerupId: null, speed: M.projectileSpeed(10), cooldownTicks: M.rateOfFireTicks(3, s.ruleset.combat), bounces: 2 });
     const hp = F(s).defender.hp;
+    const expected = computeDamage(F(s).attacker.stats, F(s).defender.stats, s.ruleset.combat); // Power vs Shield, like melee
     s = run(s, 1, { attack: true }).s;
     expect(s.battle!.combat!.projectiles).toHaveLength(1);
-    expect(F(run(s, 60).s).defender.hp).toBe(hp - 9);
+    expect(F(run(s, 60).s).defender.hp).toBe(hp - expected);
+  });
+
+  it('ranged and melee deal the same damage: Power 2 vs Shield 6 = 1 (2 x 70 %), not a fixed weapon damage', () => {
+    let s = fightWith(null, { attack: ownRanged });
+    F(s).attacker.stats.power = 2;
+    F(s).defender.stats.shield = 6;
+    const hp = F(s).defender.hp;
+    s = run(s, 1, { attack: true }).s;
+    expect(F(run(s, 60).s).defender.hp).toBe(hp - 1);
+    expect(computeDamage({ power: 2, shield: 0, speed: 0, block: 0, dash: 0 }, { power: 0, shield: 6, speed: 0, block: 0, dash: 0 }, s.ruleset.combat)).toBe(1);
   });
 
   it('the core uses the monster\'s own melee settings', () => {

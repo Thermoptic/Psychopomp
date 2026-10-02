@@ -90,13 +90,14 @@ export interface MeleeSettings {
   range: number;
 }
 
-/** Ranged weapon settings (levels 1-10; impactDamage 1-100, see core/combat/powerups.ts). */
+/** Ranged weapon settings (levels 1-10, see core/combat/powerups.ts). */
 export interface RangedSettings {
   speed: number;
   range: number;
   rateOfFire: number;
   impactSize: number;
-  impactDamage: number;
+  /** No longer used: projectiles deal Power damage reduced by Shield, like melee. Kept so older content still loads. */
+  impactDamage?: number;
   homing: number;
   trajectory: number;
   bounce: number;
@@ -430,7 +431,6 @@ export type Weapon =
       /** Max travel distance before it fizzles, combat units. */
       range: number;
       impactRadius: number;
-      impactDamage: number;
       /** Steering towards the opponent per tick, percent of speed. */
       homing: number;
       /** Magnus curve per tick at full sideways movement, angle × 65536 (radians). */
@@ -456,7 +456,6 @@ export interface Projectile {
   curveCos: number;
   curveSin: number;
   impactRadius: number;
-  impactDamage: number;
 }
 
 export interface CombatState {

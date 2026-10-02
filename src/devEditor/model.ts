@@ -240,7 +240,6 @@ export const RANGED_FIELDS = [
   { key: 'range', label: 'Range', hint: 'travel distance' },
   { key: 'rateOfFire', label: 'Rate of Fire', hint: 'time between shots' },
   { key: 'impactSize', label: 'Impact Size', hint: 'shockwave radius' },
-  { key: 'impactDamage', label: 'Impact Damage', hint: 'shockwave damage (1-100)' },
   { key: 'homing', label: 'Homing', hint: 'steering towards the opponent' },
   { key: 'trajectory', label: 'Trajectory', hint: 'Magnus curve when moving while firing' },
   { key: 'bounce', label: 'Bounce', hint: 'wall bounces' },
@@ -249,8 +248,8 @@ export const RANGED_FIELDS = [
 export type MeleeKey = (typeof MELEE_FIELDS)[number]['key'];
 export type RangedKey = (typeof RANGED_FIELDS)[number]['key'];
 
-export function fieldMax(key: string): number {
-  return key === 'impactDamage' ? 100 : 10;
+export function fieldMax(_key: string): number {
+  return 10;
 }
 
 /** Sets one melee/ranged level on any weapon settings (a monster's attack or a Powerup). */
@@ -277,7 +276,6 @@ export function levelMeaning(group: 'melee' | 'ranged', key: string, level: numb
     if (key === 'range') return `${cells(M.projectileRange(level, c), rules)} cells`;
     if (key === 'rateOfFire') return secs(M.rateOfFireTicks(level, c), rules);
     if (key === 'impactSize') return `r ${cells(M.impactRadius(level), rules)} cells`;
-    if (key === 'impactDamage') return `${M.impactDamage(level)} dmg`;
     if (key === 'homing') return `${M.homingPercent(level)} %/tick`;
     if (key === 'trajectory') return `${((M.trajectoryCurve(level) / 65536) * (180 / Math.PI)).toFixed(2)}°/tick`;
     if (key === 'bounce') return `${M.bounceCount(level)}×`;

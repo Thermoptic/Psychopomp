@@ -58,7 +58,7 @@ export function weaponSummary(w: WeaponSettings | undefined, rules: Ruleset): st
   }
   if (w.type === 'ranged' && w.ranged) {
     const r = w.ranged;
-    return `RANGED · ${levelMeaning('ranged', 'speed', r.speed, rules)} · ${levelMeaning('ranged', 'range', r.range, rules)} · ${levelMeaning('ranged', 'rateOfFire', r.rateOfFire, rules)} · ${r.impactDamage} dmg`;
+    return `RANGED · ${levelMeaning('ranged', 'speed', r.speed, rules)} · ${levelMeaning('ranged', 'range', r.range, rules)} · ${levelMeaning('ranged', 'rateOfFire', r.rateOfFire, rules)} · Power dmg`;
   }
   return w.type;
 }

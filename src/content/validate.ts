@@ -203,10 +203,11 @@ function validateWeapon(raw: Obj, where: string, errors: string[], typeRequired:
       return;
     }
     if (!isObj(b)) return void errors.push(`${where}.${key} must be an object`);
-    for (const f of fields) intIn(errors, `${where}.${key}.${f}`, b[f], 1, f === 'impactDamage' ? 100 : 10);
+    for (const f of fields) intIn(errors, `${where}.${key}.${f}`, b[f], 1, 10);
   };
   block('melee', ['speed', 'knockback', 'range']);
-  block('ranged', ['speed', 'range', 'rateOfFire', 'impactSize', 'impactDamage', 'homing', 'trajectory', 'bounce']);
+  // (impactDamage from older content is ignored: damage comes from Power and Shield.)
+  block('ranged', ['speed', 'range', 'rateOfFire', 'impactSize', 'homing', 'trajectory', 'bounce']);
 }
 
 /** Level 1-10 settings (impact damage 1-100), see core/combat/powerups.ts for their meaning. */

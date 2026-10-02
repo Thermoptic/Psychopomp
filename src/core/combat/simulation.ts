@@ -187,12 +187,15 @@ function fireProjectile(combat: CombatState, f: Fighter, input: FighterInput, ru
     curveCos: cos,
     curveSin: sin,
     impactRadius: w.impactRadius,
-    impactDamage: w.impactDamage,
   });
 }
 
-/** Shockwave at the projectile's position: damages the opponent inside the radius. */
-function impact(p: Projectile, target: Fighter, rules: CombatRules, damage: Record<BattleSide, number>, events: GameEvent[]): void {
+/**
+ * Shockwave at the projectile's position: hits the opponent inside the radius
+ * for the shooter's Power, reduced by the target's Shield - the same damage
+ * as a melee hit (computeDamage).
+ */
+function impact(p: Projectile, target: Fighter, shooter: Fighter, rules: CombatRules, damage: Record<BattleSide, number>, events: GameEvent[]): void {
   const x = Math.trunc(p.x / FP);
   const y = Math.trunc(p.y / FP);
   const dx = target.x - x;
@@ -203,8 +206,9 @@ function impact(p: Projectile, target: Fighter, rules: CombatRules, damage: Reco
   if (!hit) return;
   if (target.guard > 0) events.push({ type: 'BLOCKED', side: target.side });
   else {
-    damage[target.side] += p.impactDamage;
-    events.push({ type: 'HIT', side: p.side, damage: p.impactDamage });
+    const dmg = computeDamage(shooter.stats, target.stats, rules);
+    damage[target.side] += dmg;
+    events.push({ type: 'HIT', side: p.side, damage: dmg });
   }
 }
 
@@ -259,7 +263,7 @@ function stepProjectiles(combat: CombatState, rules: CombatRules, damage: Record
         p.bouncesLeft--;
         events.push({ type: 'PROJECTILE_BOUNCED', side: p.side });
       } else {
-        impact(p, target, rules, damage, events);
+        impact(p, target, combat.fighters[p.side], rules, damage, events);
         continue;
       }
     }
@@ -268,7 +272,7 @@ function stepProjectiles(combat: CombatState, rules: CombatRules, damage: Record
     const hy = target.y * FP - p.y;
     const reach = (rules.fighterRadius + PROJECTILE_RADIUS) * FP;
     if (hx * hx + hy * hy <= reach * reach) {
-      impact(p, target, rules, damage, events);
+      impact(p, target, combat.fighters[p.side], rules, damage, events);
       continue;
     }
     if (p.travelled >= p.maxTravel) continue; // out of range: fizzles
