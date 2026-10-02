@@ -21,6 +21,7 @@ import {
 import type { Action, ActionFrame } from '../input/actions';
 import { aimToward, emptyQueue, queuePresses, toFighterInput } from '../input/combatInput';
 import { ARENA_EXPAND_MS, drawArena, drawCombatHud, drawCountdown } from '../rendering/arenaView';
+import { SLASH_MS } from '../rendering/swordSwing';
 import { combatHint, drawPrepPanel, drawResult, sideOf } from '../rendering/battleView';
 import { drawBoard, drawBoardScreen, drawHeader, drawMessageBar } from '../rendering/boardView';
 import { scanlines, type Ctx } from '../rendering/draw';
@@ -88,6 +89,15 @@ export class App {
       return false;
     }
     this.state = r.state;
+    // A melee attack shows its swish at once, on the button press, in the swing's aim direction.
+    const fighters = r.state.battle?.combat?.fighters;
+    if (fighters) {
+      for (const e of r.events) {
+        if (e.type !== 'ATTACK_STARTED') continue;
+        const f = fighters[e.side];
+        if (f.weapon.kind === 'melee') this.ui.slashes.push({ side: e.side, ms: SLASH_MS, aim: { ...f.swingAim } });
+      }
+    }
     this.sfx.handle(r.events);
     this.onEvents(r.events);
     return true;
@@ -198,6 +208,7 @@ export class App {
     ui.flash.defender = Math.max(0, ui.flash.defender - dtMs);
     ui.floaters = ui.floaters.filter((f) => (f.ms -= dtMs) > 0);
     ui.impacts = ui.impacts.filter((f) => (f.ms -= dtMs) > 0);
+    ui.slashes = ui.slashes.filter((f) => (f.ms -= dtMs) > 0);
 
     switch (this.screen) {
       case 'menu':

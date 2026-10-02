@@ -9,6 +9,7 @@ import { BOARD_AREA, HEADER, LEFT_PANEL, MESSAGE_BAR, RIGHT_PANEL, boardLayout, 
 import { aimReticle, boardUnits, combatToScreen, isBattleView, isCombatView, type BoardUnit } from './boardUnits';
 import { movementText } from './movementText';
 import { drawCreature } from './sprites';
+import { SLASH_MS, coneHalfAngle, drawSwish } from './swordSwing';
 import { C, CATEGORY_COLOR, playerColor, playerLabel } from './theme';
 
 /** A hanging pennant in a player's colour (the reference's banners beside the title). */
@@ -278,6 +279,14 @@ export function drawUnits(ctx: Ctx, state: GameState, ui: MatchUi, l: BoardLayou
     }
     const flash = f && ui.flash[f.side] > 0 && Math.floor(now / 60) % 2 === 0 ? '#ffffff' : undefined;
     drawCreature(ctx, u.defId, u.owner, u.cx, u.cy - (portrait ? 0 : 3), u.px, { flip: f ? f.facing < 0 : u.owner === 'P2' && !!state.battle, flash, portrait, portraitSize });
+    if (f && f.weapon.kind === 'melee') {
+      // Swish across the aim cone, shown on the button press.
+      const reach = f.weapon.range * unitScale;
+      const half = coneHalfAngle(rules.attackConeCos);
+      for (const sl of ui.slashes) {
+        if (sl.side === f.side) drawSwish(ctx, u.cx, u.cy, sl.aim, half, reach, 1 - sl.ms / SLASH_MS, color);
+      }
+    }
     if (f) {
       // Aim reticle: small dot in the player's colour, brighter while the right stick is held.
       const p = aimReticle(u, f, l);
