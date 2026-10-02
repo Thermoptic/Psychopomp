@@ -5,6 +5,7 @@
 import type { MatchUi } from '../app/ui';
 import { arenaGrid, computeBlockCharges, type GameState, type PlayerId } from '../core';
 import { boardUnits, combatToScreen } from './boardUnits';
+import { drawBoardSurface } from './boardArt';
 import { drawUnits } from './boardView';
 import { hpBar, measure, panel, rect, text, type Ctx } from './draw';
 import { ARENA_AREA, BOARD_AREA, COMBAT_HUD, arenaLayout, type BoardLayout, type Rect } from './layout';
@@ -39,22 +40,14 @@ export function drawArena(ctx: Ctx, state: GameState, ui: MatchUi, now: number, 
     h: frame.h,
   };
 
-  panel(ctx, vis);
+  // Same frame and stone as the strategic board: the board opens into the arena.
+  drawBoardSurface(ctx, vis, l, g.width, g.height, 'arena');
   ctx.save();
   ctx.beginPath();
-  ctx.rect(vis.x + 6, vis.y + 6, vis.w - 12, vis.h - 12);
+  ctx.rect(vis.x + 10, vis.y + 10, vis.w - 20, vis.h - 20);
   ctx.clip();
-  for (let y = 0; y < g.height; y++) {
-    for (let x = 0; x < g.width; x++) {
-      const r = { x: l.ox + x * l.cell, y: l.oy + y * l.cell, w: l.cell, h: l.cell };
-      rect(ctx, r, (x + y) % 2 === 0 ? C.cellA : C.cellB);
-      ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      ctx.fillRect(r.x, r.y + r.h - 1, r.w, 1);
-      ctx.fillRect(r.x + r.w - 1, r.y, 1, r.h);
-    }
-  }
   // Faint centre line so the wide arena still reads as one field.
-  ctx.fillStyle = 'rgba(57,224,200,0.08)';
+  ctx.fillStyle = 'rgba(232,207,122,0.10)';
   ctx.fillRect(l.ox + Math.floor((g.width * l.cell) / 2) - 1, l.oy, 2, g.height * l.cell);
   drawUnits(ctx, state, ui, l, boardUnits(state, l), now);
   drawProjectiles(ctx, state, ui, l);

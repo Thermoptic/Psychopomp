@@ -3,27 +3,55 @@
 
 import type { MatchUi } from '../app/ui';
 import { baseBattleStats, creatureAt, describeRequirement, getLegalMoves, livingCreatures, type GameState, type PlayerId } from '../core';
-import { badge, hpBar, panel, rect, strokeRect, text, wrapText, type Ctx } from './draw';
+import { badge, categoryIcon, hpBar, panel, playerTag, rect, strokeRect, text, wrapText, type Ctx } from './draw';
+import { drawBoardSurface, drawPowerPointMarker } from './boardArt';
 import { BOARD_AREA, HEADER, LEFT_PANEL, MESSAGE_BAR, RIGHT_PANEL, boardLayout, cellRect, type BoardLayout, type Rect } from './layout';
 import { aimReticle, boardUnits, combatToScreen, isBattleView, isCombatView, type BoardUnit } from './boardUnits';
 import { movementText } from './movementText';
 import { drawCreature } from './sprites';
-import { C, playerColor, playerLabel } from './theme';
+import { C, CATEGORY_COLOR, playerColor, playerLabel } from './theme';
+
+/** A hanging pennant in a player's colour (the reference's banners beside the title). */
+function pennant(ctx: Ctx, x: number, y: number, h: number, color: string, dark: string): void {
+  const w = 22;
+  ctx.fillStyle = '#050404';
+  ctx.fillRect(x - 1, y, w + 2, h + 1);
+  ctx.fillStyle = dark;
+  ctx.fillRect(x, y, w, h - 6);
+  ctx.beginPath();
+  ctx.moveTo(x, y + h - 6);
+  ctx.lineTo(x + w / 2, y + h);
+  ctx.lineTo(x + w, y + h - 6);
+  ctx.fill();
+  ctx.fillStyle = color;
+  ctx.fillRect(x + 3, y, w - 6, 2);
+  // Cross emblem.
+  ctx.fillRect(x + w / 2 - 1, y + 7, 2, 14);
+  ctx.fillRect(x + w / 2 - 6, y + 12, 12, 2);
+}
 
 export function drawHeader(ctx: Ctx, state: GameState): void {
   const H = HEADER;
-  panel(ctx, H, undefined, '#101015');
+  panel(ctx, H, undefined, '#0d0b09');
   const cy = H.y + H.h / 2;
-  const left = H.x + 18; // same text inset as the message bar
-  text(ctx, 'PSYCHOPOMP', left + 1, cy + 8, { size: 22, color: C.text });
-  text(ctx, 'PSYCHOPOMP', left, cy + 7, { size: 22, color: C.danger });
-
-  const p = state.currentTurn.player;
   const mid = H.x + H.w / 2;
-  const label = state.phase === 'gameOver' ? 'MATCH OVER' : `TURN ${state.currentTurn.number}  ·  ${playerLabel(p)}`;
-  badge(ctx, mid - 110, cy, 14, p, playerColor(p));
-  text(ctx, label, mid - 96, cy + 5, { size: 16, color: playerColor(p) });
 
+  // Title plaque: PSYCHOPOMP between chevrons, P1 and P2 pennants either side.
+  pennant(ctx, mid - 152, H.y - 4, H.h + 14, C.p1, C.p1dark);
+  pennant(ctx, mid + 130, H.y - 4, H.h + 14, C.p2, C.p2dark);
+  text(ctx, '«', mid - 112, cy + 8, { size: 22, color: C.p1, align: 'center' });
+  text(ctx, '»', mid + 112, cy + 8, { size: 22, color: C.p2, align: 'center' });
+  text(ctx, 'PSYCHOPOMP', mid + 2, cy + 10, { size: 24, color: '#2a0c06', align: 'center' });
+  text(ctx, 'PSYCHOPOMP', mid, cy + 8, { size: 24, color: C.text, align: 'center' });
+
+  // Turn (left).
+  const p = state.currentTurn.player;
+  const left = H.x + 18; // same text inset as the message bar
+  const label = state.phase === 'gameOver' ? 'MATCH OVER' : `TURN ${state.currentTurn.number}  ·  ${playerLabel(p)}`;
+  badge(ctx, left + 7, cy, 14, p, playerColor(p));
+  text(ctx, label, left + 22, cy + 5, { size: 14, color: playerColor(p) });
+
+  // Power Points held (right).
   const count = (o: PlayerId) => state.powerPoints.filter((pp) => pp.owner === o).length;
   const total = state.powerPoints.length;
   const R = H.x + H.w;
@@ -35,9 +63,12 @@ export function drawHeader(ctx: Ctx, state: GameState): void {
   text(ctx, `${count('P2')}/${total}`, R - 48, cy + 5, { size: 15, color: C.p2 });
 }
 
-function statLine(ctx: Ctx, x: number, y: number, label: string, value: string, color: string = C.text): void {
-  text(ctx, label, x, y, { size: 12, color: C.dim });
-  text(ctx, value, x + 90, y, { size: 14, color });
+/** One stat row: category icon + coloured label + value. */
+function statLine(ctx: Ctx, x: number, y: number, label: string, value: string, category?: string): void {
+  const col = (category && CATEGORY_COLOR[category]) || C.dim;
+  if (category) categoryIcon(ctx, category, x, y - 11, col, 2);
+  text(ctx, label, x + 20, y, { size: 13, color: col });
+  text(ctx, value, x + 118, y, { size: 14, color: C.text });
 }
 
 /** Chooses which creature a player's panel shows: hovered, selected, else first alive. */
@@ -53,35 +84,41 @@ function panelCreature(state: GameState, ui: MatchUi, player: PlayerId): string 
 
 export function drawPlayerPanel(ctx: Ctx, state: GameState, ui: MatchUi, player: PlayerId, r: Rect): void {
   const color = playerColor(player);
+  const mirror = player === 'P2';
   const active = state.currentTurn.player === player && state.phase === 'board';
   panel(ctx, r, color);
-  badge(ctx, r.x + 20, r.y + 22, 14, player, color);
-  text(ctx, playerLabel(player), r.x + 34, r.y + 27, { size: 16, color });
-  if (active) text(ctx, 'TO MOVE', r.x + r.w - 14, r.y + 27, { size: 11, color: C.pp, align: 'right' });
+  // Header: P1/P2 tag (outer corner), player name, turn marker.
+  const tagX = mirror ? r.x + r.w - 12 - 40 : r.x + 12;
+  playerTag(ctx, tagX, r.y + 10, player);
+  text(ctx, playerLabel(player), mirror ? tagX - 8 : tagX + 48, r.y + 27, { size: 14, color, align: mirror ? 'right' : 'left' });
+  if (active) text(ctx, 'TO MOVE', mirror ? r.x + 14 : r.x + r.w - 14, r.y + 26, { size: 11, color: C.pp, align: mirror ? 'left' : 'right' });
 
   const id = panelCreature(state, ui, player);
-  let y = r.y + 44;
+  let y = r.y + 42;
   if (id) {
     const cr = state.creatures[id];
     const def = state.creatureDefs[cr.defId];
-    rect(ctx, { x: r.x + 12, y, w: 84, h: 84 }, '#0c0c10');
-    strokeRect(ctx, { x: r.x + 12, y, w: 84, h: 84 }, C.faint, 2);
-    drawCreature(ctx, def.id, player, r.x + 54, y + 42, 7);
-    text(ctx, def.name.toUpperCase(), r.x + 106, y + 16, { size: 15, color: C.text });
-    text(ctx, 'HP', r.x + 106, y + 38, { size: 11, color: C.dim });
-    text(ctx, `${cr.hp}/${def.stats.maxHp}`, r.x + r.w - 14, y + 38, { size: 14, color: cr.hp < def.stats.maxHp ? C.danger : C.text, align: 'right' });
-    hpBar(ctx, { x: r.x + 106, y: y + 44, w: r.w - 120, h: 10 }, cr.hp, def.stats.maxHp, color);
-    text(ctx, cr === state.creatures[ui.selected ?? ''] ? 'SELECTED' : '', r.x + 106, y + 74, { size: 11, color: C.pp });
-    y += 106;
+    // Portrait on the outer side, name + HP beside it (mirrored for P2).
+    const portX = mirror ? r.x + r.w - 12 - 84 : r.x + 12;
+    rect(ctx, { x: portX, y, w: 84, h: 84 }, '#0c0a08');
+    drawCreature(ctx, def.id, player, portX + 42, y + 42, 7, { portrait: def.art?.portrait });
+    const nx = mirror ? portX - 10 : portX + 94;
+    const align = mirror ? 'right' : 'left';
+    text(ctx, def.name.toUpperCase(), nx, y + 18, { size: 16, color: C.text, align });
+    text(ctx, `${cr.hp}/${def.stats.maxHp} HP`, nx, y + 42, { size: 14, color: cr.hp < def.stats.maxHp ? C.danger : color, align });
+    const barW = r.w - 120;
+    hpBar(ctx, { x: mirror ? nx - barW : nx, y: y + 50, w: barW, h: 10 }, cr.hp, def.stats.maxHp, color);
+    text(ctx, cr === state.creatures[ui.selected ?? ''] ? 'SELECTED' : '', nx, y + 76, { size: 11, color: C.pp, align });
+    y += 110;
     statLine(ctx, r.x + 14, y, 'MOVEMENT', movementText(def));
     const base = baseBattleStats(def, state.ruleset);
-    statLine(ctx, r.x + 14, (y += 20), 'POWER', String(base.power));
-    statLine(ctx, r.x + 14, (y += 20), 'SPEED', String(base.speed));
-    statLine(ctx, r.x + 14, (y += 20), 'SHIELD', String(base.shield));
+    statLine(ctx, r.x + 14, (y += 21), 'POWER', String(base.power), 'power');
+    statLine(ctx, r.x + 14, (y += 21), 'SPEED', String(base.speed), 'speed');
+    statLine(ctx, r.x + 14, (y += 21), 'SHIELD', String(base.shield), 'shield');
     y += 26;
     if (def.special) {
       text(ctx, 'SPECIAL', r.x + 14, y, { size: 11, color: C.dim });
-      text(ctx, def.special.name.toUpperCase(), r.x + 76, y, { size: 13, color: C.pp });
+      text(ctx, def.special.name.toUpperCase(), r.x + 76, y, { size: 13, color: C.ok });
       y = wrapText(ctx, describeRequirement(def.special.requirement), r.x + 14, y + 18, r.w - 28, { size: 11, color: C.text });
       if (def.special.description) y = wrapText(ctx, def.special.description, r.x + 14, y, r.w - 28, { size: 11, color: C.dim });
     }
@@ -103,17 +140,7 @@ export function drawPlayerPanel(ctx: Ctx, state: GameState, ui: MatchUi, player:
 export function drawBoard(ctx: Ctx, state: GameState, ui: MatchUi, now: number, battleView = isBattleView(state)): void {
   const board = state.board;
   const l = boardLayout(board);
-  panel(ctx, BOARD_AREA);
-
-  for (let y = 0; y < board.height; y++) {
-    for (let x = 0; x < board.width; x++) {
-      const r = cellRect(l, { x, y });
-      rect(ctx, r, (x + y) % 2 === 0 ? C.cellA : C.cellB);
-      ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      ctx.fillRect(r.x, r.y + r.h - 1, r.w, 1);
-      ctx.fillRect(r.x + r.w - 1, r.y, 1, r.h);
-    }
-  }
+  drawBoardSurface(ctx, BOARD_AREA, l, board.width, board.height, 'board');
   for (const b of board.blockedCells) {
     const r = cellRect(l, b);
     rect(ctx, r, '#050506');
@@ -127,26 +154,8 @@ export function drawBoard(ctx: Ctx, state: GameState, ui: MatchUi, now: number, 
     ctx.stroke();
   }
 
-  // Power Points: glyph + owner label (not colour alone).
-  for (const pp of state.powerPoints) {
-    const r = cellRect(l, pp);
-    const col = pp.owner ? playerColor(pp.owner) : C.pp;
-    ctx.fillStyle = pp.owner ? (pp.owner === 'P1' ? 'rgba(242,180,65,0.14)' : 'rgba(179,92,255,0.16)') : 'rgba(57,224,200,0.10)';
-    ctx.fillRect(r.x, r.y, r.w, r.h);
-    strokeRect(ctx, { x: r.x + 2, y: r.y + 2, w: r.w - 4, h: r.h - 4 }, col, 2);
-    const cx = r.x + r.w / 2;
-    const cy = r.y + r.h / 2;
-    ctx.strokeStyle = col;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - r.h / 2 + 6);
-    ctx.lineTo(cx + r.w / 2 - 6, cy);
-    ctx.lineTo(cx, cy + r.h / 2 - 6);
-    ctx.lineTo(cx - r.w / 2 + 6, cy);
-    ctx.closePath();
-    ctx.stroke();
-    text(ctx, pp.owner ? (pp.owner === 'P1' ? '1' : '2') : '-', r.x + r.w - 6, r.y + r.h - 5, { size: 10, color: col, align: 'right' });
-  }
+  // Power Points: lit symbol + owner badge (not colour alone).
+  for (const pp of state.powerPoints) drawPowerPointMarker(ctx, cellRect(l, pp), pp.owner ?? null);
 
   // Legal moves of the selected creature (queried from the core).
   if (state.phase === 'board' && ui.selected) {
@@ -215,6 +224,9 @@ export function drawUnits(ctx: Ctx, state: GameState, ui: MatchUi, l: BoardLayou
   const pulse = Math.floor(now / 150) % 2 === 0;
   for (const u of units) {
     const color = playerColor(u.owner);
+    const portrait = state.creatureDefs[u.defId]?.art?.portrait;
+    // Board tokens fill their tile, as in the reference.
+    const portraitSize = l.cell - 4;
     const f = u.fighter;
     if (f) {
       // Attack reach, wind-up and guard, scaled to the grid.
@@ -248,15 +260,17 @@ export function drawUnits(ctx: Ctx, state: GameState, ui: MatchUi, l: BoardLayou
       for (let k = 3; k >= 1; k--) {
         const back = (travelled * k) / 4;
         ctx.globalAlpha = 0.12 * (4 - k);
-        drawCreature(ctx, u.defId, u.owner, u.cx - (f.dashDir.x / len) * back, u.cy - 3 - (f.dashDir.y / len) * back, u.px, {
+        drawCreature(ctx, u.defId, u.owner, u.cx - (f.dashDir.x / len) * back, u.cy - (portrait ? 0 : 3) - (f.dashDir.y / len) * back, u.px, {
           flip: f.facing < 0,
           flash: color,
+          portrait,
+          portraitSize,
         });
       }
       ctx.restore();
     }
     const flash = f && ui.flash[f.side] > 0 && Math.floor(now / 60) % 2 === 0 ? '#ffffff' : undefined;
-    drawCreature(ctx, u.defId, u.owner, u.cx, u.cy - 3, u.px, { flip: f ? f.facing < 0 : u.owner === 'P2' && !!state.battle, flash });
+    drawCreature(ctx, u.defId, u.owner, u.cx, u.cy - (portrait ? 0 : 3), u.px, { flip: f ? f.facing < 0 : u.owner === 'P2' && !!state.battle, flash, portrait, portraitSize });
     if (f) {
       // Aim reticle: small dot in the player's colour, brighter while the right stick is held.
       const p = aimReticle(u, f, l);

@@ -1,9 +1,13 @@
 // Placeholder creature art: a symmetric pixel monster generated from the
 // creature's content id (so every new creature gets its own look with no art
 // files). This is presentation only — it never touches the game RNG.
-// Real artwork from content `art` fields will replace this later.
+// When the creature's content has `art.portrait` (see art.ts) and the art has
+// loaded, its prototype portrait is drawn instead, in a frame in the owner's
+// colour.
 
 import type { PlayerId } from '../core/types';
+import { portraitSprite } from './art';
+import { drawSprite } from './boardArt';
 import type { Ctx } from './draw';
 import { C, playerColor, playerDark } from './theme';
 
@@ -48,8 +52,51 @@ function pattern(id: string): number[][] {
   return grid;
 }
 
-/** Draws the creature centred at (cx, cy); `px` is the size of one art pixel. */
-export function drawCreature(ctx: Ctx, defId: string, owner: PlayerId, cx: number, cy: number, px: number, opts: { flip?: boolean; flash?: string } = {}): void {
+export interface CreatureDrawOpts {
+  flip?: boolean;
+  flash?: string;
+  /** Content `art.portrait` reference ("monsters:<n>"). */
+  portrait?: string;
+  /** Portrait edge length in px (default 12 × px). */
+  portraitSize?: number;
+}
+
+/**
+ * Draws the creature centred at (cx, cy). `px` sets the size: one art pixel
+ * of the procedural sprite (10 px wide), or a portrait of 12 × px.
+ */
+export function drawCreature(ctx: Ctx, defId: string, owner: PlayerId, cx: number, cy: number, px: number, opts: CreatureDrawOpts = {}): void {
+  const art = portraitSprite(opts.portrait);
+  if (art) {
+    const size = Math.round(opts.portraitSize ?? px * 12);
+    const x0 = Math.round(cx - size / 2);
+    const y0 = Math.round(cy - size / 2);
+    const color = playerColor(owner);
+    ctx.fillStyle = C.edgeDark;
+    ctx.fillRect(x0 - 1, y0 - 1, size + 2, size + 2);
+    ctx.fillStyle = opts.flash ?? color;
+    ctx.fillRect(x0, y0, size, size);
+    const b = size >= 60 ? 3 : 2;
+    ctx.save();
+    if (opts.flip) {
+      ctx.translate(x0 + size / 2, 0);
+      ctx.scale(-1, 1);
+      ctx.translate(-(x0 + size / 2), 0);
+    }
+    drawSprite(ctx, art, x0 + b, y0 + b, size - 2 * b, size - 2 * b);
+    ctx.restore();
+    if (opts.flash) {
+      ctx.fillStyle = opts.flash;
+      ctx.globalAlpha *= 0.55;
+      ctx.fillRect(x0 + b, y0 + b, size - 2 * b, size - 2 * b);
+      ctx.globalAlpha /= 0.55;
+    }
+    // Owner-coloured corner ticks, as on the reference's board tokens.
+    ctx.fillStyle = playerDark(owner);
+    ctx.fillRect(x0 + b, y0 + b, 4, 1);
+    ctx.fillRect(x0 + size - b - 4, y0 + size - b - 1, 4, 1);
+    return;
+  }
   const grid = pattern(defId);
   const x0 = Math.round(cx - (SIZE * px) / 2);
   const y0 = Math.round(cy - (SIZE * px) / 2);

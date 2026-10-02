@@ -6,7 +6,9 @@
   "tags": [
     "test"
   ],
-  "art": {},
+  "art": {
+    "portrait": "monsters:3"
+  },
   "stats": {
     "maxHp": 20,
     "movement": 3

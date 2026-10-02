@@ -8,7 +8,10 @@ import { loadContentPack } from './content/loader';
 import { InputManager } from './input/InputManager';
 import { bundledPackFiles } from './platform/web/bundledContent';
 import { browserStorage } from './platform/web/storage';
+import { loadArt } from './rendering/art';
 import { VIEW_H, VIEW_W } from './rendering/theme';
+
+void loadArt();
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d', { alpha: false })!;

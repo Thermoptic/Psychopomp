@@ -9,6 +9,7 @@ import { bundledPackFiles } from '../platform/web/bundledContent';
 import { browserStorage } from '../platform/web/storage';
 import { h, pickTextFile } from './dom';
 import { mountItemSection, type MountedSection } from './itemSection';
+import { loadArt } from '../rendering/art';
 import { ItemEditor } from './model';
 import { monsterForm, monsterPreview } from './monsterSection';
 import { powerupForm, powerupPreview } from './powerupSection';
@@ -110,5 +111,7 @@ app.replaceChildren(
 );
 if (lib.loadWarnings.length) console.warn(lib.loadWarnings);
 show(location.hash.slice(1) || 'monsters');
+// Prototype portraits load in the background; redraw the section once they are in.
+void loadArt().then(() => show(location.hash.slice(1) || 'monsters'));
 // Address-bar links like /editor/#powerups switch section too.
 window.addEventListener('hashchange', () => show(location.hash.slice(1)));

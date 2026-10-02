@@ -15,10 +15,10 @@ export function menuItemRect(i: number): Rect {
 
 export function drawMenu(ctx: Ctx, focus: number, now: number): void {
   const t = now / 1000;
-  drawCreature(ctx, 'glubber', 'P1', 220, 250 + Math.sin(t * 2) * 6, 12);
-  drawCreature(ctx, 'shroud', 'P2', 740, 250 + Math.cos(t * 2) * 6, 12, { flip: true });
+  drawCreature(ctx, 'glubber', 'P1', 200, 270 + Math.sin(t * 2) * 6, 12, { portrait: 'monsters:0' });
+  drawCreature(ctx, 'shroud', 'P2', 760, 270 + Math.cos(t * 2) * 6, 12, { flip: true, portrait: 'monsters:3' });
   text(ctx, 'PSYCHOPOMP', 483, 163, { size: 64, color: '#3a0d0a', align: 'center' });
-  text(ctx, 'PSYCHOPOMP', 480, 160, { size: 64, color: C.danger, align: 'center' });
+  text(ctx, 'PSYCHOPOMP', 480, 160, { size: 64, color: C.p1, align: 'center' });
   text(ctx, 'BUILD YOUR MONSTER  ·  THEN FIGHT WITH WHAT YOU BUILT', 480, 200, { size: 13, color: C.dim, align: 'center' });
   MENU_ITEMS.forEach((label, i) => {
     button(ctx, menuItemRect(i), label, { focused: i === focus, size: 16 });

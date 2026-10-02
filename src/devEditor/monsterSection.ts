@@ -311,7 +311,7 @@ export function monsterPreview(ed: ItemEditor<'monster'>): HTMLElement {
   if (ctx) {
     ctx.imageSmoothingEnabled = false;
     // Placeholder art is generated from the monster id (no art files yet).
-    drawCreature(ctx, d.id || '?', d.player ?? 'P1', 55, 55, 9);
+    drawCreature(ctx, d.id || '?', d.player ?? 'P1', 55, 55, 9, { portrait: d.art?.portrait });
   }
   const stats = baseBattleStats(d, rules);
   const pu = d.powerupId ? ed.lib.get('powerup', d.powerupId)?.item : undefined;

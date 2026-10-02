@@ -23,7 +23,7 @@ import { aimToward, emptyQueue, queuePresses, toFighterInput } from '../input/co
 import { ARENA_EXPAND_MS, drawArena, drawCombatHud, drawCountdown } from '../rendering/arenaView';
 import { combatHint, drawPrepPanel, drawResult, sideOf } from '../rendering/battleView';
 import { drawBoard, drawBoardScreen, drawHeader, drawMessageBar } from '../rendering/boardView';
-import { rect, scanlines, type Ctx } from '../rendering/draw';
+import { backdrop, scanlines, type Ctx } from '../rendering/draw';
 import { cellAtPoint, inRect, prepItemAt, prepPanelLayout, type PrepItem } from '../rendering/layout';
 import { prepButton } from '../rendering/prepModel';
 import {
@@ -575,7 +575,7 @@ export class App {
   // --- render --------------------------------------------------------------------
 
   render(ctx: Ctx, now: number): void {
-    rect(ctx, { x: 0, y: 0, w: VIEW_W, h: VIEW_H }, C.bg);
+    backdrop(ctx, VIEW_W, VIEW_H, now);
     switch (this.screen) {
       case 'menu':
         drawMenu(ctx, this.menuFocus, now);
@@ -601,9 +601,9 @@ export class App {
       drawBoardScreen(ctx, s, ui, now, s.phase === 'board' ? this.boardHint() : '');
       if (s.phase === 'gameOver') drawGameOver(ctx, s);
     } else {
-      drawHeader(ctx, s);
       if (b.stage === 'dice') {
         // Preparation: both panels live, combatants on the strategic board.
+        drawHeader(ctx, s);
         drawPrepPanel(ctx, s, ui, 'P1');
         drawPrepPanel(ctx, s, ui, 'P2');
         drawBoard(ctx, s, ui, now);
