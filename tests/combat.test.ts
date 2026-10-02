@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyCommand, computeDamage, inAttackRange, type GameState } from '../src/core';
-import { customMatch, fightToResult, ok, prepareBothAndBegin, testCreature, tick } from './helpers';
+import { basePack, customMatch, fightToResult, ok, prepareBothAndBegin, testCreature, tick } from './helpers';
 
 const MOVE_RIGHT = { dx: 100, dy: 0, attack: false, block: false };
 const ATTACK = { dx: 0, dy: 0, attack: true, block: false };
@@ -24,12 +24,43 @@ function waitWindup(s: GameState): GameState {
 }
 
 describe('combat formulas', () => {
-  const rules = { minDamage: 1 } as never;
-  it('damage = power - shield', () => {
-    expect(computeDamage({ power: 12, shield: 0, speed: 0, block: 0, dash: 0 }, { power: 0, shield: 5, speed: 0, block: 0, dash: 0 }, rules)).toBe(7);
+  const rules = { minDamage: 1, shieldPercentPerPoint: 5, shieldMaxPercent: 80 } as never;
+  const hit = (power: number, shield: number) =>
+    computeDamage({ power, shield: 0, speed: 0, block: 0, dash: 0 }, { power: 0, shield, speed: 0, block: 0, dash: 0 }, rules);
+
+  it('Shield takes 5 % off per point: Shield 6 = 30 % less damage', () => {
+    expect(hit(10, 0)).toBe(10);
+    expect(hit(10, 6)).toBe(7);
+    expect(hit(10, 10)).toBe(5);
+    expect(hit(20, 6)).toBe(14);
   });
-  it('shield never reduces damage below the minimum', () => {
-    expect(computeDamage({ power: 3, shield: 0, speed: 0, block: 0, dash: 0 }, { power: 0, shield: 50, speed: 0, block: 0, dash: 0 }, rules)).toBe(1);
+
+  it('matches the agreed damage table (rounded to the nearest whole point)', () => {
+    const shields = [0, 2, 4, 6, 8, 10];
+    const table: Record<number, number[]> = {
+      4: [4, 4, 3, 3, 2, 2],
+      6: [6, 5, 5, 4, 4, 3],
+      8: [8, 7, 6, 6, 5, 4],
+      10: [10, 9, 8, 7, 6, 5],
+      12: [12, 11, 10, 8, 7, 6],
+      16: [16, 14, 13, 11, 10, 8],
+      20: [20, 18, 16, 14, 12, 10],
+    };
+    for (const [power, row] of Object.entries(table)) expect(shields.map((s) => hit(Number(power), s))).toEqual(row);
+    // The examples discussed: Power 10 vs Shield 5, Power 8 vs Shield 8, Power 6 vs Shield 5.
+    expect([hit(10, 5), hit(8, 8), hit(6, 5)]).toEqual([8, 5, 5]);
+  });
+
+  it('Shield never takes off more than 80 %, and every hit does at least 1', () => {
+    expect(hit(10, 16)).toBe(2);
+    expect(hit(10, 50)).toBe(2);
+    expect(hit(3, 50)).toBe(1);
+    expect(hit(0, 0)).toBe(1);
+  });
+
+  it('the bundled ruleset uses 5 % per point and an 80 % cap', () => {
+    const c = basePack().ruleset.combat;
+    expect([c.shieldPercentPerPoint, c.shieldMaxPercent, c.minDamage]).toEqual([5, 80, 1]);
   });
 });
 
@@ -45,12 +76,12 @@ describe('combat flow', () => {
     return prepareBothAndBegin(ok(s, { type: 'MOVE_CREATURE', creatureId: 'P1-a-1', to: { x: 1, y: 0 } }));
   }
 
-  it('a hit deals power minus shield', () => {
+  it('a hit deals power reduced by shield (5 % per point)', () => {
     let s = closeIn(duel({ power: 10 }, { shield: 3 }));
     s = tick(s, ATTACK);
     s = waitWindup(s);
-    // (10+1) - (3+1) = 7
-    expect(s.battle!.combat!.fighters.defender.hp).toBe(20 - 7);
+    // Power 10+1 = 11 vs Shield 3+1 = 4 -> 20 % off: 8.8 -> 9
+    expect(s.battle!.combat!.fighters.defender.hp).toBe(20 - 9);
   });
 
   it('an attack out of range misses', () => {

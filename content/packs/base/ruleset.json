@@ -29,6 +29,8 @@
     "guardTicks": 24,
     "blockChargeDivisor": 2,
     "minDamage": 1,
+    "shieldPercentPerPoint": 5,
+    "shieldMaxPercent": 80,
     "timeoutTicks": 5400,
     "countdownTicks": 180,
     "attackConeCos": 50,

@@ -86,9 +86,16 @@ export function computeBuild(def: CreatureDef, prep: DicePrep, rules: Ruleset): 
   };
 }
 
-/** damage_taken = max(minDamage, incoming_power - effective_shield) */
+/**
+ * Melee damage: Shield absorbs a share of the hit.
+ *   reduction % = min(shieldMaxPercent, shield × shieldPercentPerPoint)
+ *   damage      = max(minDamage, round(power × (100 − reduction %) / 100))
+ * Integer maths (rounds half up), so combat stays deterministic.
+ */
 export function computeDamage(attacker: BattleStats, defender: BattleStats, rules: CombatRules): number {
-  return Math.max(rules.minDamage, attacker.power - defender.shield);
+  const reduction = Math.min(rules.shieldMaxPercent, Math.max(0, defender.shield) * rules.shieldPercentPerPoint);
+  const power = Math.max(0, attacker.power);
+  return Math.max(rules.minDamage, Math.floor((power * (100 - reduction) + 50) / 100));
 }
 
 /** Arena units per tick. */

@@ -236,6 +236,10 @@ export interface CombatRules {
   /** Guard charges = floor(block / blockChargeDivisor). */
   blockChargeDivisor: number;
   minDamage: number;
+  /** Melee damage taken shrinks by this percent per Shield point (5 = Shield 6 takes 30 % off). */
+  shieldPercentPerPoint: number;
+  /** Shield never takes off more than this percent of a hit. */
+  shieldMaxPercent: number;
   /** 0 = no timeout. On timeout the attacker withdraws. */
   timeoutTicks: number;
   /** Ticks of the 3-2-1 countdown between "both READY" and combat (0 = start at once). */

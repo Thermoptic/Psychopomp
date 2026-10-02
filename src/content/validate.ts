@@ -244,6 +244,7 @@ export function validateRuleset(raw: unknown): ValidationResult {
       intIn(errors, `ruleset.combat.${k}`, c[k], 1, 100000);
     }
     for (const k of ['cooldownPerSpeed', 'minDamage', 'timeoutTicks', 'countdownTicks']) intIn(errors, `ruleset.combat.${k}`, c[k], 0, 1000000);
+    for (const k of ['shieldPercentPerPoint', 'shieldMaxPercent']) intIn(errors, `ruleset.combat.${k}`, c[k], 0, 100);
     intIn(errors, 'ruleset.combat.attackConeCos', c.attackConeCos, -100, 100);
     if (!isObj(c.dash)) errors.push('ruleset.combat: missing "dash"');
     else {
