@@ -21,34 +21,34 @@ const matchFrom = (lib: ContentLibrary) => {
 };
 
 describe('editable board lineup', () => {
-  it('starts as the bundled lineup: 3 Glubber (P1) and 3 Shroud (P2)', () => {
+  it('starts as the bundled lineup: one Glubber (P1, E1) and one Shroud (P2, E9)', () => {
     const { lib } = fresh();
     expect(lib.lineupIsCustom()).toBe(false);
-    expect(cells(lib, 'glubber')).toEqual(['P1@0,2', 'P1@0,4', 'P1@0,6']);
-    expect(cells(lib, 'shroud')).toEqual(['P2@8,2', 'P2@8,4', 'P2@8,6']);
+    expect(cells(lib, 'glubber')).toEqual(['P1@0,4']);
+    expect(cells(lib, 'shroud')).toEqual(['P2@8,4']);
+    expect(Object.keys(matchFrom(lib).creatures).sort()).toEqual(['P1-glubber-1', 'P2-shroud-1']);
   });
 
   it('moving, removing and adding pieces is saved and used by new matches', () => {
     const { lib, storage } = fresh();
     const list = lib.lineup();
-    // Move a Glubber from A1-ish (0,2) to C1 (0,2 -> 2,0), remove one Shroud, add a Shroud as P1.
-    const i = list.findIndex((p) => p.creature === 'glubber' && p.y === 2);
+    // Move the Glubber from E1 (0,4) to A3 (2,0), add a second Glubber on G1 and a Shroud for P1 on D4.
+    const i = list.findIndex((p) => p.creature === 'glubber');
     list[i] = { ...list[i], x: 2, y: 0 };
-    const next = list.filter((p) => !(p.creature === 'shroud' && p.y === 6));
-    next.push({ creature: 'shroud', owner: 'P1', x: 3, y: 3 });
-    lib.setLineup(next);
+    list.push({ creature: 'glubber', owner: 'P1', x: 0, y: 6 }, { creature: 'shroud', owner: 'P1', x: 3, y: 3 });
+    lib.setLineup(list);
     expect(lib.lineupIsCustom()).toBe(true);
 
     const reloaded = new ContentLibrary(basePack(), storage);
-    expect(cells(reloaded, 'glubber')).toEqual(['P1@0,4', 'P1@0,6', 'P1@2,0']);
-    expect(cells(reloaded, 'shroud')).toEqual(['P1@3,3', 'P2@8,2', 'P2@8,4']);
+    expect(cells(reloaded, 'glubber')).toEqual(['P1@0,6', 'P1@2,0']);
+    expect(cells(reloaded, 'shroud')).toEqual(['P1@3,3', 'P2@8,4']);
 
     const s = matchFrom(reloaded);
     const on = (x: number, y: number) => Object.values(s.creatures).find((c) => c.x === x && c.y === y);
     expect(on(2, 0)).toMatchObject({ defId: 'glubber', owner: 'P1' });
     expect(on(3, 3)).toMatchObject({ defId: 'shroud', owner: 'P1' });
-    expect(on(8, 6)).toBeUndefined();
-    expect(Object.keys(s.creatures)).toHaveLength(6);
+    expect(on(0, 4)).toBeUndefined();
+    expect(Object.keys(s.creatures)).toHaveLength(4);
   });
 
   it('a monster can be taken off the board completely, and the bundled lineup restored', () => {
@@ -58,7 +58,33 @@ describe('editable board lineup', () => {
     expect(Object.values(matchFrom(lib).creatures).every((c) => c.defId === 'shroud')).toBe(true);
     lib.resetLineup();
     expect(lib.lineupIsCustom()).toBe(false);
-    expect(cells(lib, 'glubber')).toHaveLength(3);
+    expect(cells(lib, 'glubber')).toHaveLength(1);
+  });
+
+  it('bundled monsters can be deleted (and leave the board) and restored', () => {
+    const { lib, storage } = fresh();
+    expect(lib.removeItem('monster', 'glubber').ok).toBe(true);
+    const after = new ContentLibrary(basePack(), storage);
+    expect(after.creatures().map((c) => c.id)).toEqual(['shroud']);
+    expect(after.deletedBase('monster').map((c) => c.id)).toEqual(['glubber']);
+    expect(cells(after, 'glubber')).toEqual([]);
+    expect(Object.keys(matchFrom(after).creatures)).toEqual(['P2-shroud-1']);
+    // Its id stays reserved until it is restored.
+    expect(after.validateMonster({ ...after.newMonster(), id: 'glubber', name: 'X' }, null).join()).toMatch(/deleted bundled/);
+    after.restoreItem('monster', 'glubber');
+    expect(after.creatures().map((c) => c.id)).toEqual(['glubber', 'shroud']);
+    expect(cells(after, 'glubber')).toEqual(['P1@0,4']);
+  });
+
+  it('deleting a modified bundled monster removes the local edits too', () => {
+    const { lib } = fresh();
+    const g = lib.get('monster', 'glubber')!.item;
+    expect(lib.saveItem('monster', { ...g, name: 'Big Glubber' }, 'glubber').ok).toBe(true);
+    expect(lib.get('monster', 'glubber')!.origin).toBe('modified');
+    expect(lib.removeItem('monster', 'glubber').ok).toBe(true);
+    expect(lib.get('monster', 'glubber')).toBeUndefined();
+    lib.restoreItem('monster', 'glubber');
+    expect(lib.get('monster', 'glubber')).toMatchObject({ origin: 'base', item: { name: 'Glubber' } });
   });
 
   it('a deleted custom monster leaves the board; a renamed one keeps its pieces', () => {

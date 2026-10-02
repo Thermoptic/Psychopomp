@@ -102,11 +102,9 @@ export class ItemEditor<K extends ContentKind> {
       this.revert();
       return { ok: true, restored: false };
     }
-    if (this.origin() === 'base') return { ok: false, error: 'Base content cannot be deleted' };
     const id = this.originalId;
     const r = this.lib.removeItem(this.kind, id);
     if (!r.ok) return r;
-    if (this.select(id)) return { ok: true, restored: true };
     const first = this.list()[0];
     if (first) this.select(first.item.id);
     else this.newItem();

@@ -36,7 +36,8 @@ export function mountItemSection<K extends ContentKind>(root: HTMLElement, spec:
     rebuild();
   }, 'primary');
   const deleteBtn = btn('DELETE', () => {
-    if (ed.originalId && !confirm(ed.origin() === 'modified' ? 'Restore the bundled version?' : `Delete "${ed.draft.name}"?`)) return;
+    const bundled = ed.origin() === 'base' || ed.origin() === 'modified';
+    if (ed.originalId && !confirm(bundled ? `Delete "${ed.draft.name}"? It is bundled with the game: RESTORE (below the list) brings it back.` : `Delete "${ed.draft.name}"?`)) return;
     const r = ed.remove();
     say(r.ok ? (r.restored ? 'Bundled version restored' : 'Deleted') : r.error, r.ok ? 'ok' : 'dirty');
     rebuild();
@@ -89,6 +90,27 @@ export function mountItemSection<K extends ContentKind>(root: HTMLElement, spec:
         ),
       ),
       ...(ed.originalId === null ? [h('div', { class: 'note', text: `+ unsaved: ${ed.draft.name}` })] : []),
+      ...ed.lib.deletedBase(ed.kind).map((b) =>
+        h(
+          'div',
+          { class: 'note deleted' },
+          h('span', { text: `deleted: ${b.name}  ` }),
+          h('button', {
+            type: 'button',
+            class: 'btn',
+            text: 'RESTORE',
+            on: {
+              click: () => {
+                if (!confirmDiscard()) return;
+                ed.lib.restoreItem(ed.kind, b.id);
+                ed.select(b.id);
+                say(`${b.name} restored`, 'ok');
+                rebuild();
+              },
+            },
+          }),
+        ),
+      ),
     );
   }
 
@@ -98,7 +120,6 @@ export function mountItemSection<K extends ContentKind>(root: HTMLElement, spec:
     const errors = ed.errors();
     errorsEl.replaceChildren(errors.length ? h('ul', { class: 'errors' }, ...errors.map((e) => h('li', { text: e }))) : h('div', { class: 'valid', text: 'VALID' }));
     saveBtn.disabled = errors.length > 0 || !ed.dirty;
-    deleteBtn.disabled = ed.originalId !== null && ed.origin() === 'base';
     statusEl.className = `status ${message?.cls ?? (ed.dirty ? 'dirty' : '')}`;
     statusEl.textContent = message?.text ?? (ed.dirty ? 'UNSAVED CHANGES' : 'SAVED');
   }

@@ -67,7 +67,7 @@ describe('Monster content', () => {
     const m = { ...lib.newMonster(), player: 'P2' as const, position: 'E5' };
     expect(lib.validateMonster(m, null)).toEqual([]);
     expect(lib.validateMonster({ ...m, position: 'J1' }, null).join()).toMatch(/not a board cell/);
-    expect(lib.validateMonster({ ...m, position: 'C1' }, null).join()).toMatch(/board lineup/); // a Glubber starts there
+    expect(lib.validateMonster({ ...m, position: 'E1' }, null).join()).toMatch(/board lineup/); // the Glubber starts there
     expect(lib.validateMonster({ ...m, player: 'P3' as never }, null).join()).toMatch(/player/);
   });
 
@@ -77,7 +77,7 @@ describe('Monster content', () => {
     const pack = lib.pack();
     const s = createMatch({ ruleset: pack.ruleset, board: pack.boards[0], creatures: pack.creatures, powerups: pack.powerups, seed: 1 });
     expect(s.creatures['P2-grim-1']).toMatchObject({ owner: 'P2', x: 4, y: 4, hp: 20 });
-    expect(Object.keys(s.creatures)).toHaveLength(7); // 6 board lineup + 1 placed monster
+    expect(Object.keys(s.creatures)).toHaveLength(3); // 2 board lineup (1 Glubber, 1 Shroud) + 1 placed monster
   });
 
   it('modifiers default to 0 and take positive and negative values that change battle stats', () => {

@@ -34,6 +34,8 @@ export interface SaveData {
    * board's lineup plus monsters' own positions.
    */
   lineup?: Placement[];
+  /** Bundled (base) items deleted in the developer editor, by id; RESTORE brings them back. */
+  deleted?: { monsters?: string[]; powerups?: string[] };
 }
 
 export type ParseResult<T> = { ok: true; value: T; migratedFrom: number | null; warnings: string[] } | { ok: false; errors: string[] };
@@ -161,6 +163,14 @@ export function parseSave(input: string | unknown, ruleset: Ruleset): ParseResul
     },
     'powerup',
   );
+  // Deleted bundled items: lists of ids.
+  let deleted: SaveData['deleted'];
+  if (isObj(raw.deleted)) {
+    const ids = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : undefined);
+    const m = ids(raw.deleted.monsters);
+    const p = ids(raw.deleted.powerups);
+    if (m?.length || p?.length) deleted = { ...(m?.length ? { monsters: m } : {}), ...(p?.length ? { powerups: p } : {}) };
+  }
   // Edited lineup: keep well-formed pieces (board bounds are checked by the library).
   let lineup: Placement[] | undefined;
   if (Array.isArray(raw.lineup)) {
@@ -174,7 +184,7 @@ export function parseSave(input: string | unknown, ruleset: Ruleset): ParseResul
   }
   return {
     ok: true,
-    value: { saveVersion: SAVE_VERSION, contentVersion: Number((raw as Obj).contentVersion ?? 1), monsters, powerups, ...(lineup ? { lineup } : {}) },
+    value: { saveVersion: SAVE_VERSION, contentVersion: Number((raw as Obj).contentVersion ?? 1), monsters, powerups, ...(lineup ? { lineup } : {}), ...(deleted ? { deleted } : {}) },
     migratedFrom: v < SAVE_VERSION ? v : null,
     warnings,
   };

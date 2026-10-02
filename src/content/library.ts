@@ -116,6 +116,24 @@ export class ContentLibrary {
     return (kind === 'monster' ? this.base.creatures : this.base.powerups) as ItemOf<K>[];
   }
 
+  /** Ids of bundled items deleted locally. */
+  private deletedIds(kind: ContentKind): Set<string> {
+    return new Set(this.save.deleted?.[COLLECTION[kind]] ?? []);
+  }
+
+  /** Bundled items deleted locally (offered for RESTORE in the editor). */
+  deletedBase<K extends ContentKind>(kind: K): ItemOf<K>[] {
+    const del = this.deletedIds(kind);
+    return this.baseItems(kind).filter((b) => del.has(b.id));
+  }
+
+  /** Brings a deleted bundled item back (its bundled version). */
+  restoreItem(kind: ContentKind, id: string): void {
+    const list = [...this.deletedIds(kind)].filter((x) => x !== id);
+    this.save = { ...this.save, deleted: { ...this.save.deleted, [COLLECTION[kind]]: list } };
+    this.persist();
+  }
+
   private savedItems<K extends ContentKind>(kind: K): ItemOf<K>[] {
     return this.save[COLLECTION[kind]] as ItemOf<K>[];
   }
@@ -123,9 +141,10 @@ export class ContentLibrary {
   /** All items of a kind as the game sees them (base order first, then custom). */
   entries<K extends ContentKind>(kind: K): Entry<ItemOf<K>>[] {
     const saved = new Map(this.savedItems(kind).map((m) => [m.id, m]));
-    const base = this.baseItems(kind);
+    const del = this.deletedIds(kind);
+    const base = this.baseItems(kind).filter((b) => !del.has(b.id));
     const out: Entry<ItemOf<K>>[] = base.map((b) => (saved.has(b.id) ? { item: saved.get(b.id)!, origin: 'modified' as const } : { item: b, origin: 'base' as const }));
-    const baseIds = new Set(base.map((b) => b.id));
+    const baseIds = new Set(this.baseItems(kind).map((b) => b.id));
     for (const m of this.savedItems(kind)) if (!baseIds.has(m.id)) out.push({ item: m, origin: 'custom' });
     return out;
   }
@@ -216,6 +235,7 @@ export class ContentLibrary {
     if (!ID_RE.test(id)) errors.push('ID: use a-z, 0-9 and _ only (not empty)');
     if (!item.name || !String(item.name).trim()) errors.push('NAME: must not be empty');
     if (this.entries(kind).some((e) => e.item.id === id && e.item.id !== originalId)) errors.push(`ID: "${id}" is already used`);
+    if (this.deletedIds(kind).has(id)) errors.push(`ID: "${id}" belongs to a deleted bundled item (restore it or pick another id)`);
     return errors;
   }
 
@@ -276,17 +296,23 @@ export class ContentLibrary {
     return { ok: true, item: clean };
   }
 
-  /** Removes the local version: deletes a custom item, restores a modified base item. */
+  /**
+   * Deletes an item: a custom one is removed, a bundled one (modified or not)
+   * is hidden locally and can be brought back with restoreItem(). A deleted
+   * monster leaves the board too.
+   */
   removeItem(kind: ContentKind, id: string): { ok: true } | { ok: false; error: string } {
-    if (kind === 'powerup' && !this.isBase('powerup', id)) {
+    if (!this.get(kind, id)) return { ok: false, error: 'No such item' };
+    if (kind === 'powerup') {
       const users = this.monstersUsing(id);
       if (users.length) return { ok: false, error: `Used by ${users.map((m) => m.name).join(', ')}` };
     }
-    const list = this.savedItems(kind);
-    if (!list.some((m) => m.id === id)) return { ok: false, error: 'Nothing saved locally for this item' };
-    this.save = { ...this.save, [COLLECTION[kind]]: list.filter((m) => m.id !== id) };
-    // A deleted custom monster leaves the board too.
-    if (kind === 'monster' && this.save.lineup && !this.isBase('monster', id)) this.save = { ...this.save, lineup: this.save.lineup.filter((p) => p.creature !== id) };
+    this.save = { ...this.save, [COLLECTION[kind]]: this.savedItems(kind).filter((m) => m.id !== id) };
+    if (this.isBase(kind, id)) {
+      const del = [...this.deletedIds(kind), id];
+      this.save = { ...this.save, deleted: { ...this.save.deleted, [COLLECTION[kind]]: del } };
+    }
+    if (kind === 'monster' && this.save.lineup) this.save = { ...this.save, lineup: this.save.lineup.filter((p) => p.creature !== id) };
     this.persist();
     return { ok: true };
   }

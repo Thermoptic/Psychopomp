@@ -14,11 +14,7 @@
     { "x": 4, "y": 8 }
   ],
   "placements": [
-    { "creature": "glubber", "owner": "P1", "x": 0, "y": 2 },
     { "creature": "glubber", "owner": "P1", "x": 0, "y": 4 },
-    { "creature": "glubber", "owner": "P1", "x": 0, "y": 6 },
-    { "creature": "shroud", "owner": "P2", "x": 8, "y": 2 },
-    { "creature": "shroud", "owner": "P2", "x": 8, "y": 4 },
-    { "creature": "shroud", "owner": "P2", "x": 8, "y": 6 }
+    { "creature": "shroud", "owner": "P2", "x": 8, "y": 4 }
   ]
 }

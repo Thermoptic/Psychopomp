@@ -41,9 +41,8 @@ describe('board: movement', () => {
     const id = 'P1-glubber-1';
     for (const to of [
       { x: 8, y: 8 }, // too far
-      { x: -1, y: 2 }, // off board
-      { x: 0, y: 4 }, // own creature
-      { x: 0, y: 2 }, // own cell (zero steps)
+      { x: -1, y: 4 }, // off board
+      { x: 0, y: 4 }, // own cell (zero steps)
     ]) {
       const r = applyCommand(s, { type: 'MOVE_CREATURE', creatureId: id, to });
       expect(r.error).toBeDefined();
@@ -119,15 +118,16 @@ describe('board: turns and Power Points', () => {
 
   it('captures a Power Point by moving onto it and keeps it after leaving', () => {
     let s = newMatch();
-    s = ok(s, { type: 'MOVE_CREATURE', creatureId: 'P1-glubber-1', to: { x: 3, y: 2 } });
-    s = ok(s, { type: 'MOVE_CREATURE', creatureId: 'P2-shroud-1', to: { x: 7, y: 2 } });
-    const r = applyCommand(s, { type: 'MOVE_CREATURE', creatureId: 'P1-glubber-1', to: { x: 4, y: 0 } });
-    expect(r.events).toContainEqual({ type: 'POWER_POINT_CAPTURED', x: 4, y: 0, owner: 'P1' });
+    // Bundled lineup: Glubber (P1) on E1 (0,4), Shroud (P2) on E9 (8,4); the centre E5 is a Power Point.
+    s = ok(s, { type: 'MOVE_CREATURE', creatureId: 'P1-glubber-1', to: { x: 3, y: 4 } });
+    s = ok(s, { type: 'MOVE_CREATURE', creatureId: 'P2-shroud-1', to: { x: 7, y: 4 } });
+    const r = applyCommand(s, { type: 'MOVE_CREATURE', creatureId: 'P1-glubber-1', to: { x: 4, y: 4 } });
+    expect(r.events).toContainEqual({ type: 'POWER_POINT_CAPTURED', x: 4, y: 4, owner: 'P1' });
     s = r.state;
-    expect(s.powerPoints.find((p) => p.x === 4 && p.y === 0)?.owner).toBe('P1');
-    s = ok(s, { type: 'MOVE_CREATURE', creatureId: 'P2-shroud-1', to: { x: 6, y: 2 } });
-    s = ok(s, { type: 'MOVE_CREATURE', creatureId: 'P1-glubber-1', to: { x: 4, y: 1 } });
-    expect(s.powerPoints.find((p) => p.x === 4 && p.y === 0)?.owner).toBe('P1');
+    expect(s.powerPoints.find((p) => p.x === 4 && p.y === 4)?.owner).toBe('P1');
+    s = ok(s, { type: 'MOVE_CREATURE', creatureId: 'P2-shroud-1', to: { x: 7, y: 3 } });
+    s = ok(s, { type: 'MOVE_CREATURE', creatureId: 'P1-glubber-1', to: { x: 4, y: 5 } });
+    expect(s.powerPoints.find((p) => p.x === 4 && p.y === 4)?.owner).toBe('P1');
   });
 
   it('PASS_TURN is only legal with no legal moves', () => {
