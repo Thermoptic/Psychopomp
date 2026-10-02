@@ -8,7 +8,7 @@
 // in the editor — the save format already keeps collections by name.
 
 import { cellCode, cellInBoard, parseCell } from '../core/board/cells';
-import { DEFAULT_CATEGORIES, type CreatureDef, type MeleeSettings, type PowerupDef, type RangedSettings, type Ruleset } from '../core/types';
+import { DEFAULT_CATEGORIES, type CreatureDef, type MeleeSettings, type Placement, type PowerupDef, type RangedSettings, type Ruleset } from '../core/types';
 import type { ContentPack } from './loader';
 import {
   emptySave,
@@ -142,9 +142,61 @@ export class ContentLibrary {
     return this.entries('powerup').map((e) => e.item);
   }
 
-  /** The content pack with saved content merged in — what a new match uses. */
+  /**
+   * The content pack with saved content merged in — what a new match uses.
+   * The board carries the full lineup (see lineup()), so monsters' own
+   * positions are already in it and are left out of the creatures.
+   */
   pack(): ContentPack {
-    return { ...this.base, creatures: this.creatures(), powerups: this.powerups() };
+    const [board, ...rest] = this.base.boards;
+    const creatures = this.creatures().map((c) => {
+      const copy = { ...c };
+      delete copy.position;
+      return copy;
+    });
+    return { ...this.base, boards: [{ ...board, placements: this.lineup() }, ...rest], creatures, powerups: this.powerups() };
+  }
+
+  // --- board lineup --------------------------------------------------------------------
+
+  /**
+   * Every creature on the board at the start of a match: the lineup edited in
+   * the developer editor, or (until it is edited) the bundled board's lineup
+   * plus each monster's own player + position. Pieces of monsters that no
+   * longer exist, or outside the board, are left out.
+   */
+  lineup(): Placement[] {
+    const ids = new Set(this.creatures().map((c) => c.id));
+    const inBoard = (p: Placement) => cellInBoard(p, this.board);
+    if (this.save.lineup) return this.save.lineup.filter((p) => ids.has(p.creature) && inBoard(p)).map((p) => ({ ...p }));
+    const list: Placement[] = this.board.placements.map((p) => ({ ...p }));
+    const used = new Set(list.map((p) => `${p.x},${p.y}`));
+    for (const m of this.creatures()) {
+      const c = m.player && m.position ? parseCell(m.position) : null;
+      if (!c || !cellInBoard(c, this.board) || used.has(`${c.x},${c.y}`)) continue;
+      used.add(`${c.x},${c.y}`);
+      list.push({ creature: m.id, owner: m.player!, x: c.x, y: c.y });
+    }
+    return list.filter((p) => ids.has(p.creature));
+  }
+
+  /** True once the lineup has been edited (saved locally). */
+  lineupIsCustom(): boolean {
+    return !!this.save.lineup;
+  }
+
+  /** Saves an edited lineup (the whole board). */
+  setLineup(list: Placement[]): void {
+    this.save = { ...this.save, lineup: list.map((p) => ({ creature: p.creature, owner: p.owner, x: p.x, y: p.y })) };
+    this.persist();
+  }
+
+  /** Back to the bundled board's lineup. */
+  resetLineup(): void {
+    const next: SaveData = { ...this.save };
+    delete next.lineup;
+    this.save = next;
+    this.persist();
   }
 
   isBase(kind: ContentKind, id: string): boolean {
@@ -173,7 +225,7 @@ export class ContentLibrary {
     errors.push(...v.errors.map((e) => e.replace(/^creature "[^"]*"[.:]?\s*/, '')));
     // Position must be free: not used by the board lineup or another placed monster.
     const cell = def.position ? parseCell(def.position) : null;
-    if (cell && def.player && cellInBoard(cell, this.board)) {
+    if (cell && def.player && cellInBoard(cell, this.board) && !this.save.lineup) {
       if (this.board.placements.some((p) => p.x === cell.x && p.y === cell.y)) errors.push(`POSITION: ${cellCode(cell)} is taken by the board lineup`);
       const other = this.creatures().find((m) => m.id !== originalId && m.id !== def.id && m.player && m.position && parseCell(m.position)?.x === cell.x && parseCell(m.position)?.y === cell.y);
       if (other) errors.push(`POSITION: ${cellCode(cell)} is taken by ${other.name}`);
@@ -205,6 +257,17 @@ export class ContentLibrary {
     const errors = this.validate(kind, item, originalId);
     if (errors.length) return { ok: false, errors };
     const clean = structuredClone(item);
+    if (kind === 'monster' && this.save.lineup) {
+      // With an edited lineup the board is the single source of placements:
+      // a renamed monster keeps its pieces, an imported position joins the board.
+      const m = clean as CreatureDef;
+      let lineup = this.save.lineup;
+      if (originalId && originalId !== m.id && !this.isBase('monster', originalId)) lineup = lineup.map((p) => (p.creature === originalId ? { ...p, creature: m.id } : p));
+      const c = m.player && m.position ? parseCell(m.position) : null;
+      if (c && cellInBoard(c, this.board) && !lineup.some((p) => p.x === c.x && p.y === c.y)) lineup = [...lineup, { creature: m.id, owner: m.player!, x: c.x, y: c.y }];
+      delete m.position;
+      this.save = { ...this.save, lineup };
+    }
     let list = this.savedItems(kind).filter((m) => m.id !== clean.id);
     if (originalId && originalId !== clean.id && !this.isBase(kind, originalId)) list = list.filter((m) => m.id !== originalId);
     list.push(clean);
@@ -222,6 +285,8 @@ export class ContentLibrary {
     const list = this.savedItems(kind);
     if (!list.some((m) => m.id === id)) return { ok: false, error: 'Nothing saved locally for this item' };
     this.save = { ...this.save, [COLLECTION[kind]]: list.filter((m) => m.id !== id) };
+    // A deleted custom monster leaves the board too.
+    if (kind === 'monster' && this.save.lineup && !this.isBase('monster', id)) this.save = { ...this.save, lineup: this.save.lineup.filter((p) => p.creature !== id) };
     this.persist();
     return { ok: true };
   }

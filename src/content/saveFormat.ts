@@ -12,7 +12,7 @@
 // (absolute stats) migrate to v2 on load; save v1 (monsters only) migrates to
 // v2. Newer, unknown versions are refused with a clear error.
 
-import type { CreatureDef, PowerupDef, Ruleset } from '../core/types';
+import type { CreatureDef, Placement, PowerupDef, Ruleset } from '../core/types';
 import { MONSTER_FORMAT_VERSION, POWERUP_FORMAT_VERSION, isObj, migrateMonster } from './migrate';
 import { validateCreature, validatePowerup } from './validate';
 
@@ -28,6 +28,12 @@ export interface SaveData {
   contentVersion: number;
   monsters: CreatureDef[];
   powerups: PowerupDef[];
+  /**
+   * The board lineup as edited in the developer editor (every creature on the
+   * board: which monster, which player, which cell). Missing = the bundled
+   * board's lineup plus monsters' own positions.
+   */
+  lineup?: Placement[];
 }
 
 export type ParseResult<T> = { ok: true; value: T; migratedFrom: number | null; warnings: string[] } | { ok: false; errors: string[] };
@@ -155,9 +161,20 @@ export function parseSave(input: string | unknown, ruleset: Ruleset): ParseResul
     },
     'powerup',
   );
+  // Edited lineup: keep well-formed pieces (board bounds are checked by the library).
+  let lineup: Placement[] | undefined;
+  if (Array.isArray(raw.lineup)) {
+    lineup = [];
+    for (const p of raw.lineup) {
+      const okPiece =
+        isObj(p) && typeof p.creature === 'string' && (p.owner === 'P1' || p.owner === 'P2') && Number.isInteger(p.x) && Number.isInteger(p.y) && (p.x as number) >= 0 && (p.y as number) >= 0;
+      if (okPiece) lineup.push({ creature: p.creature as string, owner: p.owner as Placement['owner'], x: p.x as number, y: p.y as number });
+      else warnings.push('Skipped a malformed board lineup entry');
+    }
+  }
   return {
     ok: true,
-    value: { saveVersion: SAVE_VERSION, contentVersion: Number((raw as Obj).contentVersion ?? 1), monsters, powerups },
+    value: { saveVersion: SAVE_VERSION, contentVersion: Number((raw as Obj).contentVersion ?? 1), monsters, powerups, ...(lineup ? { lineup } : {}) },
     migratedFrom: v < SAVE_VERSION ? v : null,
     warnings,
   };

@@ -1,7 +1,7 @@
 // MONSTERS section: identity, health, player, 9×9 position, start modifiers,
 // Special slot conditions, Powerup reference, behaviour. Edits CreatureDef.
 
-import { baseBattleStats, cellCode, computeDashCooldown, describeRequirement, parseCell, type CreatureDef, type Effect, type SlotCondition } from '../core';
+import { baseBattleStats, cellCode, computeDashCooldown, describeRequirement, parseCell, type CreatureDef, type Effect, type Placement, type SlotCondition } from '../core';
 import { resolveDash } from '../core/combat/simulation';
 import { PORTRAIT_IDS, parsePortraitRef, portraitUrl } from '../rendering/art';
 import { drawCreature } from '../rendering/sprites';
@@ -32,6 +32,9 @@ const idSanitize = (v: string) => v.toLowerCase().replace(/\s/g, '_').replace(/[
 const EFFECTS: Array<Exclude<Effect['type'], 'multi'>> = ['addPower', 'addShield', 'addSpeed', 'addBlock', 'addDash'];
 const EFFECT_LABELS = ['+ Power', '+ Shield', '+ Speed', '+ Block', '+ Dash (-1 s cooldown each)'];
 const signed = (n: number) => (n > 0 ? `+${n}` : String(n));
+
+/** The board cell of the selected piece of the monster being edited (kept across form rebuilds). */
+let selectedPiece: string | null = null;
 
 export function monsterForm(ed: ItemEditor<'monster'>, refresh: () => void, rebuild: () => void): HTMLElement {
   const lib = ed.lib;
@@ -68,38 +71,124 @@ export function monsterForm(ed: ItemEditor<'monster'>, refresh: () => void, rebu
     ),
   );
 
-  // --- 9×9 position ---------------------------------------------------------------------------
+  // --- board pieces (POSITION) -----------------------------------------------------------------
+  // The whole board lineup is shown. Click a monster to open it in the editor;
+  // click one of this monster's pieces to select it, then an empty cell to move
+  // it there; with nothing selected an empty cell adds a new piece. Lineup edits
+  // are saved at once (they belong to the board, not to the monster draft).
   const board = lib.board;
-  const taken = new Map<string, { owner: string; who: string }>();
-  for (const p of board.placements) taken.set(cellCode(p), { owner: p.owner, who: `board lineup (${p.creature})` });
-  for (const m of lib.creatures()) {
-    if (m.id === ed.originalId || !m.player || !m.position) continue;
-    taken.set(m.position.toUpperCase(), { owner: m.player, who: m.name });
+  const lineup = lib.lineup();
+  const names = new Map(lib.creatures().map((c) => [c.id, c.name]));
+  const mine = ed.originalId;
+  const at = (x: number, y: number) => lineup.find((q) => q.x === x && q.y === y) ?? null;
+  const pps = new Set(board.powerPoints.map((q) => cellCode(q)));
+  if (selectedPiece) {
+    const c = parseCell(selectedPiece);
+    const q = c ? at(c.x, c.y) : null;
+    if (!q || q.creature !== mine) selectedPiece = null;
   }
-  const pps = new Set(board.powerPoints.map((p) => cellCode(p)));
-  const selected = d.position ? cellCode(parseCell(d.position) ?? { x: -1, y: -1 }) : null;
+  const commit = (list: Placement[]) => {
+    lib.setLineup(list);
+    rebuild();
+  };
   const grid = boardGrid(board.width, board.height, (x, y) => {
     const code = cellCode({ x, y });
-    const t = taken.get(code);
-    const isSel = code === selected;
+    const piece = at(x, y);
+    if (piece) {
+      const own = piece.creature === mine;
+      const name = names.get(piece.creature) ?? piece.creature;
+      return {
+        cls: `piece ${piece.owner.toLowerCase()} ${own ? 'mine' : ''} ${code === selectedPiece ? 'sel' : ''}`,
+        text: name.slice(0, 2).toUpperCase(),
+        title: `${code}: ${name} (${piece.owner}) - ${own ? 'click to select / deselect' : 'click to edit this monster'}`,
+        onClick: () => {
+          if (own) {
+            selectedPiece = selectedPiece === code ? null : code;
+            rebuild();
+            return;
+          }
+          if (ed.dirty && !confirm('Discard unsaved changes?')) return;
+          if (!ed.select(piece.creature)) return;
+          selectedPiece = code;
+          rebuild();
+        },
+      };
+    }
     return {
-      cls: `${isSel ? `sel ${(d.player ?? 'P1').toLowerCase()}` : ''} ${t ? `taken ${t.owner.toLowerCase()}` : ''} ${pps.has(code) ? 'pp' : ''}`,
-      text: pps.has(code) && !isSel ? '◆' : code,
-      title: t ? `${code}: ${t.who}` : pps.has(code) ? `${code}: Power Point` : code,
-      disabled: !!t,
-      onClick: () => edit((m) => ((m.position = code), (m.player = m.player ?? 'P1')), true),
+      cls: pps.has(code) ? 'pp' : '',
+      text: pps.has(code) ? '◆' : code,
+      title: !mine ? 'Save this monster first, then place it' : selectedPiece ? `Move ${selectedPiece} to ${code}` : `Place ${d.name} on ${code}`,
+      disabled: !mine,
+      onClick: () => {
+        if (!mine) return;
+        const list = lib.lineup();
+        const from = selectedPiece ? parseCell(selectedPiece) : null;
+        const i = from ? list.findIndex((q) => q.x === from.x && q.y === from.y) : -1;
+        if (i >= 0) list[i] = { ...list[i], x, y };
+        // New piece: the monster's PLAYER side, else the side of its other pieces, else P1.
+        else list.push({ creature: mine, owner: d.player ?? list.find((q) => q.creature === mine)?.owner ?? 'P1', x, y });
+        selectedPiece = code;
+        commit(list);
+      },
     };
   });
+  const minePieces = lineup.filter((q) => q.creature === mine);
+  const sel = selectedPiece ? lineup.find((q) => cellCode(q) === selectedPiece) ?? null : null;
+  const btn = (text: string, onClick: () => void) => h('button', { type: 'button', class: 'btn', text, on: { click: onClick } });
   const position = group(
     'POSITION',
     grid,
     h(
       'div',
       { class: 'pos-line' },
-      h('span', { text: `Position: ${selected ?? 'None (not placed)'}  ` }),
-      selected ? h('button', { type: 'button', class: 'btn', text: 'CLEAR', on: { click: () => edit((m) => delete m.position, true) } }) : null,
+      h('span', { text: `On the board: ${minePieces.length ? minePieces.map((q) => `${cellCode(q)} (${q.owner})`).join(', ') : mine ? 'not placed' : 'save the monster to place it'}  ` }),
     ),
-    h('div', { class: 'hint dim', text: 'A1 top-left · E5 centre · I9 bottom-right. Outlined cells are taken (hover for who).' }),
+    sel
+      ? h(
+          'div',
+          { class: 'pos-line' },
+          h('span', { text: `Selected ${cellCode(sel)}: side  ` }),
+          segmented(
+            [
+              { value: 'P1', label: 'P1', cls: 'p1' },
+              { value: 'P2', label: 'P2', cls: 'p2' },
+            ],
+            sel.owner,
+            (v) => commit(lib.lineup().map((q) => (q.x === sel.x && q.y === sel.y ? { ...q, owner: v } : q))),
+          ),
+          btn('REMOVE FROM BOARD', () => {
+            selectedPiece = null;
+            commit(lib.lineup().filter((q) => !(q.x === sel.x && q.y === sel.y)));
+          }),
+          btn('DESELECT', () => {
+            selectedPiece = null;
+            rebuild();
+          }),
+        )
+      : null,
+    h(
+      'div',
+      { class: 'pos-line' },
+      minePieces.length > 1 || (minePieces.length === 1 && !sel)
+        ? btn(`REMOVE ALL ${d.name.toUpperCase()} FROM BOARD`, () => {
+            if (!confirm(`Remove every ${d.name} from the board?`)) return;
+            selectedPiece = null;
+            commit(lib.lineup().filter((q) => q.creature !== mine));
+          })
+        : null,
+      lib.lineupIsCustom()
+        ? btn('RESET BOARD LINEUP', () => {
+            if (!confirm('Restore the bundled board lineup (all monsters)?')) return;
+            selectedPiece = null;
+            lib.resetLineup();
+            rebuild();
+          })
+        : null,
+    ),
+    h('div', {
+      class: 'hint dim',
+      text: 'Click any monster on the board to open it. Click one of this monster\'s pieces to select it, then an empty cell to move it. With nothing selected, an empty cell adds a new piece (side from PLAYER, else from its other pieces). Board changes are saved at once and used by new matches.',
+    }),
   );
 
   // --- movement: DEFAULT (N cardinal steps) or a pattern of relative cells ---------------------------
@@ -358,7 +447,7 @@ export function monsterPreview(ed: ItemEditor<'monster'>): HTMLElement {
       'table',
       {},
       tr('Player', d.player ?? '-'),
-      tr('Position', d.position ? d.position.toUpperCase() : d.id && ed.lib.board.placements.some((p) => p.creature === d.id) ? 'board lineup' : 'not placed'),
+      tr('Board', ((ps) => (ps.length ? ps.map((p) => `${cellCode(p)} ${p.owner}`).join(', ') : 'not placed'))(ed.lib.lineup().filter((p) => p.creature === ed.originalId))),
       tr('HP', String(d.stats.maxHp)),
       tr('Movement', movementLabel(d)),
       tr('Power', mod('power')),
