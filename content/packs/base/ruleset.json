@@ -24,7 +24,7 @@
     "baseCooldownTicks": 70,
     "cooldownPerSpeed": 3,
     "minCooldownTicks": 24,
-    "baseMoveSpeed": 2,
+    "baseMoveSpeed": 4,
     "speedPerMoveUnit": 3,
     "guardTicks": 24,
     "blockChargeDivisor": 2,
