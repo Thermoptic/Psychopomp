@@ -187,7 +187,7 @@ describe('Powerup content and mappings', () => {
   it('ranged mappings: speed, range, rate of fire, impact size/damage, homing, trajectory, bounce', () => {
     const c = rules().combat;
     expect([1, 10].map(M.projectileSpeed)).toEqual([4, 40]);
-    expect(M.projectileRange(10, c)).toBe(c.arenaColumns * c.cellUnits); // whole arena
+    expect(M.projectileRange(10, c)).toBe(20 * c.cellUnits); // 2 cells per level
     expect([1, 4, 10].map((l) => M.rateOfFireTicks(l, c) / c.tickRate)).toEqual([0.5, 2, 5]);
     expect([1, 10].map(M.impactRadius)).toEqual([16, 160]);
     expect([0, 42, 500].map(M.impactDamage)).toEqual([1, 42, 100]);

@@ -16,7 +16,7 @@
   "combat": {
     "tickRate": 60,
     "cellUnits": 80,
-    "arenaColumns": 20,
+    "arenaColumns": 9,
     "arenaRows": 9,
     "fighterRadius": 26,
     "attackRange": 96,

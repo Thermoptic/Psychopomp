@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { arenaGrid, cellCentre, combatSpawnCell, type GameState } from '../src/core';
-import { ARENA_AREA, arenaLayout, boardLayout } from '../src/rendering/layout';
+import { ARENA_AREA, BOARD_AREA, arenaLayout, boardLayout } from '../src/rendering/layout';
 import { boardSpritePx, boardUnits, isArenaView, isCombatView } from '../src/rendering/boardUnits';
 import { customMatch, fightToResult, ok, prepareBothAndBegin, quickPrepare, testCreature, tick } from './helpers';
 
@@ -36,11 +36,14 @@ const cellCentrePx = (s: GameState, x: number, y: number) => {
 };
 
 describe('combat arena', () => {
-  it('the arena is wider than the strategic board and its size is ruleset data', () => {
+  it('combat happens on the same 9×9 board: the arena size is ruleset data and matches the board', () => {
     const s = board9();
     const g = arenaGrid(s.ruleset.combat);
-    expect(g).toEqual({ width: 20, height: 9 });
-    expect(g.width).toBeGreaterThan(s.board.width * 2);
+    expect(g).toEqual({ width: 9, height: 9 });
+    expect(g).toEqual({ width: s.board.width, height: s.board.height });
+    // ...drawn in the board's own place with the board's own cells.
+    expect(ARENA_AREA).toEqual(BOARD_AREA);
+    expect(arenaOf(s)).toEqual(boardLayout(s.board));
   });
 
   it('spawn cells: P1 leftmost column, P2 rightmost column, both on the centre row', () => {
@@ -61,7 +64,7 @@ describe('combat arena', () => {
     expect(arena.cell * g.height).toBeLessThanOrEqual(ARENA_AREA.h);
   });
 
-  it('the wide arena is only used once both players are READY', () => {
+  it('the combat view is only used once both players are READY', () => {
     let s = ok(board9(), { type: 'MOVE_CREATURE', creatureId: 'P1-a-1', to: { x: 5, y: 2 } });
     expect(isArenaView(s)).toBe(false);
     s = quickPrepare(s, 'P1');
@@ -74,7 +77,7 @@ describe('combat arena', () => {
     const p1 = units.find((u) => u.owner === 'P1')!;
     const p2 = units.find((u) => u.owner === 'P2')!;
     expect({ cx: p1.cx, cy: p1.cy }).toEqual(cellCentrePx(s, 0, 4));
-    expect({ cx: p2.cx, cy: p2.cy }).toEqual(cellCentrePx(s, 19, 4));
+    expect({ cx: p2.cx, cy: p2.cy }).toEqual(cellCentrePx(s, 8, 4));
   });
 
   it('movement covers the whole arena (corner to corner)', () => {
@@ -95,8 +98,9 @@ describe('combat arena', () => {
     const rules = s.ruleset.combat;
     const { attacker, defender } = s.battle!.combat!.fighters;
     expect({ x: attacker.x, y: attacker.y }).toEqual(cellCentre({ x: 0, y: 4 }, rules));
-    expect({ x: defender.x, y: defender.y }).toEqual(cellCentre({ x: 19, y: 4 }, rules));
-    expect(s.battle!.combat!.arena).toEqual({ width: 20 * rules.cellUnits, height: 9 * rules.cellUnits });
+    // P1 = column 1, row 5; P2 = column 9, row 5.
+    expect({ x: defender.x, y: defender.y }).toEqual(cellCentre({ x: 8, y: 4 }, rules));
+    expect(s.battle!.combat!.arena).toEqual({ width: 9 * rules.cellUnits, height: 9 * rules.cellUnits });
   });
 
   it('sides follow the player, not attacker/defender (P2 attacking)', () => {
@@ -106,7 +110,7 @@ describe('combat arena', () => {
     const rules = s.ruleset.combat;
     const { attacker, defender } = s.battle!.combat!.fighters;
     expect(attacker.creatureId).toBe('P2-b-1');
-    expect({ x: attacker.x, y: attacker.y }).toEqual(cellCentre({ x: 19, y: 4 }, rules));
+    expect({ x: attacker.x, y: attacker.y }).toEqual(cellCentre({ x: 8, y: 4 }, rules));
     expect({ x: defender.x, y: defender.y }).toEqual(cellCentre({ x: 0, y: 4 }, rules));
   });
 
@@ -130,7 +134,10 @@ describe('combat arena', () => {
     const p1 = units.find((u) => u.owner === 'P1')!;
     const p2 = units.find((u) => u.owner === 'P2')!;
     expect({ cx: p1.cx, cy: p1.cy }).toEqual(cellCentrePx(s, 0, 4));
-    expect({ cx: p2.cx, cy: p2.cy }).toEqual(cellCentrePx(s, 19, 4));
+    expect({ cx: p2.cx, cy: p2.cy }).toEqual(cellCentrePx(s, 8, 4));
+    // ...which are exactly the board's centre-left and centre-right cells.
+    const bl = boardLayout(s.board);
+    expect({ cx: p1.cx, cy: p1.cy }).toEqual({ cx: bl.ox + bl.cell / 2, cy: bl.oy + 4 * bl.cell + bl.cell / 2 });
   });
 
   it('non-combatants are hidden during combat and the result screen, visible again after', () => {

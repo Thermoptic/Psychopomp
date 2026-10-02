@@ -1,17 +1,17 @@
-// Combat arena presentation, used from the moment both players are READY
-// (countdown, combat, result): a wide grid arena below a top HUD. Same grid
-// look and creature scale as the strategic board; only layout differs.
+// Combat presentation, used from the moment both players are READY
+// (countdown, combat, result): the same board in the same place, below a top
+// HUD. Same grid look and creature scale as the strategic board.
 
 import type { MatchUi } from '../app/ui';
 import { arenaGrid, computeBlockCharges, type GameState, type PlayerId } from '../core';
 import { boardUnits, combatToScreen } from './boardUnits';
-import { drawBoardSurface } from './boardArt';
+import { drawBoardSurface, drawPowerPointMarker } from './boardArt';
 import { drawUnits } from './boardView';
 import { hpBar, measure, panel, rect, text, type Ctx } from './draw';
-import { ARENA_AREA, BOARD_AREA, COMBAT_HUD, arenaLayout, type BoardLayout, type Rect } from './layout';
+import { ARENA_AREA, COMBAT_HUD, arenaLayout, cellRect, type BoardLayout } from './layout';
 import { C, playerColor } from './theme';
 
-/** Length of the board -> arena expand transition. */
+/** Short pause between both READY and the countdown appearing. */
 export const ARENA_EXPAND_MS = 450;
 
 export function currentArenaLayout(state: GameState): BoardLayout {
@@ -19,36 +19,21 @@ export function currentArenaLayout(state: GameState): BoardLayout {
   return arenaLayout(g.width, g.height);
 }
 
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-
 /**
- * The arena grid with the two combatants. `expandMs` > 0 animates the arena
- * opening outward from the strategic board's footprint.
+ * Combat on the strategic board itself: same frame, same tiles and Power
+ * Points, only the two combatants (the room does not change).
  */
-export function drawArena(ctx: Ctx, state: GameState, ui: MatchUi, now: number, expandMs: number): void {
+export function drawArena(ctx: Ctx, state: GameState, ui: MatchUi, now: number): void {
   const g = arenaGrid(state.ruleset.combat);
   const l = currentArenaLayout(state);
-  const frame: Rect = ARENA_AREA;
-
-  // Expand: interpolate the visible frame from the board area to the arena.
-  const t = expandMs > 0 ? 1 - Math.pow(expandMs / ARENA_EXPAND_MS, 2) : 1;
-  const from: Rect = { x: BOARD_AREA.x, y: frame.y, w: BOARD_AREA.w, h: frame.h };
-  const vis: Rect = {
-    x: Math.round(lerp(from.x, frame.x, t)),
-    y: frame.y,
-    w: Math.round(lerp(from.w, frame.w, t)),
-    h: frame.h,
-  };
-
-  // Same frame and stone as the strategic board: the board opens into the arena.
-  drawBoardSurface(ctx, vis, l, g.width, g.height, 'arena');
+  drawBoardSurface(ctx, ARENA_AREA, l, g.width, g.height, 'board');
+  if (g.width === state.board.width && g.height === state.board.height) {
+    for (const pp of state.powerPoints) drawPowerPointMarker(ctx, cellRect(l, pp), pp.owner ?? null);
+  }
   ctx.save();
   ctx.beginPath();
-  ctx.rect(vis.x + 10, vis.y + 10, vis.w - 20, vis.h - 20);
+  ctx.rect(ARENA_AREA.x + 10, ARENA_AREA.y + 10, ARENA_AREA.w - 20, ARENA_AREA.h - 20);
   ctx.clip();
-  // Faint centre line so the wide arena still reads as one field.
-  ctx.fillStyle = 'rgba(232,207,122,0.10)';
-  ctx.fillRect(l.ox + Math.floor((g.width * l.cell) / 2) - 1, l.oy, 2, g.height * l.cell);
   drawUnits(ctx, state, ui, l, boardUnits(state, l), now);
   drawProjectiles(ctx, state, ui, l);
   ctx.restore();
@@ -156,8 +141,8 @@ export function drawCombatHud(ctx: Ctx, state: GameState): void {
       const label = d.special.manualReady ? `${d.special.name} [LT]` : d.special.name;
       text(ctx, label, mirror ? X(14) - w : X(14) + w, top, { size: 9, color: d.special.manualReady ? C.pp : C.ok, align: al });
     }
-    text(ctx, `${d.hp}/${d.maxHp}`, X(206), top, { size: 14, color: d.hp <= d.maxHp / 4 ? C.danger : C.text, align: ar });
-    hpBar(ctx, { x: mirror ? H.x + H.w - 206 : H.x + 14, y: bot - 8, w: 192, h: 10 }, d.hp, d.maxHp, color);
+    text(ctx, `${d.hp}/${d.maxHp}`, X(184), top, { size: 14, color: d.hp <= d.maxHp / 4 ? C.danger : C.text, align: ar });
+    hpBar(ctx, { x: mirror ? H.x + H.w - 184 : H.x + 14, y: bot - 8, w: 170, h: 10 }, d.hp, d.maxHp, color);
 
     // Stat columns, separated by thin rules. Each column always reads
     // "LABEL ... value" left to right; only the column order is mirrored.
@@ -172,18 +157,18 @@ export function drawCombatHud(ctx: Ctx, state: GameState): void {
       if (v2 !== null) text(ctx, v2, right, bot, { size: 13, color: C.text, align: 'right' });
       for (let k = 0; k < pips; k++) rect(ctx, { x: right - 9 - k * 11, y: bot - 9, w: 9, h: 9 }, C.pp);
     };
-    col(220, 'POWER', String(d.power), 'SHIELD', String(d.shield));
-    col(310, 'SPEED', String(d.speed), 'GUARD', d.guard === 0 ? '-' : null, d.guard);
+    col(196, 'POWER', String(d.power), 'SHIELD', String(d.shield));
+    col(282, 'SPEED', String(d.speed), 'GUARD', d.guard === 0 ? '-' : null, d.guard);
 
     // Attack + dash status.
     ctx.fillStyle = C.faint;
-    ctx.fillRect(X(394), H.y + 8, 1, H.h - 16);
+    ctx.fillRect(X(366), H.y + 8, 1, H.h - 16);
     const atkColor = d.attack === 'READY' ? C.ok : d.attack === 'SWING' ? C.danger : C.dim;
-    text(ctx, 'ATK', X(400), top, { size: 9, color: C.dim, align: al });
-    text(ctx, d.attack, X(422), top, { size: 10, color: atkColor, align: al });
+    text(ctx, 'ATK', X(372), top, { size: 9, color: C.dim, align: al });
+    text(ctx, d.attack, X(394), top, { size: 10, color: atkColor, align: al });
     const dashColor = d.dash === 'READY' ? C.ok : d.dash === 'DASH' ? C.pp : C.dim;
-    text(ctx, 'DSH', X(400), bot, { size: 9, color: C.dim, align: al });
-    text(ctx, d.dash, X(422), bot, { size: 10, color: dashColor, align: al });
+    text(ctx, 'DSH', X(372), bot, { size: 9, color: C.dim, align: al });
+    text(ctx, d.dash, X(394), bot, { size: 10, color: dashColor, align: al });
   }
 
   // Centre: time left / status.

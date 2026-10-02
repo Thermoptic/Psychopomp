@@ -23,7 +23,8 @@ import { aimToward, emptyQueue, queuePresses, toFighterInput } from '../input/co
 import { ARENA_EXPAND_MS, drawArena, drawCombatHud, drawCountdown } from '../rendering/arenaView';
 import { combatHint, drawPrepPanel, drawResult, sideOf } from '../rendering/battleView';
 import { drawBoard, drawBoardScreen, drawHeader, drawMessageBar } from '../rendering/boardView';
-import { backdrop, scanlines, type Ctx } from '../rendering/draw';
+import { scanlines, type Ctx } from '../rendering/draw';
+import { drawEnvironment } from '../rendering/environment';
 import { cellAtPoint, inRect, prepItemAt, prepPanelLayout, type PrepItem } from '../rendering/layout';
 import { prepButton } from '../rendering/prepModel';
 import {
@@ -575,7 +576,7 @@ export class App {
   // --- render --------------------------------------------------------------------
 
   render(ctx: Ctx, now: number): void {
-    backdrop(ctx, VIEW_W, VIEW_H, now);
+    drawEnvironment(ctx, now, this.screen === 'match');
     switch (this.screen) {
       case 'menu':
         drawMenu(ctx, this.menuFocus, now);
@@ -610,9 +611,11 @@ export class App {
         const msg = ui.message && ui.message.ms > 0 ? ui.message : null;
         drawMessageBar(ctx, msg ? msg.text : this.prepHint(), msg ? msg.color : C.dim);
       } else {
-        // Both READY: wide combat arena + top HUD for countdown, combat and result.
+        // Both READY: combat on the same board, locked builds stay beside it, HUD on top.
+        drawPrepPanel(ctx, s, ui, 'P1');
+        drawPrepPanel(ctx, s, ui, 'P2');
         drawCombatHud(ctx, s);
-        drawArena(ctx, s, ui, now, ui.arenaMs);
+        drawArena(ctx, s, ui, now);
         if (ui.arenaMs <= 0) drawCountdown(ctx, s, ui);
         drawMessageBar(ctx, b.stage === 'countdown' ? 'BOTH READY - BATTLE STARTS' : combatHint(s), C.dim);
         if (b.stage === 'result') drawResult(ctx, s);

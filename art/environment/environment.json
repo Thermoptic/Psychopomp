@@ -1,0 +1,24 @@
+{
+  "description": "Environment crops from art/references/psychopomp-environment-reference.webp (1565x1005). Each crop keeps its decorations in their original context (walls, niches, statues, torches, candles, chains, arches, floor); cut-out sprites of single objects would carry the busy background with them. Coordinates: src = [x, y, w, h] in the reference; scale maps the reference height (1005) to the view height (540). Anchors place a crop against an edge of the 960x540 view; feather = soft alpha edges (view px) so crops blend into the procedural stone behind them.",
+  "source": "psychopomp-environment-reference.webp",
+  "scale": 0.5373,
+  "crops": [
+    { "id": "left-wall", "contains": "hanging chains, wall torch, candle stands, statue niche, skull niche, candles on the floor", "src": [0, 0, 360, 1005], "anchor": "left", "feather": { "right": 24 } },
+    { "id": "right-wall", "contains": "hanging chains, wall torch, candle stands, statue niche, skull niche, candles", "src": [1205, 0, 360, 1005], "anchor": "right", "feather": { "left": 24 } },
+    { "id": "arches", "contains": "gothic arches, windows, skull ornaments, central torch", "src": [330, 0, 905, 100], "anchor": "top", "feather": { "left": 24, "right": 24, "bottom": 14 } },
+    { "id": "floor", "contains": "stone floor, rubble, skulls, candles", "src": [330, 840, 905, 165], "anchor": "bottom", "feather": { "left": 24, "right": 24, "top": 22 } }
+  ],
+  "lights": [
+    { "at": [247, 132], "kind": "torch" },
+    { "at": [113, 214], "kind": "candle" },
+    { "at": [78, 290], "kind": "candle" },
+    { "at": [152, 534], "kind": "candle" },
+    { "at": [240, 872], "kind": "candle" },
+    { "at": [1318, 132], "kind": "torch" },
+    { "at": [1452, 214], "kind": "candle" },
+    { "at": [1487, 290], "kind": "candle" },
+    { "at": [1412, 534], "kind": "candle" },
+    { "at": [782, 62], "kind": "torch" },
+    { "at": [1272, 872], "kind": "candle" }
+  ]
+}

@@ -1,6 +1,6 @@
 // Low-level drawing primitives in the Psychopomp look (see art/references/):
 // heavy worn-metal panels with bolts, gothic pixel display type, coloured
-// pixel dice, a dungeon-wall backdrop.
+// pixel dice. The room behind the UI is environment.ts.
 
 import type { PlayerId } from '../core/types';
 import { displayFontReady } from './art';
@@ -286,60 +286,4 @@ export function categoryIcon(ctx: Ctx, category: string, x: number, y: number, c
       ctx.fillRect(x + i * scale, y + j * scale, scale, scale);
     }
   }
-}
-
-// --- backdrop -------------------------------------------------------------------------------
-
-let wall: HTMLCanvasElement | null = null;
-
-/** Dark dungeon brick wall, rendered once to an offscreen canvas. */
-function wallTexture(w: number, h: number): HTMLCanvasElement | null {
-  if (wall) return wall;
-  if (typeof document === 'undefined') return null;
-  const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
-  const g = c.getContext('2d')!;
-  g.fillStyle = '#070605';
-  g.fillRect(0, 0, w, h);
-  let seed = 1234567;
-  const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
-  const bw = 34;
-  const bh = 15;
-  for (let row = 0; row * bh < h; row++) {
-    const off = row % 2 ? bw / 2 : 0;
-    for (let x = -off; x < w; x += bw) {
-      const v = 20 + Math.floor(rnd() * 16);
-      g.fillStyle = `rgb(${v + 6},${v},${v - 4})`;
-      g.fillRect(x + 1, row * bh + 1, bw - 2, bh - 2);
-      g.fillStyle = 'rgba(255,230,190,0.05)';
-      g.fillRect(x + 1, row * bh + 1, bw - 2, 1);
-      if (rnd() < 0.25) {
-        g.fillStyle = 'rgba(0,0,0,0.35)';
-        g.fillRect(x + 3 + Math.floor(rnd() * (bw - 10)), row * bh + 3 + Math.floor(rnd() * (bh - 6)), 3 + Math.floor(rnd() * 5), 1);
-      }
-    }
-  }
-  wall = c;
-  return c;
-}
-
-/** The screen background: brick wall, flickering torch light at the top corners, vignette. */
-export function backdrop(ctx: Ctx, w: number, h: number, now: number): void {
-  const tex = wallTexture(w, h);
-  if (tex) ctx.drawImage(tex, 0, 0);
-  else rect(ctx, { x: 0, y: 0, w, h }, C.bg);
-  const flicker = 0.85 + 0.15 * Math.sin(now / 90) * Math.sin(now / 37);
-  for (const tx of [40, w - 40]) {
-    const g = ctx.createRadialGradient(tx, 18, 0, tx, 18, 170);
-    g.addColorStop(0, `rgba(255,140,50,${0.30 * flicker})`);
-    g.addColorStop(1, 'rgba(255,120,40,0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(tx - 170, 0, 340, 190);
-  }
-  const v = ctx.createRadialGradient(w / 2, h / 2, h * 0.35, w / 2, h / 2, w * 0.7);
-  v.addColorStop(0, 'rgba(0,0,0,0)');
-  v.addColorStop(1, 'rgba(0,0,0,0.55)');
-  ctx.fillStyle = v;
-  ctx.fillRect(0, 0, w, h);
 }

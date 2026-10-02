@@ -12,26 +12,31 @@ export interface Rect {
 
 export const inRect = (r: Rect, x: number, y: number) => x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h;
 
-// Match screens use one gutter everywhere: GAP between the screen edge and the
-// windows, and between every pair of windows. Rows, top to bottom:
-//   GAP | header / combat HUD | GAP | side panels + board (or arena) | GAP | message bar | GAP
-// The board's frame is a square filling BOARD_AREA; the side panels share
-// the remaining width.
+// Match screens, composed like the environment reference: the UI is mounted in
+// a chamber, so the environment shows around it.
+//   - side panels stand free at the outer edges (SIDE_MARGIN to the screen edge),
+//   - the centre column holds the title plaque, the board and the message bar,
+//   - one GAP between every pair of windows,
+//   - above/below the side panels and along the edges the environment is visible.
+// The board's frame is a square of CONTENT_H; its size did not change.
 
 const VIEW = { w: 960, h: 540 };
 export const GAP = 12;
-const TOP_H = 48;
+export const SIDE_MARGIN = 36;
+const TOP_H = 44;
 const BAR_H = 36;
-const CONTENT_Y = GAP + TOP_H + GAP;
-const CONTENT_H = VIEW.h - CONTENT_Y - GAP - BAR_H - GAP;
-const FULL_W = VIEW.w - 2 * GAP;
-const SIDE_W = (FULL_W - CONTENT_H - 2 * GAP) / 2;
+const CONTENT_Y = GAP + TOP_H + 8;
+const CONTENT_H = 408;
+const SIDE_W = (VIEW.w - 2 * SIDE_MARGIN - CONTENT_H - 2 * GAP) / 2;
+const CENTRE_X = SIDE_MARGIN + SIDE_W + GAP;
 
-export const HEADER: Rect = { x: GAP, y: GAP, w: FULL_W, h: TOP_H };
-export const LEFT_PANEL: Rect = { x: GAP, y: CONTENT_Y, w: SIDE_W, h: CONTENT_H };
-export const BOARD_AREA: Rect = { x: GAP + SIDE_W + GAP, y: CONTENT_Y, w: CONTENT_H, h: CONTENT_H };
-export const RIGHT_PANEL: Rect = { x: VIEW.w - GAP - SIDE_W, y: CONTENT_Y, w: SIDE_W, h: CONTENT_H };
-export const MESSAGE_BAR: Rect = { x: GAP, y: VIEW.h - GAP - BAR_H, w: FULL_W, h: BAR_H };
+/** Title plaque above the board (centre column). */
+export const HEADER: Rect = { x: CENTRE_X, y: GAP, w: CONTENT_H, h: TOP_H };
+export const LEFT_PANEL: Rect = { x: SIDE_MARGIN, y: CONTENT_Y, w: SIDE_W, h: CONTENT_H };
+export const BOARD_AREA: Rect = { x: CENTRE_X, y: CONTENT_Y, w: CONTENT_H, h: CONTENT_H };
+export const RIGHT_PANEL: Rect = { x: VIEW.w - SIDE_MARGIN - SIDE_W, y: CONTENT_Y, w: SIDE_W, h: CONTENT_H };
+/** Message bar below the board (centre column). */
+export const MESSAGE_BAR: Rect = { x: CENTRE_X, y: CONTENT_Y + CONTENT_H + 8, w: CONTENT_H, h: BAR_H };
 
 /** Inner padding between a board/arena frame and its cells. */
 export const FRAME_PAD = 10;
@@ -51,14 +56,16 @@ export function boardLayout(board: BoardDef): BoardLayout {
   };
 }
 
-// --- Combat arena -------------------------------------------------------------
+// --- Combat -------------------------------------------------------------------
 //
-// From READY+READY on, the battle uses a top HUD and a wide arena that fills
-// everything between the HUD and the message bar. The arena's column/row count
-// is gameplay data (ruleset); only the on-screen cell size is computed here.
+// From READY+READY on, combat runs on the same 9×9 board in the same place (the
+// ruleset's arena is 9×9), with a full-width HUD over the title plaque. The
+// arena's column/row count is gameplay data (ruleset); only the on-screen cell
+// size is computed here.
 
-export const COMBAT_HUD: Rect = HEADER;
-export const ARENA_AREA: Rect = { x: GAP, y: CONTENT_Y, w: FULL_W, h: CONTENT_H };
+export const COMBAT_HUD: Rect = { x: SIDE_MARGIN, y: GAP, w: VIEW.w - 2 * SIDE_MARGIN, h: TOP_H };
+/** Combat uses the board's own footprint (same frame, same cells). */
+export const ARENA_AREA: Rect = BOARD_AREA;
 
 /** Fits a columns × rows grid of square cells into `area`, centred. */
 export function arenaLayout(columns: number, rows: number, area: Rect = ARENA_AREA): BoardLayout {

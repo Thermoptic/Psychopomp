@@ -3,7 +3,7 @@
 
 import type { MatchUi } from '../app/ui';
 import { baseBattleStats, creatureAt, describeRequirement, getLegalMoves, livingCreatures, type GameState, type PlayerId } from '../core';
-import { badge, categoryIcon, hpBar, panel, playerTag, rect, strokeRect, text, wrapText, type Ctx } from './draw';
+import { badge, categoryIcon, hpBar, measure, panel, playerTag, rect, strokeRect, text, wrapText, type Ctx } from './draw';
 import { drawBoardSurface, drawPowerPointMarker } from './boardArt';
 import { BOARD_AREA, HEADER, LEFT_PANEL, MESSAGE_BAR, RIGHT_PANEL, boardLayout, cellRect, type BoardLayout, type Rect } from './layout';
 import { aimReticle, boardUnits, combatToScreen, isBattleView, isCombatView, type BoardUnit } from './boardUnits';
@@ -30,37 +30,37 @@ function pennant(ctx: Ctx, x: number, y: number, h: number, color: string, dark:
   ctx.fillRect(x + w / 2 - 6, y + 12, 12, 2);
 }
 
+/**
+ * Title plaque above the board: PSYCHOPOMP in the middle, the turn on the
+ * left, Power Points held on the right; the P1/P2 pennants hang beside it.
+ */
 export function drawHeader(ctx: Ctx, state: GameState): void {
   const H = HEADER;
+  pennant(ctx, H.x - 34, H.y - 6, H.h + 12, C.p1, C.p1dark);
+  pennant(ctx, H.x + H.w + 12, H.y - 6, H.h + 12, C.p2, C.p2dark);
   panel(ctx, H, undefined, '#0d0b09');
   const cy = H.y + H.h / 2;
   const mid = H.x + H.w / 2;
-
-  // Title plaque: PSYCHOPOMP between chevrons, P1 and P2 pennants either side.
-  pennant(ctx, mid - 152, H.y - 4, H.h + 14, C.p1, C.p1dark);
-  pennant(ctx, mid + 130, H.y - 4, H.h + 14, C.p2, C.p2dark);
-  text(ctx, '«', mid - 112, cy + 8, { size: 22, color: C.p1, align: 'center' });
-  text(ctx, '»', mid + 112, cy + 8, { size: 22, color: C.p2, align: 'center' });
-  text(ctx, 'PSYCHOPOMP', mid + 2, cy + 10, { size: 24, color: '#2a0c06', align: 'center' });
-  text(ctx, 'PSYCHOPOMP', mid, cy + 8, { size: 24, color: C.text, align: 'center' });
+  text(ctx, 'PSYCHOPOMP', mid + 2, cy + 10, { size: 22, color: '#2a0c06', align: 'center' });
+  text(ctx, 'PSYCHOPOMP', mid, cy + 8, { size: 22, color: C.text, align: 'center' });
 
   // Turn (left).
   const p = state.currentTurn.player;
-  const left = H.x + 18; // same text inset as the message bar
-  const label = state.phase === 'gameOver' ? 'MATCH OVER' : `TURN ${state.currentTurn.number}  ·  ${playerLabel(p)}`;
-  badge(ctx, left + 7, cy, 14, p, playerColor(p));
-  text(ctx, label, left + 22, cy + 5, { size: 14, color: playerColor(p) });
+  const left = H.x + 14;
+  badge(ctx, left + 6, cy - 5, 11, p, playerColor(p));
+  if (state.phase === 'gameOver') text(ctx, 'OVER', left + 16, cy - 1, { size: 13, color: playerColor(p) });
+  else text(ctx, `TURN ${state.currentTurn.number}`, left + 16, cy - 1, { size: 13, color: playerColor(p) });
+  text(ctx, playerLabel(p), left, cy + 13, { size: 9, color: C.dim });
 
   // Power Points held (right).
   const count = (o: PlayerId) => state.powerPoints.filter((pp) => pp.owner === o).length;
   const total = state.powerPoints.length;
-  const R = H.x + H.w;
-  text(ctx, 'POWER', R - 190, cy - 2, { size: 10, color: C.dim });
-  text(ctx, 'POINTS', R - 190, cy + 10, { size: 10, color: C.dim });
-  badge(ctx, R - 130, cy, 12, 'P1', C.p1);
-  text(ctx, `${count('P1')}/${total}`, R - 118, cy + 5, { size: 15, color: C.p1 });
-  badge(ctx, R - 60, cy, 12, 'P2', C.p2);
-  text(ctx, `${count('P2')}/${total}`, R - 48, cy + 5, { size: 15, color: C.p2 });
+  const R = H.x + H.w - 14;
+  text(ctx, 'POWER POINTS', R, cy - 5, { size: 9, color: C.dim, align: 'right' });
+  badge(ctx, R - 82, cy + 7, 10, 'P1', C.p1);
+  text(ctx, `${count('P1')}/${total}`, R - 74, cy + 12, { size: 13, color: C.p1 });
+  badge(ctx, R - 34, cy + 7, 10, 'P2', C.p2);
+  text(ctx, `${count('P2')}/${total}`, R - 26, cy + 12, { size: 13, color: C.p2 });
 }
 
 /** One stat row: category icon + coloured label + value. */
@@ -200,8 +200,15 @@ export function drawBoard(ctx: Ctx, state: GameState, ui: MatchUi, now: number, 
 }
 
 export function drawMessageBar(ctx: Ctx, msg: string, color: string = C.text): void {
-  panel(ctx, MESSAGE_BAR, undefined, '#0e0e12');
-  text(ctx, msg, MESSAGE_BAR.x + 18, MESSAGE_BAR.y + MESSAGE_BAR.h / 2 + 5, { size: 14, color });
+  const B = MESSAGE_BAR;
+  panel(ctx, B, undefined, '#0e0c0a');
+  const maxW = B.w - 30;
+  if (measure(ctx, msg, 14) <= maxW) {
+    text(ctx, msg, B.x + 15, B.y + B.h / 2 + 5, { size: 14, color });
+    return;
+  }
+  // Two lines at body size.
+  wrapText(ctx, msg, B.x + 15, B.y + 15, maxW, { size: 11, color, lineH: 12 });
 }
 
 /** Plain board mode (also used for the short battle intro). */

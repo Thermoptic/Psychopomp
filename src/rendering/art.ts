@@ -9,6 +9,7 @@
 
 import boardUrl from '../../art/references/psychopomp-board-reference.webp?url';
 import monstersUrl from '../../art/references/psychopomp-monsters-reference.webp?url';
+import environmentUrl from '../../art/references/psychopomp-environment-reference.webp?url';
 import displayFontUrl from '../../art/fonts/the-lowly-scribe.ttf?url';
 // The font's OFL licence and readme must ship with the font (they are linked
 // from the page, which also makes the build emit them next to it).
@@ -91,6 +92,7 @@ interface BoardArt {
 }
 
 let monsterImg: HTMLImageElement | null = null;
+let environmentImg: HTMLImageElement | null = null;
 let boardArt: BoardArt | null = null;
 let fontReady = false;
 let loading: Promise<void> | null = null;
@@ -140,6 +142,7 @@ export function loadArt(): Promise<void> {
   const tasks: Array<Promise<unknown>> = [
     loadImage(monstersUrl).then((img) => (monsterImg = img)),
     loadImage(boardUrl).then((img) => (boardArt = classifyBoard(img))),
+    loadImage(environmentUrl).then((img) => (environmentImg = img)),
   ];
   if (typeof document !== 'undefined') {
     for (const href of [displayFontLicenseUrl, displayFontReadmeUrl]) {
@@ -204,4 +207,9 @@ export function boardTileSprite(x: number, y: number, mode: 'board' | 'arena'): 
 /** The board art image for the frame (9-slice), or null if not loaded. */
 export function boardFrameImage(): HTMLImageElement | null {
   return boardArt?.img ?? null;
+}
+
+/** The environment reference (cropped by environment.ts), or null if not loaded. */
+export function environmentImage(): HTMLImageElement | null {
+  return environmentImg;
 }
