@@ -4,26 +4,63 @@ import type { MatchUi } from '../app/ui';
 import { getMovableCreatures, type GameState } from '../core';
 import { badge, button, panel, rect, text, type Ctx } from './draw';
 import type { Rect } from './layout';
-import { drawCreature } from './sprites';
+import title from '../../art/title/title.json';
+import { titleImage } from './art';
 import { C, playerColor, VIEW_H, VIEW_W } from './theme';
 
-export const MENU_ITEMS = ['NEW MATCH', 'CONTROLS'] as const;
-
-export function menuItemRect(i: number): Rect {
-  return { x: 480 - 130, y: 300 + i * 50, w: 260, h: 38 };
+/** Where a point of the title image lands in the view (image covers the view by width). */
+export function titlePoint(x: number, y: number): { x: number; y: number; scale: number } {
+  const scale = VIEW_W / title.size[0];
+  return { x: x * scale, y: y * scale - title.offsetY, scale };
 }
 
-export function drawMenu(ctx: Ctx, focus: number, now: number): void {
-  const t = now / 1000;
-  drawCreature(ctx, 'glubber', 'P1', 200, 270 + Math.sin(t * 2) * 6, 12, { portrait: 'monsters:0' });
-  drawCreature(ctx, 'shroud', 'P2', 760, 270 + Math.cos(t * 2) * 6, 12, { flip: true, portrait: 'monsters:3' });
-  text(ctx, 'PSYCHOPOMP', 483, 163, { size: 64, color: '#3a0d0a', align: 'center' });
-  text(ctx, 'PSYCHOPOMP', 480, 160, { size: 64, color: C.p1, align: 'center' });
-  text(ctx, 'BUILD YOUR MONSTER  ·  THEN FIGHT WITH WHAT YOU BUILT', 480, 200, { size: 13, color: C.dim, align: 'center' });
-  MENU_ITEMS.forEach((label, i) => {
-    button(ctx, menuItemRect(i), label, { focused: i === focus, size: 16 });
+const FLAME_COLOURS: Record<string, [number, number, number]> = {
+  fire: [255, 150, 55],
+  red: [255, 60, 40],
+  blue: [80, 160, 255],
+};
+
+/**
+ * Title screen: the key art full screen, no text or buttons (any confirm or
+ * click starts a match). Every flame in the picture gets a small flickering
+ * glow so the fire seems to move in the dark.
+ */
+export function drawMenu(ctx: Ctx, now: number): void {
+  const img = titleImage();
+  if (!img) {
+    rect(ctx, { x: 0, y: 0, w: VIEW_W, h: VIEW_H }, '#000');
+    return;
+  }
+  const o = titlePoint(0, 0);
+  const prev = ctx.imageSmoothingEnabled;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, 0, o.y, title.size[0] * o.scale, title.size[1] * o.scale);
+  ctx.imageSmoothingEnabled = prev;
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  title.flames.forEach((f, i) => {
+    const p = titlePoint(f.at[0], f.at[1]);
+    // Two out-of-phase waves per flame: an uneven, living flicker.
+    const flick = 0.62 + 0.38 * Math.sin(now / (63 + (i % 7) * 11) + i * 1.7) * Math.sin(now / (37 + (i % 5) * 6) + i);
+    const [r, g, b] = FLAME_COLOURS[f.kind] ?? FLAME_COLOURS.fire;
+    const rad = 22 * f.size * (0.9 + 0.12 * flick);
+    const halo = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, rad);
+    halo.addColorStop(0, `rgba(${r},${g},${b},${0.30 * flick})`);
+    halo.addColorStop(0.35, `rgba(${r},${g},${b},${0.12 * flick})`);
+    halo.addColorStop(1, `rgba(${r},${g},${b},0)`);
+    ctx.fillStyle = halo;
+    ctx.fillRect(p.x - rad, p.y - rad, rad * 2, rad * 2);
+    // Bright core that sways a little.
+    const sway = Math.sin(now / 90 + i * 2.1) * 0.8 * f.size;
+    const core = ctx.createRadialGradient(p.x + sway, p.y - 1, 0, p.x + sway, p.y - 1, 4 * f.size);
+    core.addColorStop(0, `rgba(255,240,200,${0.45 * flick})`);
+    core.addColorStop(1, 'rgba(255,200,120,0)');
+    ctx.fillStyle = core;
+    ctx.fillRect(p.x - 6 * f.size, p.y - 7 * f.size, 12 * f.size, 12 * f.size);
   });
-  text(ctx, 'VERTICAL SLICE 0.1  ·  OFFLINE  ·  2 LOCAL PLAYERS', 480, 520, { size: 11, color: C.faint, align: 'center' });
+  ctx.restore();
 }
 
 export function drawControls(ctx: Ctx): void {

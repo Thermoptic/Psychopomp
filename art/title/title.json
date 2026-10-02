@@ -1,0 +1,31 @@
+{
+  "description": "Title screen: art/references/psychopomp-title-reference.webp, drawn to cover the 960x540 view (scaled by width, shifted up by offsetY view px so the top torch stays visible). Flames are points in the reference (1565x1005) that get a flickering glow: fire = torches and candles, red/blue = the coloured lanterns beside the crowns.",
+  "source": "psychopomp-title-reference.webp",
+  "size": [1565, 1005],
+  "offsetY": 24,
+  "flames": [
+    { "at": [782, 57], "kind": "fire", "size": 1.4 },
+    { "at": [716, 110], "kind": "fire", "size": 0.8 },
+    { "at": [889, 110], "kind": "fire", "size": 0.8 },
+    { "at": [244, 136], "kind": "fire", "size": 1 },
+    { "at": [250, 243], "kind": "fire", "size": 1 },
+    { "at": [111, 225], "kind": "fire", "size": 0.8 },
+    { "at": [77, 304], "kind": "fire", "size": 0.8 },
+    { "at": [420, 190], "kind": "fire", "size": 0.8 },
+    { "at": [149, 536], "kind": "fire", "size": 1 },
+    { "at": [226, 875], "kind": "fire", "size": 0.9 },
+    { "at": [1315, 134], "kind": "fire", "size": 1 },
+    { "at": [1328, 247], "kind": "fire", "size": 1 },
+    { "at": [1147, 123], "kind": "fire", "size": 0.8 },
+    { "at": [1446, 222], "kind": "fire", "size": 0.8 },
+    { "at": [1480, 297], "kind": "fire", "size": 0.8 },
+    { "at": [1306, 285], "kind": "fire", "size": 0.7 },
+    { "at": [1403, 536], "kind": "fire", "size": 1 },
+    { "at": [1270, 880], "kind": "fire", "size": 0.9 },
+    { "at": [450, 237], "kind": "red", "size": 1.1 },
+    { "at": [258, 450], "kind": "red", "size": 1.1 },
+    { "at": [1120, 245], "kind": "blue", "size": 1.1 },
+    { "at": [1205, 304], "kind": "blue", "size": 1 },
+    { "at": [1292, 440], "kind": "blue", "size": 1.1 }
+  ]
+}

@@ -28,7 +28,6 @@ import { drawEnvironment } from '../rendering/environment';
 import { cellAtPoint, inRect, prepItemAt, prepPanelLayout, type PrepItem } from '../rendering/layout';
 import { prepButton } from '../rendering/prepModel';
 import {
-  MENU_ITEMS,
   PAUSE_ITEMS,
   drawControls,
   drawDebug,
@@ -36,7 +35,6 @@ import {
   drawGameOver,
   drawMenu,
   drawPause,
-  menuItemRect,
   pauseItemRect,
 } from '../rendering/screens';
 import { C, VIEW_H, VIEW_W, playerColor, playerLabel } from '../rendering/theme';
@@ -49,7 +47,6 @@ const MOVE_KEYS: Record<PlayerId, string> = { P1: 'WASD + SPACE', P2: 'ARROWS + 
 
 export class App {
   screen: Screen = 'menu';
-  menuFocus = 0;
   state: GameState | null = null;
   ui: MatchUi = createMatchUi();
   private acc = 0;
@@ -215,22 +212,14 @@ export class App {
     }
   }
 
+  /** Title screen: no menu; confirm starts a match. */
   private menuInput(f: Frames): void {
-    if (this.any(f, 'move_up', 'repeat')) this.menuFocus = (this.menuFocus + MENU_ITEMS.length - 1) % MENU_ITEMS.length;
-    if (this.any(f, 'move_down', 'repeat')) this.menuFocus = (this.menuFocus + 1) % MENU_ITEMS.length;
-    if (this.any(f, 'move_up', 'repeat') || this.any(f, 'move_down', 'repeat')) this.sfx.ui('move');
-    if (this.any(f, 'confirm')) this.activateMenu(this.menuFocus);
+    if (this.any(f, 'confirm')) this.startFromTitle();
   }
 
-  private activateMenu(i: number): void {
-    const item = MENU_ITEMS[i];
-    if (item === 'NEW MATCH') {
-      this.sfx.ui('confirm');
-      this.newMatch();
-    } else if (item === 'CONTROLS') {
-      this.sfx.ui('confirm');
-      this.screen = 'controls';
-    } else this.sfx.ui('deny');
+  private startFromTitle(): void {
+    this.sfx.ui('confirm');
+    this.newMatch();
   }
 
   pause(reason: string | null = null): void {
@@ -508,10 +497,6 @@ export class App {
   // --- mouse -------------------------------------------------------------------
 
   pointerMove(x: number, y: number): void {
-    if (this.screen === 'menu') {
-      MENU_ITEMS.forEach((_, i) => inRect(menuItemRect(i), x, y) && (this.menuFocus = i));
-      return;
-    }
     if (this.screen !== 'match' || !this.state) return;
     if (this.ui.paused) {
       PAUSE_ITEMS.forEach((_, i) => inRect(pauseItemRect(i), x, y) && (this.ui.pauseFocus = i));
@@ -534,7 +519,7 @@ export class App {
   click(x: number, y: number): void {
     this.sfx.unlock();
     if (this.screen === 'menu') {
-      MENU_ITEMS.forEach((_, i) => inRect(menuItemRect(i), x, y) && this.activateMenu(i));
+      this.startFromTitle();
       return;
     }
     if (this.screen === 'controls') {
@@ -579,7 +564,7 @@ export class App {
     drawEnvironment(ctx, now, this.screen === 'match');
     switch (this.screen) {
       case 'menu':
-        drawMenu(ctx, this.menuFocus, now);
+        drawMenu(ctx, now);
         break;
       case 'controls':
         drawControls(ctx);

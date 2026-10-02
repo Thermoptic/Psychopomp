@@ -7,8 +7,8 @@
 //      (walls with chains/torches/candles/statues, arches, floor) - see
 //      art/environment/environment.json
 //   3. darkening + vignette, so the UI stays the focus
-//   4. match only: UI support structure - drop shadows, wall mounts and
-//      brackets, cables, gutter pipes, struts, chains, foreground silhouettes
+//   4. match only: UI support structure - drop shadows, gutter pipes, struts,
+//      chains, foreground silhouettes
 // 1-4 are static: rendered once into an offscreen canvas at screen resolution
 // and rebuilt only when the scale changes or the art finishes loading.
 // Per frame only a few flickering fire glows and blinking LEDs are drawn.
@@ -122,11 +122,6 @@ function drawFeatheredCrop(g: CanvasRenderingContext2D, img: HTMLImageElement, c
   g.drawImage(t, dst.x, dst.y, dst.w, dst.h);
 }
 
-const PANELS = (): Array<{ r: Rect; outer: 'left' | 'right'; accent: string }> => [
-  { r: LEFT_PANEL, outer: 'left', accent: C.p1 },
-  { r: RIGHT_PANEL, outer: 'right', accent: C.p2 },
-];
-
 /** Bracket/strut LED positions (drawn per frame, blinking). */
 interface Led {
   x: number;
@@ -147,38 +142,6 @@ function steelBox(g: CanvasRenderingContext2D, x: number, y: number, w: number, 
   g.fillStyle = '#17130f';
   g.fillRect(x, y + h - 1, w, 1);
   g.fillRect(x + w - 1, y, 1, h);
-}
-
-function bolt(g: CanvasRenderingContext2D, x: number, y: number): void {
-  g.fillStyle = C.edgeDark;
-  g.fillRect(x, y, 3, 3);
-  g.fillStyle = C.rivet;
-  g.fillRect(x, y, 2, 2);
-}
-
-function cable(g: CanvasRenderingContext2D, pts: Array<[number, number]>, color: string): void {
-  const path = () => {
-    g.beginPath();
-    g.moveTo(pts[0][0], pts[0][1]);
-    for (let i = 1; i < pts.length; i++) {
-      const [px, py] = pts[i - 1];
-      const [x, y] = pts[i];
-      g.quadraticCurveTo(px, (py + y) / 2 + 6, x, y);
-    }
-  };
-  g.lineCap = 'round';
-  g.strokeStyle = C.edgeDark;
-  g.lineWidth = 5;
-  path();
-  g.stroke();
-  g.strokeStyle = color;
-  g.lineWidth = 3;
-  path();
-  g.stroke();
-  g.strokeStyle = 'rgba(255,255,255,0.18)';
-  g.lineWidth = 1;
-  path();
-  g.stroke();
 }
 
 function chain(g: CanvasRenderingContext2D, x: number, y0: number, y1: number): void {
@@ -221,34 +184,10 @@ function supportStructure(g: CanvasRenderingContext2D): void {
   for (const r of ui) g.fillRect(r.x - 3, r.y + 4, r.w + 6, r.h + 8);
   g.restore();
 
-  for (const { r, outer, accent } of PANELS()) {
-    const edge = outer === 'left' ? r.x : r.x + r.w;
-    const dir = outer === 'left' ? -1 : 1;
-    // Chains the panel hangs from.
+  // Chains the side panels hang from.
+  for (const r of [LEFT_PANEL, RIGHT_PANEL]) {
     chain(g, r.x + 34, -2, r.y + 2);
     chain(g, r.x + r.w - 34, -2, r.y + 2);
-    // Cables down the outer edge (red and blue, as in the reference).
-    const cx = edge + dir * 15;
-    const pts: Array<[number, number]> = [];
-    for (let y = -10; y <= VIEW_H + 10; y += 68) pts.push([cx + dir * ((y / 68) % 2 ? 3 : 0), y]);
-    cable(g, pts, '#7a1c14');
-    cable(g, pts.map(([x, y]) => [x + dir * 6, y + 20] as [number, number]), '#1c3f6e');
-    // Wall mounts: rods into the wall, brackets clamping the panel edge, each with an LED.
-    for (let i = 0; i < 5; i++) {
-      const y = r.y + 46 + i * 78;
-      const wallX = outer === 'left' ? 0 : VIEW_W;
-      g.fillStyle = C.edgeDark;
-      g.fillRect(Math.min(wallX, edge), y + 7, Math.abs(edge - wallX), 6);
-      g.fillStyle = '#3a3229';
-      g.fillRect(Math.min(wallX, edge), y + 8, Math.abs(edge - wallX), 3);
-      const bx = outer === 'left' ? edge - 13 : edge - 1;
-      steelBox(g, bx, y, 14, 20);
-      bolt(g, bx + 2, y + 2);
-      bolt(g, bx + 2, y + 15);
-      g.fillStyle = C.edgeDark;
-      g.fillRect(bx + 8, y + 6, 4, 8);
-      leds.push({ x: bx + 9, y: y + 7, color: accent, phase: i * 1.7 + (outer === 'left' ? 0 : 0.9) });
-    }
   }
   // Gutter pipes between the side panels and the board.
   vPipe(g, LEFT_PANEL.x + LEFT_PANEL.w + 3, LEFT_PANEL.y + 10, LEFT_PANEL.y + LEFT_PANEL.h - 10);
@@ -305,7 +244,7 @@ let lights: EnvLight[] | null = null;
 
 /**
  * The chamber behind the UI. `match` adds the support structure for the
- * match layout (mounts, cables, pipes...). Call before drawing the screen.
+ * match layout (pipes, struts, chains...). Call before drawing the screen.
  */
 export function drawEnvironment(ctx: Ctx, now: number, match: boolean): void {
   if (typeof document === 'undefined') return;
@@ -338,7 +277,7 @@ export function drawEnvironment(ctx: Ctx, now: number, match: boolean): void {
     });
     ctx.restore();
   }
-  // Blinking indicator LEDs on the mounts.
+  // Blinking indicator LEDs on the struts.
   if (match) {
     for (const l of leds) {
       const on = Math.sin(now / 600 + l.phase) > -0.6;

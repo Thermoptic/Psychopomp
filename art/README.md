@@ -11,6 +11,7 @@ and works offline (bundled by Vite, no CDN).
 | `psychopomp-board-reference.webp` | 1254×1254 | Board tiles and frame (cropped at draw time). |
 | `psychopomp-monsters-reference.webp` | 1254×1254 | Creature portraits (cropped at draw time). |
 | `psychopomp-environment-reference.webp` | 1565×1005 | The chamber around the UI (cropped at draw time, see below). |
+| `psychopomp-title-reference.webp` | 1565×1005 | The title screen, drawn full screen (see below). |
 
 The images are cropped **at runtime** (`src/rendering/art.ts`) from measured
 rectangles, so no generated copies are needed and the originals stay untouched.
@@ -81,16 +82,27 @@ completely behind the game's panels, so they never show.
 not cut out as separate sprites: in this AI-generated picture they sit on a busy
 background, so cut-outs would carry visible rectangles and seams. They are kept
 in their original wall context (the crops above) instead. Everything that has to
-fit the game's own layout is recreated procedurally in the same style: wall
-mounts and brackets with bolts, red/blue cables, gutter pipes, struts bolting the
-title plaque and message bar to the board frame, the chains the panels and
-plaque hang from, blinking orange/blue LEDs, foreground grave silhouettes, drop
+fit the game's own layout is recreated procedurally in the same style: gutter
+pipes, struts bolting the title plaque and message bar to the board frame (with
+blinking LEDs), the chains the panels and plaque hang from, foreground grave
+silhouettes, drop
 shadows, darkening and vignette, and the flickering fire glow at each light in
 the manifest.
 
 **Performance.** Stone, crops, darkening and support structure are drawn once
 into an offscreen canvas at screen resolution (rebuilt only on resize or when the
-art finishes loading). Per frame: one image draw, 11 fire glows and ~13 LEDs.
+art finishes loading). Per frame: one image draw, 11 fire glows and 3 LEDs.
+
+## title/ (title screen)
+
+`title/title.json`: the title image is drawn to cover the view (scaled to the
+view width, shifted up 24 px so the top torch stays visible; a little of the
+bottom floor is cut). There is no text or menu on top: any confirm or click
+starts a match. Each flame listed in the manifest (23: torches and candles, the
+red lanterns on the left, the blue lanterns on the right) gets an additive glow
+in its own colour that flickers with two out-of-phase waves, plus a small
+swaying bright core. Flame positions were found by scanning the image for small
+bright warm/blue blobs outside the logo and checked by eye.
 
 ## fonts/
 
