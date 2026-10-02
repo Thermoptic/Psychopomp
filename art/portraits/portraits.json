@@ -1,0 +1,326 @@
+{
+  "description": "Monster avatars cut out of the two portrait sheets in art/references/ (4x4 each, frames removed). Each crop is a square centred inside the frame, 26 px inside the frame so the coloured corner marks are cut away; output is <id>.png, exactly 256x256. Regenerate with tools/extract-portraits.mjs. Creature content selects one with art.portrait = <id>.",
+  "size": 256,
+  "portraits": [
+    {
+      "id": "eye",
+      "sheet": "psychopomp-portraits-a.webp",
+      "crop": [
+        52,
+        46,
+        216,
+        216
+      ]
+    },
+    {
+      "id": "maw",
+      "sheet": "psychopomp-portraits-a.webp",
+      "crop": [
+        363,
+        46,
+        216,
+        216
+      ]
+    },
+    {
+      "id": "hood",
+      "sheet": "psychopomp-portraits-a.webp",
+      "crop": [
+        677,
+        46,
+        216,
+        216
+      ]
+    },
+    {
+      "id": "dragon",
+      "sheet": "psychopomp-portraits-a.webp",
+      "crop": [
+        989,
+        46,
+        216,
+        216
+      ]
+    },
+    {
+      "id": "horned-skull",
+      "sheet": "psychopomp-portraits-a.webp",
+      "crop": [
+        52,
+        346,
+        217,
+        217
+      ]
+    },
+    {
+      "id": "slime",
+      "sheet": "psychopomp-portraits-a.webp",
+      "crop": [
+        363,
+        346,
+        217,
+        217
+      ]
+    },
+    {
+      "id": "lich-king",
+      "sheet": "psychopomp-portraits-a.webp",
+      "crop": [
+        677,
+        346,
+        217,
+        217
+      ]
+    },
+    {
+      "id": "automaton",
+      "sheet": "psychopomp-portraits-a.webp",
+      "crop": [
+        989,
+        346,
+        217,
+        217
+      ]
+    },
+    {
+      "id": "vampire",
+      "sheet": "psychopomp-portraits-a.webp",
+      "crop": [
+        53,
+        650,
+        215,
+        215
+      ]
+    },
+    {
+      "id": "werewolf",
+      "sheet": "psychopomp-portraits-a.webp",
+      "crop": [
+        364,
+        650,
+        215,
+        215
+      ]
+    },
+    {
+      "id": "plague-doctor",
+      "sheet": "psychopomp-portraits-a.webp",
+      "crop": [
+        678,
+        650,
+        215,
+        215
+      ]
+    },
+    {
+      "id": "tentacle-maw",
+      "sheet": "psychopomp-portraits-a.webp",
+      "crop": [
+        990,
+        650,
+        215,
+        215
+      ]
+    },
+    {
+      "id": "golem",
+      "sheet": "psychopomp-portraits-a.webp",
+      "crop": [
+        48,
+        960,
+        224,
+        224
+      ]
+    },
+    {
+      "id": "demon",
+      "sheet": "psychopomp-portraits-a.webp",
+      "crop": [
+        360,
+        961,
+        222,
+        222
+      ]
+    },
+    {
+      "id": "orb-drone",
+      "sheet": "psychopomp-portraits-a.webp",
+      "crop": [
+        675,
+        962,
+        220,
+        220
+      ]
+    },
+    {
+      "id": "skeleton-king",
+      "sheet": "psychopomp-portraits-a.webp",
+      "crop": [
+        985,
+        960,
+        224,
+        224
+      ]
+    },
+    {
+      "id": "cyclops-demon",
+      "sheet": "psychopomp-portraits-b.webp",
+      "crop": [
+        46,
+        43,
+        224,
+        224
+      ]
+    },
+    {
+      "id": "many-eyed-maw",
+      "sheet": "psychopomp-portraits-b.webp",
+      "crop": [
+        358,
+        42,
+        225,
+        225
+      ]
+    },
+    {
+      "id": "tentacle-cyclops",
+      "sheet": "psychopomp-portraits-b.webp",
+      "crop": [
+        672,
+        43,
+        224,
+        224
+      ]
+    },
+    {
+      "id": "skull-automaton",
+      "sheet": "psychopomp-portraits-b.webp",
+      "crop": [
+        985,
+        42,
+        225,
+        225
+      ]
+    },
+    {
+      "id": "brain-cyborg",
+      "sheet": "psychopomp-portraits-b.webp",
+      "crop": [
+        49,
+        348,
+        218,
+        218
+      ]
+    },
+    {
+      "id": "bone-beast",
+      "sheet": "psychopomp-portraits-b.webp",
+      "crop": [
+        362,
+        348,
+        218,
+        218
+      ]
+    },
+    {
+      "id": "skull-slime",
+      "sheet": "psychopomp-portraits-b.webp",
+      "crop": [
+        675,
+        348,
+        218,
+        218
+      ]
+    },
+    {
+      "id": "plague-hood",
+      "sheet": "psychopomp-portraits-b.webp",
+      "crop": [
+        988,
+        348,
+        218,
+        218
+      ]
+    },
+    {
+      "id": "spiked-horror",
+      "sheet": "psychopomp-portraits-b.webp",
+      "crop": [
+        49,
+        648,
+        218,
+        218
+      ]
+    },
+    {
+      "id": "beholder",
+      "sheet": "psychopomp-portraits-b.webp",
+      "crop": [
+        362,
+        648,
+        218,
+        218
+      ]
+    },
+    {
+      "id": "vampire-queen",
+      "sheet": "psychopomp-portraits-b.webp",
+      "crop": [
+        675,
+        648,
+        218,
+        218
+      ]
+    },
+    {
+      "id": "rune-golem",
+      "sheet": "psychopomp-portraits-b.webp",
+      "crop": [
+        988,
+        648,
+        218,
+        218
+      ]
+    },
+    {
+      "id": "rotting-ghoul",
+      "sheet": "psychopomp-portraits-b.webp",
+      "crop": [
+        46,
+        961,
+        224,
+        224
+      ]
+    },
+    {
+      "id": "horned-reaper",
+      "sheet": "psychopomp-portraits-b.webp",
+      "crop": [
+        357,
+        960,
+        227,
+        227
+      ]
+    },
+    {
+      "id": "frost-wraith",
+      "sheet": "psychopomp-portraits-b.webp",
+      "crop": [
+        672,
+        961,
+        224,
+        224
+      ]
+    },
+    {
+      "id": "clockwork-eye",
+      "sheet": "psychopomp-portraits-b.webp",
+      "crop": [
+        984,
+        960,
+        226,
+        226
+      ]
+    }
+  ]
+}

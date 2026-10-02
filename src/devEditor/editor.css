@@ -130,3 +130,11 @@ input[type='range'] { accent-color: var(--pp); width: 100%; }
 .valid { color: var(--ok); font-size: 11px; margin-top: 8px; }
 details summary { cursor: pointer; color: var(--dim); font-size: 11px; }
 .coming { padding: 40px; color: var(--dim); }
+
+/* Avatar picker */
+.avatars { display: grid; grid-template-columns: repeat(auto-fill, 60px); gap: 6px; }
+.avatar { width: 60px; height: 60px; padding: 0; border: 2px solid var(--edge-dark); background: #0c0a08; cursor: pointer; }
+.avatar img { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+.avatar:hover { border-color: var(--dim); }
+.avatar.on { border-color: var(--pp); box-shadow: 0 0 0 2px var(--pp); }
+.avatar.none { font-size: 10px; color: var(--dim); }

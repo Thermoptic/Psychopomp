@@ -8,7 +8,7 @@ import { loadContentPack } from './content/loader';
 import { InputManager } from './input/InputManager';
 import { bundledPackFiles } from './platform/web/bundledContent';
 import { browserStorage } from './platform/web/storage';
-import { loadArt } from './rendering/art';
+import { loadArt, preloadPortraits } from './rendering/art';
 import { VIEW_H, VIEW_W } from './rendering/theme';
 
 void loadArt();
@@ -39,6 +39,7 @@ const loaded = loadContentPack(bundledPackFiles().base ?? {});
 const sfx = new Sfx();
 // Bundled content + content saved by the developer editor (/editor) in this browser.
 const library = loaded.ok ? new ContentLibrary(loaded.pack, browserStorage()) : null;
+if (library) void preloadPortraits(library.creatures().map((c) => c.art?.portrait));
 const app = new App(library, loaded.ok ? [] : loaded.errors, sfx);
 const input = new InputManager();
 input.onGamepadDisconnected = (player) => app.pause(player ? `${player === 'P1' ? 'PLAYER 1' : 'PLAYER 2'} CONTROLLER DISCONNECTED` : 'CONTROLLER DISCONNECTED');

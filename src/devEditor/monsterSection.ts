@@ -3,6 +3,7 @@
 
 import { baseBattleStats, cellCode, computeDashCooldown, describeRequirement, parseCell, type CreatureDef, type Effect, type SlotCondition } from '../core';
 import { resolveDash } from '../core/combat/simulation';
+import { PORTRAIT_IDS, parsePortraitRef, portraitUrl } from '../rendering/art';
 import { drawCreature } from '../rendering/sprites';
 import { boardGrid, group, h, row, segmented, selectBox, slider, textInput } from './dom';
 import { setWeaponType, weaponSettingsGroup, weaponSummary, weaponTypeSelector } from './weaponFields';
@@ -300,7 +301,36 @@ export function monsterForm(ed: ItemEditor<'monster'>, refresh: () => void, rebu
     ),
   );
 
-  return h('div', {}, identity, health, player, position, movement, modifiers, attack, powerup, special, behaviour);
+  // --- avatar ---------------------------------------------------------------------------------
+  const current = parsePortraitRef(d.art?.portrait);
+  const setAvatar = (id: string | null) =>
+    edit((m) => {
+      const art = { ...(m.art ?? {}) };
+      if (id) art.portrait = id;
+      else delete art.portrait;
+      m.art = art;
+    }, true);
+  const avatar = group(
+    'AVATAR',
+    h('div', {
+      class: 'hint dim',
+      text: `Portrait on the board, in the player panels and in combat (framed in the owner's colour). Selected: ${current ?? 'none (generated sprite)'}`,
+    }),
+    h(
+      'div',
+      { class: 'avatars' },
+      h('button', { type: 'button', class: `avatar none ${current ? '' : 'on'}`, title: 'No avatar: generated pixel sprite', text: 'NONE', on: { click: () => setAvatar(null) } }),
+      ...PORTRAIT_IDS.map((id) =>
+        h(
+          'button',
+          { type: 'button', class: `avatar ${current === id ? 'on' : ''}`, title: id, on: { click: () => setAvatar(id) } },
+          h('img', { src: portraitUrl(id) ?? '', alt: id, draggable: false }),
+        ),
+      ),
+    ),
+  );
+
+  return h('div', {}, identity, avatar, health, player, position, movement, modifiers, attack, powerup, special, behaviour);
 }
 
 export function monsterPreview(ed: ItemEditor<'monster'>): HTMLElement {

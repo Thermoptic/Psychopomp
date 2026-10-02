@@ -55,7 +55,7 @@ function pattern(id: string): number[][] {
 export interface CreatureDrawOpts {
   flip?: boolean;
   flash?: string;
-  /** Content `art.portrait` reference ("monsters:<n>"). */
+  /** Content `art.portrait`: an avatar id (see art/portraits/). */
   portrait?: string;
   /** Portrait edge length in px (default 12 × px). */
   portraitSize?: number;

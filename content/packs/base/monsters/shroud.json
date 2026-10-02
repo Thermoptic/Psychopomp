@@ -7,7 +7,7 @@
     "test"
   ],
   "art": {
-    "portrait": "monsters:3"
+    "portrait": "hood"
   },
   "stats": {
     "maxHp": 20,

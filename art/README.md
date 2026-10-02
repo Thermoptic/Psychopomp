@@ -9,7 +9,9 @@ and works offline (bundled by Vite, no CDN).
 |---|---|---|
 | `psychopomp-ui-reference.webp` | 1565×1005 | Look and palette of the UI (panels, dice, labels, colours). Not drawn in the game. |
 | `psychopomp-board-reference.webp` | 1254×1254 | Board tiles and frame (cropped at draw time). |
-| `psychopomp-monsters-reference.webp` | 1254×1254 | Creature portraits (cropped at draw time). |
+| `psychopomp-monsters-reference.webp` | 1254×1254 | The first portrait sheet (superseded by the two sheets below; kept as the original). |
+| `psychopomp-portraits-a.webp` | 1254×1254 | Avatar sheet A (16 portraits), cut out into `portraits/`. |
+| `psychopomp-portraits-b.webp` | 1254×1254 | Avatar sheet B (16 portraits), cut out into `portraits/`. |
 | `psychopomp-environment-reference.webp` | 1565×1005 | The chamber around the UI (cropped at draw time, see below). |
 | `psychopomp-title-reference.webp` | 1565×1005 | The title screen, drawn full screen (see below). |
 
@@ -18,34 +20,37 @@ rectangles, so no generated copies are needed and the originals stay untouched.
 To change a crop, edit the constants in `art.ts` (the tests in
 `tests/art.test.ts` check they stay inside the images).
 
-### Monster portraits
+### Monster avatars (portraits/)
 
-Creature content points at a portrait with `art.portrait: "monsters:<index>"`
-(row-major on the 4×4 sheet). A creature without a valid `art.portrait` keeps the
-procedural placeholder sprite.
+32 avatars, cut out of the two avatar sheets: frame and corner marks removed,
+exactly **256×256 PNG** each (`portraits/<id>.png`). `portraits/portraits.json`
+lists every id with its sheet and square crop (centred inside the frame, 26 px
+in so the coloured corner marks are cut away). Regenerate with:
 
-| Index | Sheet name | Used by |
-|---|---|---|
-| 0 | eye | `glubber` |
-| 1 | maw | |
-| 2 | dragon | |
-| 3 | hood | `shroud` |
-| 4 | horned-skull | |
-| 5 | slime | |
-| 6 | automaton | |
-| 7 | lich-king | |
-| 8 | vampire | |
-| 9 | werewolf | |
-| 10 | tentacle-maw | |
-| 11 | plague-doctor | |
-| 12 | golem | |
-| 13 | demon | |
-| 14 | skeleton-king | |
-| 15 | orb-drone | |
+    npm install --no-save sharp
+    node tools/extract-portraits.mjs
 
-Crop: a 248×248 square centred in each frame (frame centres measured from the
-frame lines). The coloured frame is redrawn in the owner's colour (P1 red/orange,
-P2 blue), so any creature can belong to either player.
+Creature content selects one with `art.portrait: "<id>"`. In the Developer
+Editor (/editor -> Monsters -> AVATAR) every avatar is offered as a thumbnail;
+NONE keeps the generated pixel sprite. The game draws the avatar framed in the
+owner's colour (P1 red/orange, P2 blue), so any avatar works for either player.
+Only avatars used by the content are loaded by the game; the editor loads all.
+Older content with `"monsters:<n>"` (first sheet) still resolves to the same
+creature (e.g. `monsters:0` -> `eye`).
+
+| Sheet A (row-major) | | | |
+|---|---|---|---|
+| eye (`glubber`) | maw | hood (`shroud`) | dragon |
+| horned-skull | slime | lich-king | automaton |
+| vampire | werewolf | plague-doctor | tentacle-maw |
+| golem | demon | orb-drone | skeleton-king |
+
+| Sheet B (row-major) | | | |
+|---|---|---|---|
+| cyclops-demon | many-eyed-maw | tentacle-cyclops | skull-automaton |
+| brain-cyborg | bone-beast | skull-slime | plague-hood |
+| spiked-horror | beholder | vampire-queen | rune-golem |
+| rotting-ghoul | horned-reaper | frost-wraith | clockwork-eye |
 
 ### Board
 

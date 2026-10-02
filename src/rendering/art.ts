@@ -1,6 +1,7 @@
 // Prototype artwork taken from the visual references in art/references/.
-// The reference images are never modified: sprites are cropped from them at
-// draw time using the measured rectangles below. See art/README.md for the
+// The reference images are never modified: board tiles are cropped from them
+// at draw time using the measured rectangles below; creature avatars are
+// pre-cut files in art/portraits/. See art/README.md for the
 // mapping. Presentation only; nothing here affects the game.
 //
 // Loading needs a browser (Image, FontFace); call loadArt() from a page entry.
@@ -8,7 +9,6 @@
 // procedural look, so the game never depends on the art being present.
 
 import boardUrl from '../../art/references/psychopomp-board-reference.webp?url';
-import monstersUrl from '../../art/references/psychopomp-monsters-reference.webp?url';
 import environmentUrl from '../../art/references/psychopomp-environment-reference.webp?url';
 import titleUrl from '../../art/references/psychopomp-title-reference.webp?url';
 import displayFontUrl from '../../art/fonts/the-lowly-scribe.ttf?url';
@@ -16,6 +16,10 @@ import displayFontUrl from '../../art/fonts/the-lowly-scribe.ttf?url';
 // from the page, which also makes the build emit them next to it).
 import displayFontLicenseUrl from '../../art/fonts/the-lowly-scribe-OFL.txt?url';
 import displayFontReadmeUrl from '../../art/fonts/the-lowly-scribe-readme.txt?url';
+import portraitManifest from '../../art/portraits/portraits.json';
+
+// Every avatar PNG, bundled by Vite (URL per file).
+const PORTRAIT_FILES = import.meta.glob('../../art/portraits/*.png', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 
 export interface Sprite {
   img: CanvasImageSource;
@@ -25,40 +29,61 @@ export interface Sprite {
   sh: number;
 }
 
-// --- monster portraits ----------------------------------------------------------------------
+// --- monster portraits (avatars) -----------------------------------------------------------
 //
-// psychopomp-monsters-reference: a 4×4 sheet of framed portraits (1254×1254).
-// Centres measured from the frame lines; a square crop inside each frame (the
-// frame itself is redrawn in the owner's colour).
+// 32 avatars cut out of the portrait sheets (art/portraits/<id>.png, 256×256,
+// frame removed; see art/portraits/portraits.json and tools/extract-portraits.mjs).
+// Creature content selects one with `art.portrait: "<id>"`. The frame is redrawn
+// in the owner's colour, so any avatar works for either player.
 
-const PORTRAIT_COL_CENTRES = [161.5, 471.5, 782.5, 1093];
-const PORTRAIT_ROW_CENTRES = [154, 452.5, 756, 1071.5];
-const PORTRAIT_SIZE = 248;
+/** All avatar ids, in sheet order. */
+export const PORTRAIT_IDS: readonly string[] = portraitManifest.portraits.map((p) => p.id);
 
-/** Sheet index -> short name (row-major), for docs and tools. */
-export const MONSTER_SHEET = [
+/** Older content used "monsters:<n>" (the first 4×4 reference sheet, row-major). */
+const LEGACY_SHEET = [
   'eye', 'maw', 'dragon', 'hood',
   'horned-skull', 'slime', 'automaton', 'lich-king',
   'vampire', 'werewolf', 'tentacle-maw', 'plague-doctor',
   'golem', 'demon', 'skeleton-king', 'orb-drone',
-] as const;
+];
 
-/**
- * Portrait reference as stored in creature content (`art.portrait`):
- * "monsters:<index>" with index 0..15 into MONSTER_SHEET. Null if invalid.
- */
-export function parsePortraitRef(ref: string | undefined): { sheet: 'monsters'; index: number } | null {
-  const m = /^monsters:(\d+)$/.exec(ref ?? '');
-  if (!m) return null;
-  const index = Number(m[1]);
-  return index < MONSTER_SHEET.length ? { sheet: 'monsters', index } : null;
+/** The avatar id for a content `art.portrait` value (an id or a legacy "monsters:<n>"), or null. */
+export function parsePortraitRef(ref: string | undefined): string | null {
+  if (!ref) return null;
+  const legacy = /^monsters:(\d+)$/.exec(ref);
+  const id = legacy ? LEGACY_SHEET[Number(legacy[1])] : ref;
+  return id && PORTRAIT_IDS.includes(id) ? id : null;
 }
 
-/** Source rectangle of a portrait on the monster sheet. */
-export function portraitRect(index: number): { sx: number; sy: number; sw: number; sh: number } {
-  const cx = PORTRAIT_COL_CENTRES[index % 4];
-  const cy = PORTRAIT_ROW_CENTRES[Math.floor(index / 4)];
-  return { sx: Math.round(cx - PORTRAIT_SIZE / 2), sy: Math.round(cy - PORTRAIT_SIZE / 2), sw: PORTRAIT_SIZE, sh: PORTRAIT_SIZE };
+/** URL of an avatar image (for the editor's picker), or null for an unknown id. */
+export function portraitUrl(id: string): string | null {
+  return PORTRAIT_FILES[`../../art/portraits/${id}.png`] ?? null;
+}
+
+const portraitImgs = new Map<string, { img: HTMLImageElement; ready: Promise<void>; loaded: boolean }>();
+
+function portraitImage(id: string) {
+  let e = portraitImgs.get(id);
+  if (!e && typeof Image !== 'undefined') {
+    const url = portraitUrl(id);
+    if (!url) return null;
+    const img = new Image();
+    const entry = { img, loaded: false, ready: Promise.resolve() };
+    entry.ready = new Promise<void>((resolve) => {
+      img.onload = () => ((entry.loaded = true), resolve());
+      img.onerror = () => (console.warn('[art] could not load avatar', id), resolve());
+    });
+    img.src = url;
+    portraitImgs.set(id, entry);
+    e = entry;
+  }
+  return e ?? null;
+}
+
+/** Starts loading the avatars for these content refs; resolves when they are in. */
+export function preloadPortraits(refs: Array<string | undefined>): Promise<void> {
+  const ids = [...new Set(refs.map(parsePortraitRef).filter((x): x is string => !!x))];
+  return Promise.all(ids.map((id) => portraitImage(id)?.ready)).then(() => undefined);
 }
 
 // --- board ----------------------------------------------------------------------------------
@@ -92,7 +117,6 @@ interface BoardArt {
   byKind: Record<TileKind, Array<[number, number]>>;
 }
 
-let monsterImg: HTMLImageElement | null = null;
 let environmentImg: HTMLImageElement | null = null;
 let titleImg: HTMLImageElement | null = null;
 let boardArt: BoardArt | null = null;
@@ -142,7 +166,6 @@ function classifyBoard(img: HTMLImageElement): BoardArt {
 export function loadArt(): Promise<void> {
   if (loading) return loading;
   const tasks: Array<Promise<unknown>> = [
-    loadImage(monstersUrl).then((img) => (monsterImg = img)),
     loadImage(boardUrl).then((img) => (boardArt = classifyBoard(img))),
     loadImage(environmentUrl).then((img) => (environmentImg = img)),
     loadImage(titleUrl).then((img) => (titleImg = img)),
@@ -172,11 +195,12 @@ export function loadArt(): Promise<void> {
 
 export const displayFontReady = (): boolean => fontReady;
 
-/** The portrait sprite for a creature's `art.portrait`, or null (not set / not loaded). */
+/** The avatar sprite for a creature's `art.portrait`, or null (not set / not loaded yet). */
 export function portraitSprite(ref: string | undefined): Sprite | null {
-  const p = parsePortraitRef(ref);
-  if (!p || !monsterImg) return null;
-  return { img: monsterImg, ...portraitRect(p.index) };
+  const id = parsePortraitRef(ref);
+  const e = id ? portraitImage(id) : null;
+  if (!e || !e.loaded) return null;
+  return { img: e.img, sx: 0, sy: 0, sw: e.img.naturalWidth, sh: e.img.naturalHeight };
 }
 
 const tileHash = (x: number, y: number) => {
