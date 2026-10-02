@@ -4,30 +4,35 @@
 import type { MatchUi } from '../app/ui';
 import { baseBattleStats, creatureAt, describeRequirement, getLegalMoves, livingCreatures, type GameState, type PlayerId } from '../core';
 import { badge, hpBar, panel, rect, strokeRect, text, wrapText, type Ctx } from './draw';
-import { HEADER, LEFT_PANEL, MESSAGE_BAR, RIGHT_PANEL, boardLayout, cellRect, type BoardLayout, type Rect } from './layout';
+import { BOARD_AREA, HEADER, LEFT_PANEL, MESSAGE_BAR, RIGHT_PANEL, boardLayout, cellRect, type BoardLayout, type Rect } from './layout';
 import { aimReticle, boardUnits, combatToScreen, isBattleView, isCombatView, type BoardUnit } from './boardUnits';
 import { movementText } from './movementText';
 import { drawCreature } from './sprites';
 import { C, playerColor, playerLabel } from './theme';
 
 export function drawHeader(ctx: Ctx, state: GameState): void {
-  panel(ctx, HEADER, undefined, '#101015');
-  text(ctx, 'PSYCHOPOMP', 18, 29, { size: 22, color: C.text });
-  text(ctx, 'PSYCHOPOMP', 17, 28, { size: 22, color: C.danger });
+  const H = HEADER;
+  panel(ctx, H, undefined, '#101015');
+  const cy = H.y + H.h / 2;
+  const left = H.x + 18; // same text inset as the message bar
+  text(ctx, 'PSYCHOPOMP', left + 1, cy + 8, { size: 22, color: C.text });
+  text(ctx, 'PSYCHOPOMP', left, cy + 7, { size: 22, color: C.danger });
 
   const p = state.currentTurn.player;
+  const mid = H.x + H.w / 2;
   const label = state.phase === 'gameOver' ? 'MATCH OVER' : `TURN ${state.currentTurn.number}  ·  ${playerLabel(p)}`;
-  badge(ctx, 480 - 110, 22, 14, p, playerColor(p));
-  text(ctx, label, 480 - 96, 27, { size: 16, color: playerColor(p) });
+  badge(ctx, mid - 110, cy, 14, p, playerColor(p));
+  text(ctx, label, mid - 96, cy + 5, { size: 16, color: playerColor(p) });
 
   const count = (o: PlayerId) => state.powerPoints.filter((pp) => pp.owner === o).length;
   const total = state.powerPoints.length;
-  text(ctx, 'POWER', 760, 20, { size: 10, color: C.dim });
-  text(ctx, 'POINTS', 760, 32, { size: 10, color: C.dim });
-  badge(ctx, 820, 22, 12, 'P1', C.p1);
-  text(ctx, `${count('P1')}/${total}`, 832, 27, { size: 15, color: C.p1 });
-  badge(ctx, 890, 22, 12, 'P2', C.p2);
-  text(ctx, `${count('P2')}/${total}`, 902, 27, { size: 15, color: C.p2 });
+  const R = H.x + H.w;
+  text(ctx, 'POWER', R - 190, cy - 2, { size: 10, color: C.dim });
+  text(ctx, 'POINTS', R - 190, cy + 10, { size: 10, color: C.dim });
+  badge(ctx, R - 130, cy, 12, 'P1', C.p1);
+  text(ctx, `${count('P1')}/${total}`, R - 118, cy + 5, { size: 15, color: C.p1 });
+  badge(ctx, R - 60, cy, 12, 'P2', C.p2);
+  text(ctx, `${count('P2')}/${total}`, R - 48, cy + 5, { size: 15, color: C.p2 });
 }
 
 function statLine(ctx: Ctx, x: number, y: number, label: string, value: string, color: string = C.text): void {
@@ -98,7 +103,7 @@ export function drawPlayerPanel(ctx: Ctx, state: GameState, ui: MatchUi, player:
 export function drawBoard(ctx: Ctx, state: GameState, ui: MatchUi, now: number, battleView = isBattleView(state)): void {
   const board = state.board;
   const l = boardLayout(board);
-  panel(ctx, { x: l.ox - 10, y: l.oy - 10, w: l.cell * board.width + 20, h: l.cell * board.height + 20 });
+  panel(ctx, BOARD_AREA);
 
   for (let y = 0; y < board.height; y++) {
     for (let x = 0; x < board.width; x++) {
@@ -187,7 +192,7 @@ export function drawBoard(ctx: Ctx, state: GameState, ui: MatchUi, now: number, 
 
 export function drawMessageBar(ctx: Ctx, msg: string, color: string = C.text): void {
   panel(ctx, MESSAGE_BAR, undefined, '#0e0e12');
-  text(ctx, msg, MESSAGE_BAR.x + 18, MESSAGE_BAR.y + 28, { size: 14, color });
+  text(ctx, msg, MESSAGE_BAR.x + 18, MESSAGE_BAR.y + MESSAGE_BAR.h / 2 + 5, { size: 14, color });
 }
 
 /** Plain board mode (also used for the short battle intro). */

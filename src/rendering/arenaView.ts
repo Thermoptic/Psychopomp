@@ -7,7 +7,7 @@ import { arenaGrid, computeBlockCharges, type GameState, type PlayerId } from '.
 import { boardUnits, combatToScreen } from './boardUnits';
 import { drawUnits } from './boardView';
 import { hpBar, measure, panel, rect, text, type Ctx } from './draw';
-import { BOARD_AREA, COMBAT_HUD, arenaLayout, type BoardLayout, type Rect } from './layout';
+import { ARENA_AREA, BOARD_AREA, COMBAT_HUD, arenaLayout, type BoardLayout, type Rect } from './layout';
 import { C, playerColor } from './theme';
 
 /** Length of the board -> arena expand transition. */
@@ -27,11 +27,11 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 export function drawArena(ctx: Ctx, state: GameState, ui: MatchUi, now: number, expandMs: number): void {
   const g = arenaGrid(state.ruleset.combat);
   const l = currentArenaLayout(state);
-  const frame: Rect = { x: l.ox - 10, y: l.oy - 10, w: l.cell * g.width + 20, h: l.cell * g.height + 20 };
+  const frame: Rect = ARENA_AREA;
 
   // Expand: interpolate the visible frame from the board area to the arena.
   const t = expandMs > 0 ? 1 - Math.pow(expandMs / ARENA_EXPAND_MS, 2) : 1;
-  const from: Rect = { x: BOARD_AREA.x - 10, y: frame.y, w: BOARD_AREA.w + 20, h: frame.h };
+  const from: Rect = { x: BOARD_AREA.x, y: frame.y, w: BOARD_AREA.w, h: frame.h };
   const vis: Rect = {
     x: Math.round(lerp(from.x, frame.x, t)),
     y: frame.y,

@@ -12,11 +12,29 @@ export interface Rect {
 
 export const inRect = (r: Rect, x: number, y: number) => x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h;
 
-export const HEADER: Rect = { x: 0, y: 0, w: 960, h: 44 };
-export const LEFT_PANEL: Rect = { x: 12, y: 54, w: 226, h: 418 };
-export const RIGHT_PANEL: Rect = { x: 722, y: 54, w: 226, h: 418 };
-export const BOARD_AREA: Rect = { x: 250, y: 54, w: 460, h: 418 };
-export const MESSAGE_BAR: Rect = { x: 12, y: 482, w: 936, h: 46 };
+// Match screens use one gutter everywhere: GAP between the screen edge and the
+// windows, and between every pair of windows. Rows, top to bottom:
+//   GAP | header / combat HUD | GAP | side panels + board (or arena) | GAP | message bar | GAP
+// The board's frame is a square filling BOARD_AREA; the side panels share
+// the remaining width.
+
+const VIEW = { w: 960, h: 540 };
+export const GAP = 12;
+const TOP_H = 48;
+const BAR_H = 36;
+const CONTENT_Y = GAP + TOP_H + GAP;
+const CONTENT_H = VIEW.h - CONTENT_Y - GAP - BAR_H - GAP;
+const FULL_W = VIEW.w - 2 * GAP;
+const SIDE_W = (FULL_W - CONTENT_H - 2 * GAP) / 2;
+
+export const HEADER: Rect = { x: GAP, y: GAP, w: FULL_W, h: TOP_H };
+export const LEFT_PANEL: Rect = { x: GAP, y: CONTENT_Y, w: SIDE_W, h: CONTENT_H };
+export const BOARD_AREA: Rect = { x: GAP + SIDE_W + GAP, y: CONTENT_Y, w: CONTENT_H, h: CONTENT_H };
+export const RIGHT_PANEL: Rect = { x: VIEW.w - GAP - SIDE_W, y: CONTENT_Y, w: SIDE_W, h: CONTENT_H };
+export const MESSAGE_BAR: Rect = { x: GAP, y: VIEW.h - GAP - BAR_H, w: FULL_W, h: BAR_H };
+
+/** Inner padding between a board/arena frame and its cells. */
+export const FRAME_PAD = 10;
 
 export interface BoardLayout {
   ox: number;
@@ -25,7 +43,7 @@ export interface BoardLayout {
 }
 
 export function boardLayout(board: BoardDef): BoardLayout {
-  const cell = Math.floor(Math.min(BOARD_AREA.w / board.width, BOARD_AREA.h / board.height));
+  const cell = Math.floor(Math.min((BOARD_AREA.w - 2 * FRAME_PAD) / board.width, (BOARD_AREA.h - 2 * FRAME_PAD) / board.height));
   return {
     cell,
     ox: BOARD_AREA.x + Math.floor((BOARD_AREA.w - cell * board.width) / 2),
@@ -39,13 +57,12 @@ export function boardLayout(board: BoardDef): BoardLayout {
 // everything between the HUD and the message bar. The arena's column/row count
 // is gameplay data (ruleset); only the on-screen cell size is computed here.
 
-export const COMBAT_HUD: Rect = { x: 12, y: 4, w: 936, h: 50 };
-export const ARENA_AREA: Rect = { x: 12, y: 60, w: 936, h: 414 };
-const ARENA_FRAME = 8;
+export const COMBAT_HUD: Rect = HEADER;
+export const ARENA_AREA: Rect = { x: GAP, y: CONTENT_Y, w: FULL_W, h: CONTENT_H };
 
 /** Fits a columns × rows grid of square cells into `area`, centred. */
 export function arenaLayout(columns: number, rows: number, area: Rect = ARENA_AREA): BoardLayout {
-  const cell = Math.floor(Math.min((area.w - 2 * ARENA_FRAME) / columns, (area.h - 2 * ARENA_FRAME) / rows));
+  const cell = Math.floor(Math.min((area.w - 2 * FRAME_PAD) / columns, (area.h - 2 * FRAME_PAD) / rows));
   return {
     cell,
     ox: area.x + Math.floor((area.w - cell * columns) / 2),
