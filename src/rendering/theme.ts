@@ -57,6 +57,9 @@ export const DIE_FACE: Record<string, string> = {
   block: '#3f88d8',
 };
 
+/** Icon tile / gauge colour per stat in the side panels (as in the reference panels). */
+export const STAT_TILE: Record<string, string> = { power: '#e0562c', speed: '#3f88d8', shield: '#e7c25a', dash: '#79b84c', special: '#79b84c', block: '#7f93ad' };
+
 /** Body text: small sizes stay in a crisp monospace. */
 export const FONT = "'Courier New', Courier, monospace";
 /** Display text (titles, names, labels): the bundled gothic pixel font. */

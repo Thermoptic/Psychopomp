@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { arenaGrid, cellCentre, combatSpawnCell, type GameState } from '../src/core';
-import { ARENA_AREA, BOARD_AREA, COMBAT_HUD, arenaLayout, boardLayout } from '../src/rendering/layout';
+import { ARENA_AREA, BOARD_AREA, COMBAT_HUD, arenaLayout, boardLayout, prepItemAt, prepPanelLayout } from '../src/rendering/layout';
 import { boardSpritePx, boardUnits, isArenaView, isCombatView } from '../src/rendering/boardUnits';
 import { customMatch, fightToResult, ok, prepareBothAndBegin, quickPrepare, testCreature, tick } from './helpers';
 
@@ -184,5 +184,31 @@ describe('combat arena', () => {
     expect(s.creatures['P1-a-1'].hp).toBe(hp);
     const units = boardUnits(s, boardLayout(s.board));
     expect(units.find((u) => u.creatureId === 'P1-a-1')!.hp).toBe(hp);
+  });
+});
+
+describe('dice panel layout', () => {
+  it('LOCK tabs sit outside the panel in the side margin; every part is clickable and fits', () => {
+    for (const owner of ['P1', 'P2'] as const) {
+      const L = prepPanelLayout(owner, 5);
+      const P = L.panel;
+      for (const [i, row] of L.rows.entries()) {
+        const outside = owner === 'P1' ? row.lock.x + row.lock.w <= P.x : row.lock.x >= P.x + P.w;
+        expect(outside).toBe(true);
+        expect(row.lock.x).toBeGreaterThanOrEqual(0);
+        expect(row.lock.x + row.lock.w).toBeLessThanOrEqual(960);
+        const centre = (r: { x: number; y: number; w: number; h: number }) => [r.x + r.w / 2, r.y + r.h / 2] as const;
+        expect(prepItemAt(L, ...centre(row.lock))).toEqual({ kind: 'lock', i });
+        expect(prepItemAt(L, ...centre(row.die))).toEqual({ kind: 'die', i });
+        expect(prepItemAt(L, ...centre(row.slot))).toEqual({ kind: 'slot', i });
+      }
+      expect(prepItemAt(L, L.button.x + 5, L.button.y + 5)).toEqual({ kind: 'button' });
+      // Rows, the Special section and the button stay inside the panel, in that order.
+      const last = L.rows[L.rows.length - 1];
+      expect(L.rows[0].y).toBeGreaterThanOrEqual(P.y + 90);
+      expect(L.specialY).toBeGreaterThanOrEqual(last.y + last.h);
+      expect(L.button.y - L.specialY).toBeGreaterThan(40);
+      expect(L.button.y + L.button.h).toBeLessThanOrEqual(P.y + P.h);
+    }
   });
 });

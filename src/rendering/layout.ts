@@ -116,10 +116,11 @@ export interface PrepPanelLayout {
 
 export function prepPanelLayout(owner: 'P1' | 'P2', rowCount: number): PrepPanelLayout {
   const P = owner === 'P1' ? LEFT_PANEL : RIGHT_PANEL;
-  const top = P.y + 80;
-  const rowsArea = P.h - 80 - 96;
+  // Header (tag + phase) and creature sections above, Special + button below.
+  const top = P.y + 92;
+  const rowsArea = P.h - 92 - 104;
   const h = Math.min(50, Math.floor(rowsArea / Math.max(1, rowCount)));
-  const d = Math.min(38, h - 10);
+  const d = Math.min(36, h - 10);
   const mirror = owner === 'P2';
   // x offsets measured from the panel's outer edge (left for P1, right for P2).
   const at = (off: number, w: number) => (mirror ? P.x + P.w - off - w : P.x + off);
@@ -128,17 +129,18 @@ export function prepPanelLayout(owner: 'P1' | 'P2', rowCount: number): PrepPanel
     const y = top + i * h;
     const cy = y + Math.floor((h - d) / 2);
     rows.push({
-      lock: { x: at(4, 28), y: cy + Math.floor(d / 2) - 7, w: 28, h: 14 },
-      die: { x: at(34, d), y: cy, w: d, h: d },
-      slot: { x: at(36 + d + 6, d), y: cy, w: d, h: d },
-      labelX: mirror ? P.x + P.w - (36 + 2 * d + 16) : P.x + 36 + 2 * d + 16,
+      // LOCK tab sticks out of the panel into the side margin (outer side).
+      lock: { x: mirror ? P.x + P.w + 3 : P.x - 33, y: cy + Math.floor(d / 2) - 9, w: 30, h: 18 },
+      die: { x: at(12, d), y: cy, w: d, h: d },
+      slot: { x: at(12 + d + 6, d), y: cy, w: d, h: d },
+      labelX: mirror ? P.x + P.w - (12 + 2 * d + 16) : P.x + 12 + 2 * d + 16,
       labelAlign: mirror ? 'right' : 'left',
       y,
       h,
     });
   }
-  const specialY = top + rowCount * h + 16;
-  return { panel: P, rows, specialY, button: { x: P.x + 22, y: P.y + P.h - 48, w: P.w - 44, h: 36 } };
+  const specialY = top + rowCount * h + 6;
+  return { panel: P, rows, specialY, button: { x: P.x + 22, y: P.y + P.h - 42, w: P.w - 44, h: 32 } };
 }
 
 /** Which preparation item (if any) is under a point. */

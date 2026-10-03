@@ -10,7 +10,7 @@ import { aimReticle, boardUnits, combatToScreen, isBattleView, isCombatView, typ
 import { defaultFacing } from './art';
 import { drawCreature } from './sprites';
 import { SLASH_MS, coneHalfAngle, drawSwish } from './swordSwing';
-import { C, CATEGORY_COLOR, playerColor, playerLabel } from './theme';
+import { C, CATEGORY_COLOR, STAT_TILE, playerColor, playerLabel } from './theme';
 
 /** A hanging pennant in a player's colour (the reference's banners beside the title). */
 function pennant(ctx: Ctx, x: number, y: number, h: number, color: string, dark: string): void {
@@ -62,9 +62,6 @@ function panelCreature(state: GameState, ui: MatchUi, player: PlayerId): string 
   if (ui.selected && state.creatures[ui.selected]?.owner === player) return ui.selected;
   return livingCreatures(state, player)[0]?.id ?? null;
 }
-
-/** Icon tile / gauge colour per stat in the player panel (as in the reference panel). */
-const STAT_TILE: Record<string, string> = { power: '#e0562c', speed: '#3f88d8', shield: '#e7c25a', dash: '#79b84c', block: '#7f93ad' };
 
 /** The stat rows of the player panel (all five dice categories). */
 const PANEL_STATS = [
