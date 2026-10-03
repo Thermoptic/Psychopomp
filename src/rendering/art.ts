@@ -11,6 +11,7 @@
 import boardUrl from '../../art/references/psychopomp-board-reference.webp?url';
 import environmentUrl from '../../art/references/psychopomp-environment-reference.webp?url';
 import titleUrl from '../../art/references/psychopomp-title-reference.webp?url';
+import wallsUrl from '../../art/references/psychopomp-arena-walls-reference.webp?url';
 import displayFontUrl from '../../art/fonts/the-lowly-scribe.ttf?url';
 // The font's OFL licence and readme must ship with the font (they are linked
 // from the page, which also makes the build emit them next to it).
@@ -140,6 +141,7 @@ interface BoardArt {
 
 let environmentImg: HTMLImageElement | null = null;
 let titleImg: HTMLImageElement | null = null;
+let wallsImg: HTMLImageElement | null = null;
 let boardArt: BoardArt | null = null;
 let fontReady = false;
 let loading: Promise<void> | null = null;
@@ -190,6 +192,7 @@ export function loadArt(): Promise<void> {
     loadImage(boardUrl).then((img) => (boardArt = classifyBoard(img))),
     loadImage(environmentUrl).then((img) => (environmentImg = img)),
     loadImage(titleUrl).then((img) => (titleImg = img)),
+    loadImage(wallsUrl).then((img) => (wallsImg = img)),
   ];
   if (typeof document !== 'undefined') {
     for (const href of [displayFontLicenseUrl, displayFontReadmeUrl]) {
@@ -265,4 +268,36 @@ export function environmentImage(): HTMLImageElement | null {
 /** The title screen image, or null if not loaded. */
 export function titleImage(): HTMLImageElement | null {
   return titleImg;
+}
+
+// --- arena walls ----------------------------------------------------------------------------
+//
+// psychopomp-arena-walls-reference (1265×581): a 20×9 arena with one wall of
+// every shape. Each shape is cropped as exactly its arena cells (measured grid
+// lines), stone block plus its dark shadow, and drawn over a wall's cells.
+
+export const WALLS_IMAGE_SIZE = { w: 1265, h: 581 };
+const WALL_GRID_X = [26, 87, 147, 208, 268, 329, 389, 449, 510, 570, 631, 692, 752, 813, 873, 934, 994, 1055, 1116, 1177, 1237];
+const WALL_GRID_Y = [17, 79, 139, 200, 259, 320, 379, 439, 499, 560];
+/** Where each wall shape lies in the reference: [column, row, columns, rows]. */
+const WALL_SHAPES: Record<string, [number, number, number, number]> = {
+  single: [16, 2, 1, 1],
+  'horizontal-2': [11, 1, 2, 1],
+  'horizontal-3': [12, 6, 3, 1],
+  'vertical-2': [7, 4, 1, 2],
+  'vertical-3': [4, 0, 1, 3],
+};
+
+/** Source rectangle of a wall shape in the walls reference. */
+export function wallCrop(orientation: 'single' | 'horizontal' | 'vertical', length: number): { sx: number; sy: number; sw: number; sh: number } {
+  const key = orientation === 'single' || length <= 1 ? 'single' : `${orientation}-${Math.min(3, length)}`;
+  const [c, r, w, h] = WALL_SHAPES[key];
+  const sx = WALL_GRID_X[c];
+  const sy = WALL_GRID_Y[r];
+  return { sx, sy, sw: WALL_GRID_X[c + w] - sx, sh: WALL_GRID_Y[r + h] - sy };
+}
+
+/** The wall sprite for a segment, or null if the art is not loaded. */
+export function wallSprite(orientation: 'single' | 'horizontal' | 'vertical', length: number): Sprite | null {
+  return wallsImg ? { img: wallsImg, ...wallCrop(orientation, length) } : null;
 }

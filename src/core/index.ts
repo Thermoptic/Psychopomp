@@ -40,3 +40,4 @@ export {
   baseBattleStats,
 } from './combat/stats';
 export { inAttackRange, combatSpawnCell, cellCentre, arenaGrid } from './combat/simulation';
+export { generateCombatWalls, wallsLeaveAPath, START_CLEARANCE, SEGMENT_GAP, MAX_LAYOUT_ATTEMPTS, type CombatWallsSetup } from './combat/walls';

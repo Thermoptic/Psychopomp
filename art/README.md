@@ -15,6 +15,7 @@ and works offline (bundled by Vite, no CDN).
 | `psychopomp-portraits-c.webp` | 1254×1254 | Avatar sheet C (16 forest creatures), cut out into `portraits/`. |
 | `psychopomp-environment-reference.webp` | 1565×1005 | The chamber around the UI (cropped at draw time, see below). |
 | `psychopomp-title-reference.webp` | 1565×1005 | The title screen, drawn full screen (see below). |
+| `psychopomp-arena-walls-reference.webp` | 1265×581 | Arena walls: one wall of every shape (1×1, 1×2 and 1×3, horizontal and vertical), cropped by its cells in `art.ts` (`wallCrop`) and drawn over the battle's generated walls. |
 
 The images are cropped **at runtime** (`src/rendering/art.ts`) from measured
 rectangles, so no generated copies are needed and the originals stay untouched.

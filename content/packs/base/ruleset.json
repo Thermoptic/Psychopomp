@@ -34,6 +34,7 @@
     "timeoutTicks": 5400,
     "countdownTicks": 180,
     "attackConeCos": 50,
+    "walls": true,
     "dash": {
       "distance": 3,
       "baseCooldown": 7,

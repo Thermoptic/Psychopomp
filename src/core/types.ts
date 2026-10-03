@@ -256,6 +256,8 @@ export interface CombatRules {
    * cos(half-angle) in percent (50 = ±60°, -100 = all around).
    */
   attackConeCos: number;
+  /** Generate static walls in the arena for every battle (missing = true). */
+  walls?: boolean;
   /** Default dash for creatures without their own `dash` data. */
   dash: Required<DashDef> & {
     /** Cooldown in seconds with a dash value of 0 (no DASH die, modifier 0). */
@@ -471,10 +473,18 @@ export interface Projectile {
   impactRadius: number;
 }
 
+/** A static wall in the combat arena: 1-3 arena cells in a row (see combat/walls.ts). */
+export interface WallSegment {
+  cells: Cell[];
+  orientation: 'single' | 'horizontal' | 'vertical';
+}
+
 export interface CombatState {
   tick: number;
   /** Playable area in combat units = arena grid × cellUnits. */
   arena: { width: number; height: number };
+  /** Static walls (arena cells) that block fighters and projectiles. */
+  walls: WallSegment[];
   fighters: Record<BattleSide, Fighter>;
   projectiles: Projectile[];
   nextProjectileId: number;
@@ -509,6 +519,8 @@ export interface BattleState {
   builds: Record<BattleSide, BattleBuild> | null;
   /** Countdown ticks remaining (stage 'countdown'). */
   countdown: number;
+  /** This battle's arena walls, generated when the countdown starts (empty before). */
+  walls: WallSegment[];
   combat: CombatState | null;
   result: BattleResult | null;
 }

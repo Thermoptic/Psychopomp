@@ -11,6 +11,7 @@ import { drawUnits } from './boardView';
 import { hpBar, measure, panel, rect, text, type Ctx } from './draw';
 import { ARENA_AREA, BOARD_AREA, COMBAT_HUD, arenaLayout, cellRect, type BoardLayout, type Rect } from './layout';
 import { C, playerColor } from './theme';
+import { wallSprite } from './art';
 
 /** Length of the board -> arena expand transition. */
 export const ARENA_EXPAND_MS = 450;
@@ -45,9 +46,26 @@ export function drawArena(ctx: Ctx, state: GameState, ui: MatchUi, now: number, 
   ctx.beginPath();
   ctx.rect(vis.x + 10, vis.y + 10, vis.w - 20, vis.h - 20);
   ctx.clip();
+  drawWalls(ctx, state, l);
   drawUnits(ctx, state, ui, l, boardUnits(state, l), now);
   drawProjectiles(ctx, state, ui, l);
   ctx.restore();
+}
+
+/** This battle's arena walls (shown from the countdown on), drawn over their cells. */
+function drawWalls(ctx: Ctx, state: GameState, l: BoardLayout): void {
+  for (const w of state.battle?.walls ?? []) {
+    const a = cellRect(l, w.cells[0]);
+    const b = cellRect(l, w.cells[w.cells.length - 1]);
+    const r = { x: a.x, y: a.y, w: b.x + b.w - a.x, h: b.y + b.h - a.y };
+    const sp = wallSprite(w.orientation, w.cells.length);
+    if (sp) ctx.drawImage(sp.img, sp.sx, sp.sy, sp.sw, sp.sh, r.x, r.y, r.w, r.h);
+    else {
+      // Art not loaded: plain stone.
+      rect(ctx, r, '#0b0907');
+      rect(ctx, { x: r.x + 4, y: r.y + 4, w: r.w - 8, h: r.h - 8 }, '#4a4640');
+    }
+  }
 }
 
 /** Projectiles (from game state) and impact shockwaves (from events). */

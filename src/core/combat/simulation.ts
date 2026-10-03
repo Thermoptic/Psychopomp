@@ -26,8 +26,10 @@ import type {
   PlayerId,
   PowerupDef,
   Projectile,
+  WallSegment,
 } from '../types';
 import { PROJECTILE_RADIUS, resolveWeapon, smallAngleCosSin } from './powerups';
+import { circleHitsWall } from './walls';
 import { applyEffect, computeAttackCooldown, computeBlockCharges, computeDamage, computeDashCooldown, computeMoveSpeed } from './stats';
 
 /** The combat arena grid (columns × rows) from the ruleset. */
@@ -136,11 +138,13 @@ export function createCombat(
   defender: CombatantSetup,
   rules: CombatRules,
   powerups: Record<string, PowerupDef> = {},
+  walls: WallSegment[] = [],
 ): CombatState {
   const grid = arenaGrid(rules);
   return {
     tick: 0,
     arena: { width: grid.width * rules.cellUnits, height: grid.height * rules.cellUnits },
+    walls: walls.map((w) => ({ orientation: w.orientation, cells: w.cells.map((c) => ({ ...c })) })),
     fighters: {
       attacker: createFighter('attacker', attacker.creature, attacker.def, attacker.build, rules, powerups),
       defender: createFighter('defender', defender.creature, defender.def, defender.build, rules, powerups),
@@ -216,6 +220,7 @@ function stepProjectiles(combat: CombatState, rules: CombatRules, damage: Record
   const r = PROJECTILE_RADIUS * FP;
   const W = combat.arena.width * FP;
   const H = combat.arena.height * FP;
+  const walls = combat.walls ?? [];
   const keep: Projectile[] = [];
   for (const p of combat.projectiles) {
     const target = combat.fighters[p.side === 'attacker' ? 'defender' : 'attacker'];
@@ -242,12 +247,28 @@ function stepProjectiles(combat: CombatState, rules: CombatRules, damage: Record
       p.vx = Math.trunc((p.vx * p.speed) / vl);
       p.vy = Math.trunc((p.vy * p.speed) / vl);
     }
+    const ox = p.x;
+    const oy = p.y;
     p.x += p.vx;
     p.y += p.vy;
     p.travelled += p.speed;
 
     // Walls: bounce while bounces are left; after that a wall hit removes the shot.
     let wall = false;
+    // Arena walls: reflect on the axis that ran into the wall (both at a corner).
+    if (walls.length && circleHitsWall(p.x / FP, p.y / FP, PROJECTILE_RADIUS, walls, rules.cellUnits)) {
+      const hitX = circleHitsWall(p.x / FP, oy / FP, PROJECTILE_RADIUS, walls, rules.cellUnits);
+      const hitY = circleHitsWall(ox / FP, p.y / FP, PROJECTILE_RADIUS, walls, rules.cellUnits);
+      if (hitX || !hitY) {
+        p.x = ox;
+        p.vx = -p.vx;
+      }
+      if (hitY || !hitX) {
+        p.y = oy;
+        p.vy = -p.vy;
+      }
+      wall = true;
+    }
     if (p.x < r || p.x > W - r) {
       p.x = p.x < r ? r : W - r;
       p.vx = -p.vx;
@@ -311,21 +332,43 @@ function clamp(v: number, lo: number, hi: number): number {
 }
 
 /**
- * Moves by (sx, sy) per axis, stopping at the arena edge and at the opponent.
- * Returns true if the opponent blocked the movement.
+ * How far along one axis a fighter at (x, y) gets towards `to` before an
+ * arena wall stops it (the largest step that does not overlap a wall).
  */
-function tryMove(f: Fighter, other: Fighter, sx: number, sy: number, rules: CombatRules, arena: CombatState['arena']): boolean {
+function wallLimit(x: number, y: number, to: number, axis: 'x' | 'y', rules: CombatRules, walls: WallSegment[]): number {
+  const from = axis === 'x' ? x : y;
+  if (to === from || !walls.length) return to;
+  const at = (v: number) => (axis === 'x' ? circleHitsWall(v, y, rules.fighterRadius, walls, rules.cellUnits) : circleHitsWall(x, v, rules.fighterRadius, walls, rules.cellUnits));
+  if (!at(to)) return to;
+  const dir = to > from ? 1 : -1;
+  let lo = 0;
+  let hi = Math.abs(to - from);
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (at(from + dir * mid)) hi = mid - 1;
+    else lo = mid;
+  }
+  return from + dir * lo;
+}
+
+/**
+ * Moves by (sx, sy) per axis, stopping at the arena edge, at arena walls and
+ * at the opponent. Returns true if the opponent blocked the movement.
+ */
+function tryMove(f: Fighter, other: Fighter, sx: number, sy: number, rules: CombatRules, combat: CombatState): boolean {
+  const { arena } = combat;
+  const walls = combat.walls ?? [];
   const r = rules.fighterRadius;
   const minDistSq = 4 * r * r;
   let blocked = false;
-  const nx = clamp(f.x + sx, r, arena.width - r);
+  const nx = wallLimit(f.x, f.y, clamp(f.x + sx, r, arena.width - r), 'x', rules, walls);
   if (nx !== f.x) {
     const dx = nx - other.x;
     const dy = f.y - other.y;
     if (dx * dx + dy * dy >= minDistSq) f.x = nx;
     else blocked = true;
   }
-  const ny = clamp(f.y + sy, r, arena.height - r);
+  const ny = wallLimit(f.x, f.y, clamp(f.y + sy, r, arena.height - r), 'y', rules, walls);
   if (ny !== f.y) {
     const dx = f.x - other.x;
     const dy = ny - other.y;
@@ -336,13 +379,15 @@ function tryMove(f: Fighter, other: Fighter, sx: number, sy: number, rules: Comb
 }
 
 /**
- * Where a step of (sx, sy) would end up, clamped to the arena (opponent ignored).
- * Used to detect a dash that would only push into a wall.
+ * Where a step of (sx, sy) would end up, stopped by the arena edge and arena
+ * walls (opponent ignored). Used to detect a dash that would only push into a wall.
  */
-function clampedProgress(f: Fighter, sx: number, sy: number, rules: CombatRules, arena: CombatState['arena']): number {
+function clampedProgress(f: Fighter, sx: number, sy: number, rules: CombatRules, combat: CombatState): number {
+  const { arena } = combat;
+  const walls = combat.walls ?? [];
   const r = rules.fighterRadius;
-  const nx = clamp(f.x + sx, r, arena.width - r);
-  const ny = clamp(f.y + sy, r, arena.height - r);
+  const nx = wallLimit(f.x, f.y, clamp(f.x + sx, r, arena.width - r), 'x', rules, walls);
+  const ny = wallLimit(nx, f.y, clamp(f.y + sy, r, arena.height - r), 'y', rules, walls);
   return isqrt((nx - f.x) * (nx - f.x) + (ny - f.y) * (ny - f.y));
 }
 
@@ -357,7 +402,7 @@ function along(x: number, y: number, length: number): { sx: number; sy: number }
  * Analog movement: direction from the stick, speed scaled by how far it is
  * pushed (full deflection = moveSpeed; a full diagonal is not faster).
  */
-function move(f: Fighter, other: Fighter, input: FighterInput, rules: CombatRules, arena: CombatState['arena']): void {
+function move(f: Fighter, other: Fighter, input: FighterInput, rules: CombatRules, combat: CombatState): void {
   const x = clampAxis(input.dx);
   const y = clampAxis(input.dy);
   if (x === 0 && y === 0) return;
@@ -365,7 +410,7 @@ function move(f: Fighter, other: Fighter, input: FighterInput, rules: CombatRule
   const mag = Math.min(100, len);
   const sx = Math.trunc((f.moveSpeed * x * mag) / (len * 100));
   const sy = Math.trunc((f.moveSpeed * y * mag) / (len * 100));
-  tryMove(f, other, sx, sy, rules, arena);
+  tryMove(f, other, sx, sy, rules, combat);
 }
 
 /** Applies a 'manual' Special's effect to the fighter (once). */
@@ -442,7 +487,7 @@ export function stepCombat(
         events.push({ type: 'DASH_DENIED', side: f.side, reason: 'cooldown' });
       } else if (isqrt(mx * mx + my * my) < rules.dash.minInput) {
         events.push({ type: 'DASH_DENIED', side: f.side, reason: 'noDirection' });
-      } else if (clampedProgress(f, first.sx, first.sy, rules, combat.arena) * 2 < f.dashStep) {
+      } else if (clampedProgress(f, first.sx, first.sy, rules, combat) * 2 < f.dashStep) {
         events.push({ type: 'DASH_DENIED', side: f.side, reason: 'blocked' });
       } else {
         f.dashDir = { x: mx, y: my };
@@ -469,7 +514,7 @@ export function stepCombat(
       const { sx, sy } = along(f.dashDir.x, f.dashDir.y, f.dashStep);
       const fromX = f.x;
       const fromY = f.y;
-      const blocked = tryMove(f, other, sx, sy, rules, combat.arena);
+      const blocked = tryMove(f, other, sx, sy, rules, combat);
       f.dashTicks--;
       // Reaching a wall ends the dash instead of standing still in it.
       const moved = isqrt((f.x - fromX) * (f.x - fromX) + (f.y - fromY) * (f.y - fromY));
@@ -486,7 +531,7 @@ export function stepCombat(
         f.dashTicks = 0; // a dash stops when it runs into the opponent
       }
     } else if (f.windup === 0 && f.guard === 0) {
-      move(f, other, input, rules, combat.arena);
+      move(f, other, input, rules, combat);
     }
   }
 
@@ -514,7 +559,7 @@ export function stepCombat(
       const { sx, sy } = along(f.swingAim.x, f.swingAim.y, f.weapon.knockback);
       const x0 = other.x;
       const y0 = other.y;
-      tryMove(other, f, sx, sy, rules, combat.arena);
+      tryMove(other, f, sx, sy, rules, combat);
       const moved = isqrt((other.x - x0) * (other.x - x0) + (other.y - y0) * (other.y - y0));
       events.push({ type: 'KNOCKBACK', side: f.side, distance: moved });
     }

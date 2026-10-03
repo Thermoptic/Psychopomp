@@ -11,7 +11,8 @@
 // board creatures. This is the persistent-HP rule: nothing heals them.
 
 import { rule } from '../errors';
-import { createCombat, stepCombat } from '../combat/simulation';
+import { arenaGrid, combatSpawnCell, createCombat, stepCombat } from '../combat/simulation';
+import { generateCombatWalls } from '../combat/walls';
 import { LEVEL_UP_GAINS, LEVEL_UP_STATS, computeBuild } from '../combat/stats';
 import { nextInt } from '../rng';
 import { createDicePrep, roll } from '../dice/dice';
@@ -40,6 +41,7 @@ export function startBattle(
     },
     builds: null,
     countdown: 0,
+    walls: [],
     combat: null,
     result: null,
   };
@@ -97,6 +99,17 @@ export function onPlayerReady(state: GameState, events: GameEvent[]): void {
   }
   b.stage = 'countdown';
   b.countdown = state.ruleset.combat.countdownTicks;
+  // A new wall layout for this battle (its own seed, drawn from the match RNG).
+  const rules = state.ruleset.combat;
+  if (rules.walls !== false) {
+    const grid = arenaGrid(rules);
+    b.walls = generateCombatWalls({
+      ...grid,
+      player1Start: combatSpawnCell(grid, 'P1'),
+      player2Start: combatSpawnCell(grid, 'P2'),
+      seed: nextInt(state.rng, 0, 0x7fffffff),
+    });
+  }
   events.push({ type: 'COUNTDOWN_STARTED', ticks: b.countdown });
   if (b.countdown <= 0) beginCombat(state, events);
 }
@@ -107,7 +120,7 @@ function beginCombat(state: GameState, events: GameEvent[]): void {
     const creature = state.creatures[id];
     return { creature, def: state.creatureDefs[creature.defId], build: b.builds![side] };
   };
-  b.combat = createCombat(fighter(b.attackerId, 'attacker'), fighter(b.defenderId, 'defender'), state.ruleset.combat, state.powerupDefs);
+  b.combat = createCombat(fighter(b.attackerId, 'attacker'), fighter(b.defenderId, 'defender'), state.ruleset.combat, state.powerupDefs, b.walls);
   b.countdown = 0;
   b.stage = 'combat';
   events.push({ type: 'COMBAT_STARTED' });

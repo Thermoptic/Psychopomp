@@ -68,12 +68,14 @@ export interface CustomMatch {
   seed?: number;
   allowDiagonal?: boolean;
   blockedCells?: BoardDef['blockedCells'];
+  /** Arena walls in battles (default off, so combat tests get an open arena). */
+  walls?: boolean;
 }
 
 export function customMatch(c: CustomMatch): GameState {
   const pack = basePack();
   return createMatch({
-    ruleset: pack.ruleset,
+    ruleset: { ...pack.ruleset, combat: { ...pack.ruleset.combat, walls: c.walls ?? false } },
     creatures: c.creatures,
     seed: c.seed ?? 1,
     board: {

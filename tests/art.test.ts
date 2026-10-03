@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import portraits from '../art/portraits/portraits.json';
-import { BOARD_GRID_X, BOARD_GRID_Y, PORTRAIT_IDS, boardTileRect, boardTileSprite, defaultFacing, mirrorPortrait, parsePortraitRef, portraitFacing, portraitSprite, portraitUrl } from '../src/rendering/art';
+import { WALLS_IMAGE_SIZE, wallCrop, BOARD_GRID_X, BOARD_GRID_Y, PORTRAIT_IDS, boardTileRect, boardTileSprite, defaultFacing, mirrorPortrait, parsePortraitRef, portraitFacing, portraitSprite, portraitUrl } from '../src/rendering/art';
 import { basePack } from './helpers';
 
 // The prototype art is cropped from art/references/ at draw time (1254×1254 sheets).
@@ -84,5 +84,19 @@ describe('prototype art mapping', () => {
   it('without loaded art (tests, failed load) the renderers fall back to the procedural look', () => {
     expect(portraitSprite('eye')).toBeNull();
     expect(boardTileSprite(0, 0, 'board')).toBeNull();
+  });
+
+  it('every arena wall shape has a crop inside the walls reference, sized by its cells', () => {
+    const shapes = [['single', 1, 1, 1], ['horizontal', 2, 2, 1], ['horizontal', 3, 3, 1], ['vertical', 2, 1, 2], ['vertical', 3, 1, 3]] as const;
+    for (const [o, n, cols, rows] of shapes) {
+      const c = wallCrop(o, n);
+      expect(c.sx).toBeGreaterThanOrEqual(0);
+      expect(c.sy).toBeGreaterThanOrEqual(0);
+      expect(c.sx + c.sw).toBeLessThanOrEqual(WALLS_IMAGE_SIZE.w);
+      expect(c.sy + c.sh).toBeLessThanOrEqual(WALLS_IMAGE_SIZE.h);
+      // About 60.5 px per cell in the reference.
+      expect(Math.abs(c.sw / cols - 60.5)).toBeLessThan(1.5);
+      expect(Math.abs(c.sh / rows - 60.5)).toBeLessThan(1.5);
+    }
   });
 });

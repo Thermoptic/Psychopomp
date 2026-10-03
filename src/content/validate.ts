@@ -254,6 +254,7 @@ export function validateRuleset(raw: unknown): ValidationResult {
     for (const k of ['cooldownPerSpeed', 'minDamage', 'timeoutTicks', 'countdownTicks']) intIn(errors, `ruleset.combat.${k}`, c[k], 0, 1000000);
     for (const k of ['shieldPercentPerPoint', 'shieldMaxPercent']) intIn(errors, `ruleset.combat.${k}`, c[k], 0, 100);
     intIn(errors, 'ruleset.combat.attackConeCos', c.attackConeCos, -100, 100);
+    if (c.walls !== undefined && typeof c.walls !== 'boolean') errors.push('ruleset.combat.walls must be true or false');
     if (!isObj(c.dash)) errors.push('ruleset.combat: missing "dash"');
     else {
       validateDash(c.dash, 'ruleset.combat.dash', errors, true);
