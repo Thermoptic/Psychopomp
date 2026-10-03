@@ -242,7 +242,9 @@ export const RANGED_FIELDS = [
   { key: 'impactSize', label: 'Impact Size', hint: 'shockwave radius' },
   { key: 'homing', label: 'Homing', hint: 'steering towards the opponent' },
   { key: 'trajectory', label: 'Trajectory', hint: 'Magnus curve when moving while firing' },
-  { key: 'bounce', label: 'Bounce', hint: 'wall bounces' },
+  { key: 'bounce', label: 'Bounce', hint: 'wall bounces (0 = the shot vanishes at a wall)' },
+  { key: 'size', label: 'Size', hint: 'projectile size on screen' },
+  { key: 'trail', label: 'Trail', hint: 'fading trail (0 = none, 10 = very long)' },
 ] as const;
 
 export type MeleeKey = (typeof MELEE_FIELDS)[number]['key'];
@@ -252,9 +254,19 @@ export function fieldMax(_key: string): number {
   return 10;
 }
 
+/** Value of a level a weapon does not set (older content): the field's lowest level. */
+export function fieldDefault(key: string): number {
+  return fieldMin(key);
+}
+
+/** Lowest level of a field: 0 for Bounce and Trail (none), 1 otherwise. */
+export function fieldMin(key: string): number {
+  return key === 'bounce' || key === 'trail' ? 0 : 1;
+}
+
 /** Sets one melee/ranged level on any weapon settings (a monster's attack or a Powerup). */
 export function setWeaponLevel(w: WeaponSettings, group: 'melee' | 'ranged', key: string, value: number): void {
-  const v = Math.max(1, Math.min(fieldMax(key), Math.round(value)));
+  const v = Math.max(fieldMin(key), Math.min(fieldMax(key), Math.round(value)));
   const block = (w[group] ?? {}) as Record<string, number>;
   (w as unknown as Record<string, unknown>)[group] = { ...block, [key]: v };
 }
@@ -278,7 +290,9 @@ export function levelMeaning(group: 'melee' | 'ranged', key: string, level: numb
     if (key === 'impactSize') return `r ${cells(M.impactRadius(level), rules)} cells`;
     if (key === 'homing') return `${M.homingPercent(level)} %/tick`;
     if (key === 'trajectory') return `${((M.trajectoryCurve(level) / 65536) * (180 / Math.PI)).toFixed(2)}°/tick`;
-    if (key === 'bounce') return `${M.bounceCount(level)}×`;
+    if (key === 'bounce') return level <= 0 ? 'none - vanishes at walls' : `${M.bounceCount(level)}×`;
+    if (key === 'size') return `size ${level}`;
+    if (key === 'trail') return level <= 0 ? 'none' : `${(M.trailTicks(level) / c.tickRate).toFixed(2)} s long`;
   }
   return String(level);
 }

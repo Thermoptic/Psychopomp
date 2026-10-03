@@ -246,7 +246,7 @@ function stepProjectiles(combat: CombatState, rules: CombatRules, damage: Record
     p.y += p.vy;
     p.travelled += p.speed;
 
-    // Walls: bounce while bounces are left; the next wall hit is the impact.
+    // Walls: bounce while bounces are left; after that a wall hit removes the shot.
     let wall = false;
     if (p.x < r || p.x > W - r) {
       p.x = p.x < r ? r : W - r;
@@ -262,10 +262,7 @@ function stepProjectiles(combat: CombatState, rules: CombatRules, damage: Record
       if (p.bouncesLeft > 0) {
         p.bouncesLeft--;
         events.push({ type: 'PROJECTILE_BOUNCED', side: p.side });
-      } else {
-        impact(p, target, combat.fighters[p.side], rules, damage, events);
-        continue;
-      }
+      } else continue; // no bounces left: the shot is gone
     }
     // Direct hit on the opponent.
     const hx = target.x * FP - p.x;

@@ -192,7 +192,8 @@ describe('Powerup content and mappings', () => {
     expect([1, 10].map(M.impactRadius)).toEqual([16, 160]);
     expect([1, 10].map(M.homingPercent)).toEqual([2, 20]);
     expect(M.trajectoryCurve(10)).toBeGreaterThan(M.trajectoryCurve(1) * 9);
-    expect([1, 10].map(M.bounceCount)).toEqual([1, 10]);
+    expect([0, 1, 10].map(M.bounceCount)).toEqual([0, 1, 10]);
+    expect([0, 1, 10].map(M.trailTicks)).toEqual([0, 3, 30]);
   });
 });
 
@@ -257,16 +258,42 @@ describe('Game core consumes Powerups', () => {
     expect(r.s.battle!.combat!.projectiles).toHaveLength(0);
   });
 
-  it('bounce: bounces off walls N times, then impacts on the next wall', () => {
+  it('bounce: bounces off walls N times; with none left the shot vanishes at the wall (0 = never bounces)', () => {
     // Fire straight up (opponent far away, weak homing). Walls are ~334 then 668 units apart on this path;
     // range 10 = 1600 units of travel.
-    const shot = (bounce: number) => run(run(fightWith(ranged({ bounce, range: 10, speed: 10, homing: 1 })), 1, { attack: true, aimX: 0, aimY: -100 }).s, 200).events;
-    const one = shot(1);
-    expect(one.filter((e) => e.type === 'PROJECTILE_BOUNCED')).toHaveLength(1);
-    expect(one.filter((e) => e.type === 'IMPACT')).toHaveLength(1); // 2nd wall = impact
-    const two = shot(2);
-    expect(two.filter((e) => e.type === 'PROJECTILE_BOUNCED')).toHaveLength(2);
-    expect(two.filter((e) => e.type === 'IMPACT')).toHaveLength(0); // range runs out before a 3rd wall
+    const fire = (bounce: number) => {
+      const r0 = run(fightWith(ranged({ bounce, range: 10, speed: 10, homing: 1 })), 1, { attack: true, aimX: 0, aimY: -100 });
+      return run(r0.s, 200);
+    };
+    const zero = fire(0);
+    expect(zero.events.filter((e) => e.type === 'PROJECTILE_BOUNCED')).toHaveLength(0);
+    expect(zero.events.filter((e) => e.type === 'IMPACT')).toHaveLength(0); // gone at the first wall, no blast
+    expect(zero.s.battle!.combat!.projectiles).toHaveLength(0);
+    const one = fire(1);
+    expect(one.events.filter((e) => e.type === 'PROJECTILE_BOUNCED')).toHaveLength(1);
+    expect(one.events.filter((e) => e.type === 'IMPACT')).toHaveLength(0); // 2nd wall: vanishes
+    const two = fire(2);
+    expect(two.events.filter((e) => e.type === 'PROJECTILE_BOUNCED')).toHaveLength(2);
+  });
+
+  it('size, trail and colour are look-only settings that reach the weapon (and are validated)', () => {
+    const plain = F(fightWith(ranged())).attacker.weapon;
+    expect(plain).toMatchObject({ kind: 'ranged', look: { size: 1, trail: 0, color: null } });
+    const fancy = F(fightWith(ranged({ size: 7, trail: 10, color: '#33ccff' }))).attacker.weapon;
+    expect(fancy).toMatchObject({ kind: 'ranged', look: { size: 7, trail: 10, color: '#33ccff' } });
+    // Same gameplay values either way.
+    const strip = (w: typeof plain) => ({ ...w, look: undefined });
+    expect(strip(fancy)).toEqual(strip(plain));
+    const { lib } = fresh();
+    const base = { ...lib.newPowerup('ranged'), id: 'zap', name: 'Zap' };
+    expect(lib.validatePowerup({ ...base, ranged: { ...base.ranged!, bounce: 0, size: 10, trail: 0, color: '#ABCDEF' } }, null)).toEqual([]);
+    expect(lib.validatePowerup({ ...base, ranged: { ...base.ranged!, size: 0 } }, null).join()).toMatch(/size/);
+    expect(lib.validatePowerup({ ...base, ranged: { ...base.ranged!, trail: 11 } }, null).join()).toMatch(/trail/);
+    expect(lib.validatePowerup({ ...base, ranged: { ...base.ranged!, color: 'red' } }, null).join()).toMatch(/color/);
+    expect(lib.validatePowerup({ ...base, ranged: { ...base.ranged!, bounce: -1 } }, null).join()).toMatch(/bounce/);
+    // New ranged weapons: no bounce, smallest size, no trail, owner colour.
+    expect(base.ranged).toMatchObject({ bounce: 0, size: 1, trail: 0 });
+    expect(base.ranged!.color).toBeUndefined();
   });
 
   it('homing steers towards the opponent; stronger homing turns faster', () => {

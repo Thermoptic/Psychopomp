@@ -3,7 +3,7 @@
 
 import type { PowerupDef } from '../core';
 import { group, h, row, textInput } from './dom';
-import { MELEE_FIELDS, RANGED_FIELDS, levelMeaning, type ItemEditor } from './model';
+import { MELEE_FIELDS, RANGED_FIELDS, fieldDefault, levelMeaning, type ItemEditor } from './model';
 import { setWeaponType, weaponSettingsGroup, weaponTypeSelector } from './weaponFields';
 
 const idSanitize = (v: string) => v.toLowerCase().replace(/\s/g, '_').replace(/[^a-z0-9_]/g, '').slice(0, 32);
@@ -42,7 +42,7 @@ export function powerupPreview(ed: ItemEditor<'powerup'>): HTMLElement {
     {},
     h('div', { class: 'name', text: d.name || '?' }),
     h('div', { class: 'sub', text: `${d.type.toUpperCase()} · ${origin}${ed.dirty ? ' · UNSAVED' : ''}` }),
-    h('table', {}, ...fields.map((f) => h('tr', {}, h('td', { class: 'k', text: `${f.label} ${values[f.key] ?? '-'}` }), h('td', { text: levelMeaning(d.type, f.key, values[f.key] ?? 1, rules) })))),
+    h('table', {}, ...fields.map((f) => h('tr', {}, h('td', { class: 'k', text: `${f.label} ${values[f.key] ?? '-'}` }), h('td', { text: levelMeaning(d.type, f.key, values[f.key] ?? fieldDefault(f.key), rules) })))),
     h('div', { class: 'sub', text: '' }),
     h('div', { class: 'dim', text: users.length ? `Used by: ${users.join(', ')}` : 'Not used by any monster yet' }),
     d.type === 'ranged' ? h('div', { class: 'hint faint', text: 'Trajectory only curves shots fired while moving. Rate of fire and Auto Fire (monster) work together.' }) : null,

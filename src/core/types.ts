@@ -101,6 +101,12 @@ export interface RangedSettings {
   homing: number;
   trajectory: number;
   bounce: number;
+  /** Projectile size on screen, level 1-10 (presentation only; the hit area is impactSize). */
+  size?: number;
+  /** Fading trail behind the projectile, 0 (none) - 10 (very long). Presentation only. */
+  trail?: number;
+  /** Projectile and trail colour (#rrggbb); missing = the owner's colour. */
+  color?: string;
 }
 
 /**
@@ -439,7 +445,10 @@ export type Weapon =
       homing: number;
       /** Magnus curve per tick at full sideways movement, angle × 65536 (radians). */
       curve: number;
+      /** Wall bounces; with none left a wall hit removes the projectile. */
       bounces: number;
+      /** How it looks (no effect on the game): size 1-10, trail 0-10, colour or null = owner colour. */
+      look: { size: number; trail: number; color: string | null };
     };
 
 /** A projectile in flight. Positions/velocity in combat units × 256 (fixed point). */

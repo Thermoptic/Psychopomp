@@ -57,17 +57,51 @@ function drawProjectiles(ctx: Ctx, state: GameState, ui: MatchUi, l: BoardLayout
   const scale = l.cell / state.ruleset.combat.cellUnits;
   for (const p of combat.projectiles) {
     const owner = state.creatures[p.side === 'attacker' ? state.battle!.attackerId : state.battle!.defenderId].owner;
+    const w = combat.fighters[p.side].weapon;
+    const look = w.kind === 'ranged' ? w.look : { size: 1, trail: 0, color: null };
+    const color = look.color ?? playerColor(owner);
     const s = combatToScreen(state, l, p.x / 256, p.y / 256);
-    const tail = combatToScreen(state, l, (p.x - p.vx * 2) / 256, (p.y - p.vy * 2) / 256);
-    ctx.strokeStyle = playerColor(owner);
-    ctx.globalAlpha = 0.5;
-    ctx.lineWidth = 2;
+    const radius = 2 + look.size * 1.4;
+    // Trail: the recent path, fading and thinning towards its end.
+    const path = ui.trails[p.id] ?? [];
+    if (path.length > 1) {
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = color;
+      for (let i = 1; i < path.length; i++) {
+        const k = i / path.length;
+        const a0 = combatToScreen(state, l, path[i - 1].x, path[i - 1].y);
+        const a1 = combatToScreen(state, l, path[i].x, path[i].y);
+        ctx.globalAlpha = 0.75 * k * k;
+        ctx.lineWidth = Math.max(1, radius * 1.4 * k);
+        ctx.beginPath();
+        ctx.moveTo(a0.x, a0.y);
+        ctx.lineTo(a1.x, a1.y);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    // Projectile: soft glow, coloured body, bright core.
+    ctx.save();
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.moveTo(tail.x, tail.y);
-    ctx.lineTo(s.x, s.y);
-    ctx.stroke();
+    ctx.arc(s.x, s.y, radius * 1.9, 0, Math.PI * 2);
+    ctx.fill();
     ctx.globalAlpha = 1;
-    rect(ctx, { x: Math.round(s.x) - 3, y: Math.round(s.y) - 3, w: 6, h: 6 }, '#fff6d8');
+    ctx.fillStyle = C.edgeDark;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, radius + 1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff6d8';
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, Math.max(1.5, radius * 0.45), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
   }
   for (const im of ui.impacts) {
     const s = combatToScreen(state, l, im.x, im.y);

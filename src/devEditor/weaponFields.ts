@@ -3,8 +3,8 @@
 
 import { defaultWeaponSettings } from '../content/library';
 import type { Ruleset, WeaponSettings } from '../core';
-import { group, row, segmented, slider } from './dom';
-import { MELEE_FIELDS, RANGED_FIELDS, fieldMax, levelMeaning, setWeaponLevel } from './model';
+import { group, h, row, segmented, slider } from './dom';
+import { MELEE_FIELDS, RANGED_FIELDS, fieldDefault, fieldMax, fieldMin, levelMeaning, setWeaponLevel } from './model';
 
 /** Switches the weapon type, keeping both settings blocks (switching back restores them). */
 export function setWeaponType(w: WeaponSettings, type: 'melee' | 'ranged'): void {
@@ -31,21 +31,45 @@ export function weaponSettingsGroup(w: WeaponSettings, rules: Ruleset, edit: (fn
   if (!type) return null;
   const fields = type === 'melee' ? MELEE_FIELDS : RANGED_FIELDS;
   const values = (w[type] ?? {}) as Record<string, number>;
+  // Projectile colour: a picker, or the owner's colour (none stored).
+  const colour = type === 'ranged' ? w.ranged?.color : undefined;
+  const setColour = (c: string | undefined) =>
+    edit((x) => {
+      const r = { ...(x.ranged as NonNullable<WeaponSettings['ranged']>) };
+      if (c) r.color = c;
+      else delete r.color;
+      x.ranged = r;
+    });
+  const colourRow =
+    type === 'ranged'
+      ? row(
+          'Color',
+          h(
+            'div',
+            { class: 'pos-line' },
+            h('input', { type: 'color', value: colour ?? '#ffffff', on: { input: (e: Event) => setColour((e.target as HTMLInputElement).value) } }),
+            h('span', { text: colour ? colour.toUpperCase() : 'player colour  ' }),
+            colour ? h('button', { type: 'button', class: 'btn', text: 'PLAYER COLOUR', on: { click: () => setColour(undefined) } }) : null,
+          ),
+          'projectile and trail colour (default: the owner\'s colour)',
+        )
+      : null;
   return group(
     type === 'melee' ? 'MELEE' : 'RANGED',
     ...fields.map((f) =>
       row(
         f.label,
         slider({
-          min: 1,
+          min: fieldMin(f.key),
           max: fieldMax(f.key),
-          value: values[f.key] ?? 1,
+          value: values[f.key] ?? fieldDefault(f.key),
           meaning: (v) => levelMeaning(type, f.key, v, rules),
           onInput: (v) => edit((x) => setWeaponLevel(x, type, f.key, v)),
         }),
         f.hint,
       ),
     ),
+    colourRow,
   );
 }
 

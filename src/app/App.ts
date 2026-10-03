@@ -17,6 +17,7 @@ import {
   type GameEvent,
   type GameState,
   type PlayerId,
+  powerupMapping,
 } from '../core';
 import type { Action, ActionFrame } from '../input/actions';
 import { aimToward, emptyQueue, queuePresses, toFighterInput } from '../input/combatInput';
@@ -87,6 +88,18 @@ export class App {
       return false;
     }
     this.state = r.state;
+    // Projectile trails: remember each projectile's last positions (dropped when it is gone).
+    const combat = r.state.battle?.combat;
+    if (combat) {
+      const next: typeof this.ui.trails = {};
+      for (const p of combat.projectiles) {
+        const w = combat.fighters[p.side].weapon;
+        const keep = w.kind === 'ranged' ? powerupMapping.trailTicks(w.look.trail) : 0;
+        if (keep <= 0) continue;
+        next[p.id] = [...(this.ui.trails[p.id] ?? []), { x: p.x / 256, y: p.y / 256 }].slice(-keep);
+      }
+      this.ui.trails = next;
+    } else if (Object.keys(this.ui.trails).length) this.ui.trails = {};
     // A melee attack shows its swish at once, on the button press, in the swing's aim direction.
     const fighters = r.state.battle?.combat?.fighters;
     if (fighters) {

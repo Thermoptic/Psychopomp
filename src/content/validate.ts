@@ -207,7 +207,14 @@ function validateWeapon(raw: Obj, where: string, errors: string[], typeRequired:
   };
   block('melee', ['speed', 'knockback', 'range']);
   // (impactDamage from older content is ignored: damage comes from Power and Shield.)
-  block('ranged', ['speed', 'range', 'rateOfFire', 'impactSize', 'homing', 'trajectory', 'bounce']);
+  block('ranged', ['speed', 'range', 'rateOfFire', 'impactSize', 'homing', 'trajectory']);
+  const r = raw.ranged;
+  if (isObj(r)) {
+    intIn(errors, `${where}.ranged.bounce`, r.bounce, 0, 10);
+    if (r.size !== undefined) intIn(errors, `${where}.ranged.size`, r.size, 1, 10);
+    if (r.trail !== undefined) intIn(errors, `${where}.ranged.trail`, r.trail, 0, 10);
+    if (r.color !== undefined && (typeof r.color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(r.color))) errors.push(`${where}.ranged.color must be a colour like "#ff8800"`);
+  }
 }
 
 /** Level 1-10 settings (impact damage 1-100), see core/combat/powerups.ts for their meaning. */

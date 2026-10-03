@@ -26,7 +26,8 @@
 //                                       movement). Total curve = turn × flight ticks, so it works
 //                                       with speed: at level 10 a speed-5 / range-5 shot (40 ticks)
 //                                       bends ~90°; faster shots bend less, slower ones more.
-//     bounce     wall bounces           level (1-10); the next wall hit after that is its impact
+//     bounce     wall bounces           level (0-10); with none left a wall hit removes the shot
+//     size/trail/color                    presentation only (projectile size, fading trail, colour)
 
 import type { CombatRules, CreatureDef, PowerupDef, Weapon, WeaponSettings } from '../types';
 
@@ -48,7 +49,9 @@ export const rateOfFireTicks = (level: number, rules: CombatRules) => secondsToT
 export const impactRadius = (level: number) => clampLevel(level) * 16;
 export const homingPercent = (level: number) => clampLevel(level) * 2;
 export const trajectoryCurve = (level: number) => clampLevel(level) * CURVE_PER_LEVEL;
-export const bounceCount = (level: number) => clampLevel(level);
+export const bounceCount = (level: number) => Math.max(0, Math.min(10, Math.round(level)));
+/** Trail length in ticks of projectile history (presentation): 3 per level, 0 = none. */
+export const trailTicks = (level: number) => Math.max(0, Math.min(10, Math.round(level))) * 3;
 
 /** The classic melee attack (no Powerup): stat-based cooldown, ruleset range, no knockback. */
 export function classicWeapon(rules: CombatRules): Weapon {
@@ -89,6 +92,11 @@ export function weaponFromSettings(w: WeaponSettings, powerupId: string | null, 
       homing: homingPercent(r.homing),
       curve: trajectoryCurve(r.trajectory),
       bounces: bounceCount(r.bounce),
+      look: {
+        size: Math.max(1, Math.min(10, Math.round(r.size ?? 1))),
+        trail: Math.max(0, Math.min(10, Math.round(r.trail ?? 0))),
+        color: r.color ?? null,
+      },
     };
   }
   return classicWeapon(rules);

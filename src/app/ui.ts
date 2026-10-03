@@ -46,6 +46,8 @@ export interface MatchUi {
   floaters: Floater[];
   /** Projectile shockwaves being shown (combat units), purely visual. */
   impacts: Array<{ x: number; y: number; radius: number; ms: number; color: string }>;
+  /** Recent positions (combat units) of each projectile in flight, by id, for trails. */
+  trails: Record<number, Array<{ x: number; y: number }>>;
   /** Melee swishes being drawn (a fast arc in the swing's aim direction). */
   slashes: Array<{ side: BattleSide; ms: number; aim: { x: number; y: number } }>;
   /** Queued combat button presses, consumed by the next fixed tick. */
@@ -72,6 +74,7 @@ export function createMatchUi(): MatchUi {
     floaters: [],
     impacts: [],
     slashes: [],
+    trails: {},
     queued: { attacker: emptyQueue(), defender: emptyQueue() },
     aimActive: { attacker: false, defender: false },
     debug: false,
