@@ -14,6 +14,8 @@ import { C, CATEGORY_COLOR, STAT_TILE, playerColor, playerLabel } from './theme'
 
 /** How long the avatar frame strobes after a dash on cooldown, and its colours. */
 export const DASH_DENIED_MS = 500;
+/** Charge Attack ready: the frame alternates these two (red, blue). */
+const CHARGE_READY_COLORS = ['#ff2a2a', '#2a6bff'];
 const DASH_DENIED_COLORS = ['#ff2a2a', '#ffe14a', '#3dff6e', '#38c8ff', '#ff3dff', '#ffffff'];
 
 /** A hanging pennant in a player's colour (the reference's banners beside the title). */
@@ -302,11 +304,32 @@ export function drawUnits(ctx: Ctx, state: GameState, ui: MatchUi, l: BoardLayou
     }
     const flash = f && ui.flash[f.side] > 0 && Math.floor(now / 60) % 2 === 0 ? '#ffffff' : undefined;
     drawCreature(ctx, u.defId, u.owner, u.cx, u.cy - (portrait ? 0 : 3), u.px, { face: f ? (f.facing < 0 ? 'left' : 'right') : defaultFacing(u.owner), flash, portrait, portraitSize });
-    if (f && ui.dashDenied[f.side] > 0) {
+    // The avatar frame (for strobes and the Powerup timer).
+    const size = Math.round(portrait ? portraitSize : u.px * 12);
+    const frame = { x: Math.round(u.cx - size / 2) - 2, y: Math.round(u.cy - (portrait ? 0 : 3) - size / 2) - 2, w: size + 4, h: size + 4 };
+    if (f && f.charge.state === 'charging' && f.powerup) {
+      // Charging: a ring fills up over the charge time.
+      const t = Math.min(1, f.charge.ticks / Math.max(1, f.powerup.chargeTicks));
+      ctx.strokeStyle = C.pp;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(u.cx, u.cy, l.cell * 0.55, -Math.PI / 2, -Math.PI / 2 + t * Math.PI * 2);
+      ctx.stroke();
+    }
+    if (f && f.charge.state === 'ready') {
+      // Charge complete: the frame flashes red/blue extremely fast.
+      strokeRect(ctx, frame, Math.floor(now / 40) % 2 === 0 ? CHARGE_READY_COLORS[0] : CHARGE_READY_COLORS[1], 4);
+    } else if (f && ui.dashDenied[f.side] > 0) {
       // Dash on cooldown: the avatar frame strobes through colours, very fast.
-      const size = Math.round(portrait ? portraitSize : u.px * 12);
       const strobe = DASH_DENIED_COLORS[Math.floor(now / 35) % DASH_DENIED_COLORS.length];
-      strokeRect(ctx, { x: Math.round(u.cx - size / 2) - 2, y: Math.round(u.cy - (portrait ? 0 : 3) - size / 2) - 2, w: size + 4, h: size + 4 }, strobe, 4);
+      strokeRect(ctx, frame, strobe, 4);
+    }
+    if (f?.powerup?.limited && f.powerup.state === 'active') {
+      // Limited Powerup: seconds left, small, in the avatar's top-right corner.
+      const secs = String(Math.ceil(f.powerup.ticksLeft / rules.tickRate));
+      const w = Math.max(14, measure(ctx, secs, 11, true) + 6);
+      rect(ctx, { x: frame.x + frame.w - w - 1, y: frame.y + 1, w, h: 14 }, C.edgeDark);
+      text(ctx, secs, frame.x + frame.w - 1 - w / 2, frame.y + 12, { size: 11, bold: true, mono: true, align: 'center', color: '#fff6d8' });
     }
     if (f && f.weapon.kind === 'melee') {
       // Swish across the aim cone, shown on the button press.

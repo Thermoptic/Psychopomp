@@ -75,11 +75,18 @@ export class Sfx {
         case 'DASH':
           this.play([{ freq: 200, to: 900, dur: 0.12, type: 'triangle', gain: 0.05 }]);
           break;
+        case 'POWERUP_ACTIVATED':
         case 'SPECIAL_TRIGGERED':
           this.play([{ freq: 440, to: 1320, dur: 0.3, type: 'triangle', gain: 0.07 }]);
           break;
         case 'DASH_HIT':
           this.play([{ freq: 120, to: 40, dur: 0.18, type: 'sawtooth', gain: 0.1 }]);
+          break;
+        case 'CHARGE_READY':
+          this.play([{ freq: 880, dur: 0.05, type: 'square', gain: 0.04 }, { freq: 1320, dur: 0.07, delay: 0.05, type: 'square', gain: 0.04 }]);
+          break;
+        case 'POWERUP_EXPIRED':
+          this.play([{ freq: 660, to: 220, dur: 0.25, type: 'triangle', gain: 0.05 }]);
           break;
         case 'GUARD':
           this.play([{ freq: 600, dur: 0.04, gain: 0.03 }]);

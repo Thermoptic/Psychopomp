@@ -208,13 +208,35 @@ export interface CreatureDef {
 }
 
 /**
- * A Powerup (weapon) definition. Values are designer levels (1-10, impact
- * damage 1-100); core/combat/powerups.ts maps them to gameplay values.
+ * What a Powerup does:
+ *   'melee' / 'ranged'  a weapon that replaces the monster's own attack;
+ *   'chargeAttack'      no weapon of its own: the monster's own (configured)
+ *                       attack must be charged by holding attack for
+ *                       `chargeTime` seconds, and fires on release.
  */
-export interface PowerupDef extends WeaponSettings {
+export type PowerupType = 'melee' | 'ranged' | 'chargeAttack';
+
+/**
+ * 'permanent' (default): active the whole battle, from the start.
+ * 'limited': activated with the SPECIAL input (Left Trigger), active for
+ * `timeLimit` seconds, then spent until the next battle (round).
+ */
+export type PowerupDuration = 'permanent' | 'limited';
+
+/**
+ * A Powerup definition. Weapon values are designer levels (1-10);
+ * core/combat/powerups.ts maps them to gameplay values.
+ */
+export interface PowerupDef extends Omit<WeaponSettings, 'type'> {
   id: string;
   name: string;
-  type: 'melee' | 'ranged';
+  type: PowerupType;
+  /** Missing = 'permanent' (older content). */
+  duration?: PowerupDuration;
+  /** Seconds a 'limited' Powerup stays active after activation (1-60). */
+  timeLimit?: number;
+  /** Charge Attack: seconds attack must be held before the attack can be released (1-10). */
+  chargeTime?: number;
 }
 
 export interface CombatRules {
@@ -419,8 +441,34 @@ export interface Fighter {
   dashHit: boolean;
   /** 'none' | 'passive' (auto, already applied) | 'ready' (manual, unlocked) | 'used'. */
   special: 'none' | 'passive' | 'ready' | 'used';
-  /** The fighter's attack, resolved from its Powerup (or the classic melee). */
+  /** The fighter's current attack: the Powerup's weapon while that is active, otherwise baseWeapon. */
   weapon: Weapon;
+  /** The monster's own attack (or the classic melee), used whenever no weapon Powerup is active. */
+  baseWeapon: Weapon;
+  /** The equipped Powerup's state in this battle, or null. */
+  powerup: FighterPowerup | null;
+  /** Charge Attack: 'none', 'charging' (attack held) or 'ready' (fires on release); ticks held so far. */
+  charge: { state: 'none' | 'charging' | 'ready'; ticks: number };
+}
+
+/**
+ * An equipped Powerup during one battle (= round).
+ *   permanent: 'active' from the first tick to the end of the battle.
+ *   limited:   'inactive' -> (SPECIAL input) 'active' for limitTicks -> 'spent'.
+ * A new battle starts from scratch, so a spent Powerup is available again.
+ */
+export interface FighterPowerup {
+  id: string;
+  type: PowerupType;
+  limited: boolean;
+  state: 'inactive' | 'active' | 'spent';
+  /** Ticks left while a limited Powerup is active. */
+  ticksLeft: number;
+  limitTicks: number;
+  /** Charge Attack: ticks attack must be held (0 for other types). */
+  chargeTicks: number;
+  /** melee/ranged: the weapon used while active; null for Charge Attack. */
+  weapon: Weapon | null;
 }
 
 /** Gameplay values of an attack (combat units / ticks), see core/combat/powerups.ts. */
@@ -571,7 +619,7 @@ export interface FighterInput {
   block: boolean;
   /** Dash pressed this tick (edge, Right Bumper). */
   dash?: boolean;
-  /** Special pressed this tick (edge, Left Trigger). */
+  /** Special pressed this tick (edge, Left Trigger). Also activates a limited Powerup. */
   special?: boolean;
 }
 
@@ -621,6 +669,14 @@ export type GameEvent =
   | { type: 'DASH_DENIED'; side: BattleSide; reason: 'noDirection' | 'blocked' | 'cooldown' | 'noDash' }
   | { type: 'DASH_HIT'; side: BattleSide; damage: number }
   | { type: 'SPECIAL_TRIGGERED'; side: BattleSide; name: string }
+  /** A limited Powerup was activated (SPECIAL input) / ran out (spent for this battle). */
+  | { type: 'POWERUP_ACTIVATED'; side: BattleSide; powerupId: string }
+  | { type: 'POWERUP_EXPIRED'; side: BattleSide; powerupId: string }
+  /** Charge Attack: started holding, fully charged, released (the attack fires), cancelled. */
+  | { type: 'CHARGE_STARTED'; side: BattleSide }
+  | { type: 'CHARGE_READY'; side: BattleSide }
+  | { type: 'CHARGE_RELEASED'; side: BattleSide }
+  | { type: 'CHARGE_CANCELLED'; side: BattleSide; reason: 'early' | 'expired' }
   | { type: 'PROJECTILE_FIRED'; side: BattleSide }
   | { type: 'PROJECTILE_BOUNCED'; side: BattleSide }
   /** A projectile impact (x, y in combat units); `hit` = the opponent was inside the shockwave. */

@@ -26,6 +26,7 @@ import {
   setDefaultMovement,
   setPatternMovement,
   toggleMovementCell,
+  powerupLabel,
 } from './model';
 
 const idSanitize = (v: string) => v.toLowerCase().replace(/\s/g, '_').replace(/[^a-z0-9_]/g, '').slice(0, 32);
@@ -351,7 +352,7 @@ export function monsterForm(ed: ItemEditor<'monster'>, refresh: () => void, rebu
     'POWERUP',
     row(
       'Powerup',
-      selectBox(['None (use own attack)', ...pus.map((p) => `${p.name} · ${p.type}`)], d.powerupId ? pus.findIndex((p) => p.id === d.powerupId) + 1 : 0, (i) =>
+      selectBox(['None (use own attack)', ...pus.map((p) => `${p.name} · ${powerupLabel(p)}`)], d.powerupId ? pus.findIndex((p) => p.id === d.powerupId) + 1 : 0, (i) =>
         edit((m) => (m.powerupId = i === 0 ? null : pus[i - 1].id), true),
       ),
       'stored as the Powerup id, never a copy; replaces the own attack',

@@ -28,7 +28,7 @@ import type {
   Projectile,
   WallSegment,
 } from '../types';
-import { PROJECTILE_RADIUS, resolveWeapon, smallAngleCosSin } from './powerups';
+import { CHARGE_MOVE_PERCENT, PROJECTILE_RADIUS, fighterPowerup, ownWeapon, resolveWeapon, smallAngleCosSin } from './powerups';
 import { circleHitsWall } from './walls';
 import { applyEffect, computeAttackCooldown, computeBlockCharges, computeDamage, computeDashCooldown, computeMoveSpeed } from './stats';
 
@@ -93,6 +93,7 @@ function createFighter(
 ): Fighter {
   const spawn = cellCentre(combatSpawnCell(arenaGrid(rules), creature.owner), rules);
   const dash = resolveDash(def, rules, build.stats.dash);
+  const powerup = fighterPowerup(def, powerups, rules);
   const facing = creature.owner === 'P1' ? 1 : -1;
   return {
     creatureId: creature.id,
@@ -123,8 +124,43 @@ function createFighter(
     dashDealsDamage: dash.dealsDamage,
     dashHit: false,
     special: !build.specialName || !build.specialActive ? 'none' : build.specialManual ? 'ready' : 'passive',
-    weapon: resolveWeapon(def, powerups, rules),
+    // A limited Powerup's weapon is only used once it is activated.
+    weapon: powerup?.limited ? ownWeapon(def, rules) : resolveWeapon(def, powerups, rules),
+    baseWeapon: ownWeapon(def, rules),
+    powerup,
+    charge: { state: 'none', ticks: 0 },
   };
+}
+
+/** Is the fighter's Charge Attack Powerup active right now? */
+export const chargeActive = (f: Fighter) => f.powerup?.type === 'chargeAttack' && f.powerup.state === 'active';
+
+/** Starts the fighter's current attack (ranged shot or melee swing). */
+function startAttack(combat: CombatState, f: Fighter, input: FighterInput, rules: CombatRules, events: GameEvent[]): void {
+  if (f.weapon.kind === 'ranged') {
+    fireProjectile(combat, f, input, rules);
+    f.cooldown = f.weapon.cooldownTicks;
+    events.push({ type: 'PROJECTILE_FIRED', side: f.side });
+  } else {
+    f.windup = rules.windupTicks;
+    // A melee Powerup sets its own attack interval; classic melee uses the Speed stat.
+    f.cooldown = f.weapon.cooldownTicks ?? f.attackCooldownTicks;
+    f.swingAim = { ...f.aim };
+    events.push({ type: 'ATTACK_STARTED', side: f.side });
+  }
+}
+
+/** A limited Powerup ran out: back to the own attack, any charge is cancelled; spent until the next battle. */
+function expirePowerup(f: Fighter, events: GameEvent[]): void {
+  const pu = f.powerup!;
+  pu.state = 'spent';
+  pu.ticksLeft = 0;
+  if (pu.weapon) f.weapon = f.baseWeapon;
+  if (f.charge.state !== 'none') {
+    f.charge = { state: 'none', ticks: 0 };
+    events.push({ type: 'CHARGE_CANCELLED', side: f.side, reason: 'expired' });
+  }
+  events.push({ type: 'POWERUP_EXPIRED', side: f.side, powerupId: pu.id });
 }
 
 export interface CombatantSetup {
@@ -402,14 +438,14 @@ function along(x: number, y: number, length: number): { sx: number; sy: number }
  * Analog movement: direction from the stick, speed scaled by how far it is
  * pushed (full deflection = moveSpeed; a full diagonal is not faster).
  */
-function move(f: Fighter, other: Fighter, input: FighterInput, rules: CombatRules, combat: CombatState): void {
+function move(f: Fighter, other: Fighter, input: FighterInput, rules: CombatRules, combat: CombatState, speed = f.moveSpeed): void {
   const x = clampAxis(input.dx);
   const y = clampAxis(input.dy);
   if (x === 0 && y === 0) return;
   const len = isqrt(x * x + y * y);
   const mag = Math.min(100, len);
-  const sx = Math.trunc((f.moveSpeed * x * mag) / (len * 100));
-  const sy = Math.trunc((f.moveSpeed * y * mag) / (len * 100));
+  const sx = Math.trunc((speed * x * mag) / (len * 100));
+  const sy = Math.trunc((speed * y * mag) / (len * 100));
   tryMove(f, other, sx, sy, rules, combat);
 }
 
@@ -453,6 +489,8 @@ export function stepCombat(
     if (f.cooldown > 0) f.cooldown--;
     if (f.guard > 0) f.guard--;
     if (f.dashCooldown > 0) f.dashCooldown--;
+    // Limited Powerup timer.
+    if (f.powerup?.limited && f.powerup.state === 'active' && --f.powerup.ticksLeft <= 0) expirePowerup(f, events);
   }
 
   for (const [f, other] of pairs) {
@@ -468,12 +506,38 @@ export function stepCombat(
       triggerSpecial(f, defs[f.side], rules);
       events.push({ type: 'SPECIAL_TRIGGERED', side: f.side, name: defs[f.side].special!.name });
     }
+    // The same input activates a limited Powerup (once per battle).
+    const pu = f.powerup;
+    if (input.special && pu?.limited && pu.state === 'inactive') {
+      pu.state = 'active';
+      pu.ticksLeft = pu.limitTicks;
+      if (pu.weapon) f.weapon = pu.weapon;
+      events.push({ type: 'POWERUP_ACTIVATED', side: f.side, powerupId: pu.id });
+    }
 
     const mx = clampAxis(input.dx);
     const my = clampAxis(input.dy);
     const busy = f.windup > 0 || f.guard > 0 || f.dashTicks > 0;
     const wantsAttack = input.attack || (f.autoFire && input.attackHeld === true);
-    if (input.block && !busy && f.blockCharges > 0) {
+    // Charge Attack in progress: holding attack charges; releasing fires (if ready)
+    // or cancels. Nothing else (block, dash, a new attack) starts meanwhile.
+    const charging = f.charge.state !== 'none';
+    if (charging) {
+      if (input.attackHeld) {
+        f.charge.ticks++;
+        if (f.charge.state === 'charging' && f.charge.ticks >= f.powerup!.chargeTicks) {
+          f.charge.state = 'ready';
+          events.push({ type: 'CHARGE_READY', side: f.side });
+        }
+      } else {
+        const ready = f.charge.state === 'ready';
+        f.charge = { state: 'none', ticks: 0 };
+        if (ready) {
+          events.push({ type: 'CHARGE_RELEASED', side: f.side });
+          startAttack(combat, f, input, rules, events);
+        } else events.push({ type: 'CHARGE_CANCELLED', side: f.side, reason: 'early' });
+      }
+    } else if (input.block && !busy && f.blockCharges > 0) {
       f.blockCharges--;
       f.guard = rules.guardTicks;
       events.push({ type: 'GUARD', side: f.side });
@@ -497,17 +561,11 @@ export function stepCombat(
         events.push({ type: 'DASH', side: f.side });
       }
     } else if (wantsAttack && !busy && f.cooldown === 0) {
-      if (f.weapon.kind === 'ranged') {
-        fireProjectile(combat, f, input, rules);
-        f.cooldown = f.weapon.cooldownTicks;
-        events.push({ type: 'PROJECTILE_FIRED', side: f.side });
-      } else {
-        f.windup = rules.windupTicks;
-        // A melee Powerup sets its own attack interval; classic melee uses the Speed stat.
-        f.cooldown = f.weapon.cooldownTicks ?? f.attackCooldownTicks;
-        f.swingAim = { ...f.aim };
-        events.push({ type: 'ATTACK_STARTED', side: f.side });
-      }
+      if (chargeActive(f)) {
+        // Charge Attack: the attack must be held first (fires on release when ready).
+        f.charge = { state: 'charging', ticks: 0 };
+        events.push({ type: 'CHARGE_STARTED', side: f.side });
+      } else startAttack(combat, f, input, rules, events);
     }
 
     if (f.dashTicks > 0) {
@@ -531,7 +589,12 @@ export function stepCombat(
         f.dashTicks = 0; // a dash stops when it runs into the opponent
       }
     } else if (f.windup === 0 && f.guard === 0) {
-      move(f, other, input, rules, combat);
+      if (f.charge.state !== 'none') {
+        // Charging: almost stationary (CHARGE_MOVE_PERCENT of the speed, spread over the ticks).
+        const t = f.charge.ticks;
+        const step = Math.trunc((f.moveSpeed * CHARGE_MOVE_PERCENT * t) / 100) - Math.trunc((f.moveSpeed * CHARGE_MOVE_PERCENT * Math.max(0, t - 1)) / 100);
+        move(f, other, input, rules, combat, step);
+      } else move(f, other, input, rules, combat);
     }
   }
 

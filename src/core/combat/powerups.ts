@@ -29,7 +29,7 @@
 //     bounce     wall bounces           level (0-10); with none left a wall hit removes the shot
 //     size/trail/color                    presentation only (projectile size, fading trail, colour)
 
-import type { CombatRules, CreatureDef, PowerupDef, Weapon, WeaponSettings } from '../types';
+import type { CombatRules, CreatureDef, FighterPowerup, PowerupDef, Weapon, WeaponSettings } from '../types';
 
 export const PX = 2;
 export const PROJECTILE_RADIUS = 6;
@@ -58,15 +58,50 @@ export function classicWeapon(rules: CombatRules): Weapon {
   return { kind: 'melee', powerupId: null, cooldownTicks: null, range: rules.attackRange, knockback: 0 };
 }
 
+/** The monster's own attack: its attack settings, or without those the classic melee. */
+export function ownWeapon(def: CreatureDef, rules: CombatRules): Weapon {
+  if (def.attack?.type) return weaponFromSettings(def.attack, null, rules);
+  return classicWeapon(rules);
+}
+
+/** Limited Powerup time limit, seconds. */
+export const TIME_LIMIT_MIN = 1;
+export const TIME_LIMIT_MAX = 60;
+/** Charge Attack charge time, seconds. */
+export const CHARGE_TIME_MIN = 1;
+export const CHARGE_TIME_MAX = 10;
+/** Movement while charging, percent of normal movement speed ("almost stationary"). */
+export const CHARGE_MOVE_PERCENT = 15;
+
+const clampIn = (v: number | undefined, lo: number, hi: number, fallback: number) => Math.max(lo, Math.min(hi, Math.round(v ?? fallback)));
+
 /**
- * A creature's weapon: an equipped Powerup replaces the monster's own attack;
- * otherwise the monster's own attack settings; without those the classic melee.
+ * A creature's weapon: an equipped melee/ranged Powerup replaces the monster's
+ * own attack; a Charge Attack Powerup keeps the own attack (it only adds the
+ * charge). Without a Powerup: the own attack.
  */
 export function resolveWeapon(def: CreatureDef, powerups: Record<string, PowerupDef>, rules: CombatRules): Weapon {
   const p = def.powerupId ? powerups[def.powerupId] : undefined;
-  if (p) return weaponFromSettings(p, p.id, rules);
-  if (def.attack?.type) return weaponFromSettings(def.attack, null, rules);
-  return classicWeapon(rules);
+  if (p && p.type !== 'chargeAttack') return weaponFromSettings({ ...p, type: p.type }, p.id, rules);
+  return ownWeapon(def, rules);
+}
+
+/** The battle state of a creature's equipped Powerup (fresh every battle), or null. */
+export function fighterPowerup(def: CreatureDef, powerups: Record<string, PowerupDef>, rules: CombatRules): FighterPowerup | null {
+  const p = def.powerupId ? powerups[def.powerupId] : undefined;
+  if (!p) return null;
+  const limited = p.duration === 'limited';
+  const charge = p.type === 'chargeAttack';
+  return {
+    id: p.id,
+    type: p.type,
+    limited,
+    state: limited ? 'inactive' : 'active',
+    ticksLeft: 0,
+    limitTicks: limited ? secondsToTicks(clampIn(p.timeLimit, TIME_LIMIT_MIN, TIME_LIMIT_MAX, 10), rules) : 0,
+    chargeTicks: charge ? secondsToTicks(clampIn(p.chargeTime, CHARGE_TIME_MIN, CHARGE_TIME_MAX, 3), rules) : 0,
+    weapon: p.type === 'chargeAttack' ? null : weaponFromSettings({ ...p, type: p.type }, p.id, rules),
+  };
 }
 
 /** Gameplay values for melee/ranged settings (shared by monster attacks and Powerups). */

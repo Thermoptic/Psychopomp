@@ -362,7 +362,8 @@ export class ContentLibrary {
 
   newPowerup(type: PowerupDef['type'] = 'melee'): PowerupDef {
     const n = this.freeId('powerup', 'powerup');
-    return { id: `powerup_${n}`, name: `Powerup ${n}`, type, ...defaultWeaponSettings() };
+    if (type === 'chargeAttack') return { id: `powerup_${n}`, name: `Powerup ${n}`, type, duration: 'permanent', chargeTime: 3 };
+    return { id: `powerup_${n}`, name: `Powerup ${n}`, type, duration: 'permanent', ...defaultWeaponSettings() };
   }
 
   private persist(): void {
