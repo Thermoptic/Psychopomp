@@ -8,10 +8,11 @@ import { arenaGrid, computeBlockCharges, type GameState, type PlayerId } from '.
 import { boardUnits, combatToScreen } from './boardUnits';
 import { drawBoardSurface, drawPowerPointMarker } from './boardArt';
 import { drawUnits } from './boardView';
-import { hpBar, measure, panel, rect, text, type Ctx } from './draw';
+import { categoryIcon, measure, panel, rect, sectionPlate, segmentBar, text, type Ctx } from './draw';
 import { ARENA_AREA, BOARD_AREA, COMBAT_HUD, arenaLayout, cellRect, type BoardLayout, type Rect } from './layout';
-import { C, playerColor } from './theme';
-import { wallSprite } from './art';
+import { C, CATEGORY_COLOR, playerColor } from './theme';
+import { drawCreature } from './sprites';
+import { defaultFacing, wallSprite } from './art';
 
 /** Length of the board -> arena expand transition. */
 export const ARENA_EXPAND_MS = 450;
@@ -135,20 +136,23 @@ function drawProjectiles(ctx: Ctx, state: GameState, ui: MatchUi, l: BoardLayout
 }
 
 interface HudData {
+  defId: string;
+  portrait: string | undefined;
   name: string;
   hp: number;
   maxHp: number;
   power: number;
   shield: number;
   speed: number;
+  /** Guard (block) charges left. */
   guard: number;
-  attack: 'READY' | 'SWING' | 'RELOAD' | 'WAIT';
-  /** Dash: 'READY', 'DASH' while dashing, or remaining cooldown seconds. */
-  dash: string;
-  special: { name: string; active: boolean; manualReady: boolean } | null;
+  /** Dash: 'ready', 'dashing', 'cooldown' (with 0-1 progress back to ready) or 'none' (no dash). */
+  dash: { state: 'ready' | 'dashing' | 'cooldown' | 'none'; progress: number };
+  /** A Special or Powerup the player can still trigger (LT), or one that is running. */
+  trigger: 'ready' | 'active' | null;
 }
 
-/** HUD numbers for one player: live fighter during combat, the build during the countdown. */
+/** HUD values for one player: live fighter during combat, the build during the countdown. */
 function hudData(state: GameState, owner: PlayerId): HudData | null {
   const b = state.battle;
   if (!b || !b.builds) return null;
@@ -157,7 +161,21 @@ function hudData(state: GameState, owner: PlayerId): HudData | null {
   const def = state.creatureDefs[cr.defId];
   const build = b.builds[side];
   const f = b.combat?.fighters[side];
+  const dash: HudData['dash'] = !f
+    ? { state: 'ready', progress: 1 }
+    : f.dashStep === 0
+      ? { state: 'none', progress: 0 }
+      : f.dashTicks > 0
+        ? { state: 'dashing', progress: 1 }
+        : f.dashCooldown > 0
+          ? { state: 'cooldown', progress: 1 - f.dashCooldown / Math.max(1, f.dashCooldownTicks) }
+          : { state: 'ready', progress: 1 };
+  const specialReady = f ? f.special === 'ready' : build.specialActive && build.specialManual;
+  const powerupReady = f?.powerup?.limited && f.powerup.state === 'inactive';
+  const powerupActive = f?.powerup?.limited && f.powerup.state === 'active';
   return {
+    defId: cr.defId,
+    portrait: def.art?.portrait,
     name: def.name.toUpperCase(),
     hp: f ? f.hp : cr.hp,
     maxHp: def.stats.maxHp,
@@ -165,83 +183,120 @@ function hudData(state: GameState, owner: PlayerId): HudData | null {
     shield: build.stats.shield,
     speed: build.stats.speed,
     guard: f ? f.blockCharges : computeBlockCharges(build.stats, state.ruleset.combat),
-    attack: !f ? 'WAIT' : f.windup > 0 ? 'SWING' : f.cooldown > 0 ? 'RELOAD' : 'READY',
-    dash: !f ? 'WAIT' : f.dashTicks > 0 ? 'DASH' : f.dashCooldown > 0 ? (f.dashCooldown / state.ruleset.combat.tickRate).toFixed(1) + 's' : 'READY',
-    special: build.specialName
-      ? {
-          name: build.specialName.toUpperCase(),
-          // Manual Specials count as active once triggered.
-          active: f ? f.special === 'passive' || f.special === 'used' : build.specialActive && !build.specialManual,
-          manualReady: f ? f.special === 'ready' : build.specialActive && build.specialManual,
-        }
-      : null,
+    dash,
+    trigger: specialReady || powerupReady ? 'ready' : powerupActive ? 'active' : null,
   };
 }
 
-/** Top HUD: P1 on the left, P2 mirrored on the right, timer in the middle. */
+/** Orange lit glass tube (the reference's warning lights beside the timer). */
+function tube(ctx: Ctx, x: number, y: number, h: number): void {
+  rect(ctx, { x: x - 1, y: y - 1, w: 7, h: h + 2 }, C.edgeDark);
+  ctx.save();
+  ctx.globalAlpha = 0.18;
+  rect(ctx, { x: x - 4, y: y + 2, w: 13, h: h - 4 }, '#ff6a1a');
+  ctx.restore();
+  rect(ctx, { x, y, w: 5, h }, '#c2410f');
+  rect(ctx, { x: x + 1, y: y + 1, w: 3, h: h - 2 }, '#ff7a2a');
+  rect(ctx, { x: x + 2, y: y + 2, w: 1, h: h - 4 }, '#ffd29a');
+}
+
+/**
+ * Top HUD during a battle (the reference's combat monitor): portrait, name,
+ * HP and stats for P1 on the left and P2 mirrored on the right, the time
+ * left in the middle. Only the monster names are words; everything else is
+ * numbers, bars and icons.
+ */
 export function drawCombatHud(ctx: Ctx, state: GameState): void {
   const H = COMBAT_HUD;
-  panel(ctx, H, undefined, '#101015');
+  panel(ctx, H, undefined, '#0d0b09');
   const mid = H.x + H.w / 2;
+  const top = H.y + 4;
+  const inner = H.h - 8;
   for (const owner of ['P1', 'P2'] as const) {
     const d = hudData(state, owner);
     if (!d) continue;
     const color = playerColor(owner);
     const mirror = owner === 'P2';
-    // x positions measured from the HUD's outer edge on this player's side.
+    // A box `off` px in from this player's outer edge (mirrored for P2).
+    const R = (off: number, w: number, y = top, h = inner): Rect => ({ x: mirror ? H.x + H.w - off - w : H.x + off, y, w, h });
     const X = (off: number) => (mirror ? H.x + H.w - off : H.x + off);
     const al = mirror ? 'right' : 'left';
-    const ar = mirror ? 'left' : 'right';
-    const top = H.y + 20;
-    const bot = H.y + 40;
 
-    // Name + HP block.
-    ctx.fillStyle = color;
-    ctx.fillRect(mirror ? H.x + H.w - 6 : H.x + 3, H.y + 6, 3, H.h - 12);
-    text(ctx, d.name, X(14), top, { size: 14, color: C.text, align: al });
-    if (d.special && (d.special.active || d.special.manualReady)) {
-      const w = measure(ctx, d.name, 14) + 8;
-      const label = d.special.manualReady ? `${d.special.name} [LT]` : d.special.name;
-      text(ctx, label, mirror ? X(14) - w : X(14) + w, top, { size: 9, color: d.special.manualReady ? C.pp : C.ok, align: al });
+    // Portrait in its own plate at the outer edge.
+    const pp = R(4, inner);
+    sectionPlate(ctx, pp);
+    drawCreature(ctx, d.defId, owner, pp.x + pp.w / 2, pp.y + pp.h / 2, 3, { face: defaultFacing(owner), portrait: d.portrait, portraitSize: pp.w - 6 });
+
+    // Name, then (after it) guard charges and an LT-trigger light.
+    text(ctx, d.name, X(50), H.y + 19, { size: 15, color: C.text, align: al });
+    let ix = X(50) + (mirror ? -1 : 1) * (measure(ctx, d.name, 15) + 8);
+    for (let k = 0; k < d.guard; k++) {
+      const x = mirror ? ix - 7 : ix;
+      rect(ctx, { x, y: H.y + 9, w: 7, h: 7 }, C.edgeDark);
+      rect(ctx, { x: x + 1, y: H.y + 10, w: 5, h: 5 }, CATEGORY_COLOR.block);
+      ix += mirror ? -9 : 9;
     }
-    text(ctx, `${d.hp}/${d.maxHp}`, X(184), top, { size: 14, color: d.hp <= d.maxHp / 4 ? C.danger : C.text, align: ar });
-    hpBar(ctx, { x: mirror ? H.x + H.w - 184 : H.x + 14, y: bot - 8, w: 170, h: 10 }, d.hp, d.maxHp, color);
+    if (d.trigger) {
+      const x = mirror ? ix - 10 : ix + 2;
+      categoryIcon(ctx, 'special', x, H.y + 7, d.trigger === 'ready' ? C.pp : C.ok, 1);
+    }
 
-    // Stat columns, separated by thin rules. Each column always reads
-    // "LABEL ... value" left to right; only the column order is mirrored.
-    const col = (off: number, label1: string, v1: string, label2: string, v2: string | null, pips = 0) => {
-      const left = Math.min(X(off), X(off + 78));
-      const right = Math.max(X(off), X(off + 78));
-      ctx.fillStyle = C.faint;
-      ctx.fillRect(mirror ? right + 6 : left - 6, H.y + 8, 1, H.h - 16);
-      text(ctx, label1, left, top, { size: 10, color: C.dim });
-      text(ctx, v1, right, top, { size: 13, color: C.text, align: 'right' });
-      text(ctx, label2, left, bot, { size: 10, color: C.dim });
-      if (v2 !== null) text(ctx, v2, right, bot, { size: 13, color: C.text, align: 'right' });
-      for (let k = 0; k < pips; k++) rect(ctx, { x: right - 9 - k * 11, y: bot - 9, w: 9, h: 9 }, C.pp);
-    };
-    col(196, 'POWER', String(d.power), 'SHIELD', String(d.shield));
-    col(282, 'SPEED', String(d.speed), 'GUARD', d.guard === 0 ? '-' : null, d.guard);
+    // HP: numbers and a segmented bar.
+    const low = d.hp <= d.maxHp / 4;
+    text(ctx, `${d.hp}/${d.maxHp}`, X(50), H.y + 37, { size: 12, mono: true, color: low ? C.danger : color, align: al });
+    const bar = R(96, 100, H.y + 29, 9);
+    // P2's bar is mirrored too: it empties towards the middle.
+    ctx.save();
+    if (mirror) {
+      ctx.translate(bar.x * 2 + bar.w, 0);
+      ctx.scale(-1, 1);
+    }
+    segmentBar(ctx, bar, Math.ceil((d.hp / Math.max(1, d.maxHp)) * 20), 20, low ? C.danger : color);
+    ctx.restore();
 
-    // Attack + dash status.
-    ctx.fillStyle = C.faint;
-    ctx.fillRect(X(366), H.y + 8, 1, H.h - 16);
-    const atkColor = d.attack === 'READY' ? C.ok : d.attack === 'SWING' ? C.danger : C.dim;
-    text(ctx, 'ATK', X(372), top, { size: 9, color: C.dim, align: al });
-    text(ctx, d.attack, X(394), top, { size: 10, color: atkColor, align: al });
-    const dashColor = d.dash === 'READY' ? C.ok : d.dash === 'DASH' ? C.pp : C.dim;
-    text(ctx, 'DSH', X(372), bot, { size: 9, color: C.dim, align: al });
-    text(ctx, d.dash, X(394), bot, { size: 10, color: dashColor, align: al });
+    // Stats: icon over value, same order on both sides (Power, Speed, Shield, Dash).
+    const box = R(206, 168, H.y + 3, H.h - 6);
+    sectionPlate(ctx, box);
+    const cells: Array<[string, string | null]> = [
+      ['power', String(d.power)],
+      ['speed', String(d.speed)],
+      ['shield', String(d.shield)],
+      ['dash', null],
+    ];
+    cells.forEach(([cat, value], i) => {
+      const cx = box.x + 4 + i * 40 + 20;
+      if (i > 0) rect(ctx, { x: box.x + 4 + i * 40, y: box.y + 7, w: 1, h: box.h - 14 }, '#2c261f');
+      categoryIcon(ctx, cat, cx - 7, box.y + 6, CATEGORY_COLOR[cat], 2);
+      if (value !== null) text(ctx, value, cx, box.y + box.h - 7, { size: 12, mono: true, color: C.text, align: 'center' });
+      else {
+        // Dash: a lit lamp when ready, a filling gauge while cooling down, dark without a dash.
+        const g = { x: cx - 10, y: box.y + box.h - 13, w: 20, h: 6 };
+        rect(ctx, g, C.edgeDark);
+        const fill = d.dash.state === 'none' ? 0 : d.dash.progress;
+        const lit = d.dash.state === 'ready' || d.dash.state === 'dashing';
+        rect(ctx, { x: g.x + 1, y: g.y + 1, w: Math.round((g.w - 2) * fill), h: g.h - 2 }, lit ? CATEGORY_COLOR.dash : '#4f6b37');
+        if (lit) {
+          ctx.fillStyle = 'rgba(255,255,255,0.45)';
+          ctx.fillRect(g.x + 1, g.y + 1, g.w - 2, 1);
+        }
+      }
+    });
   }
 
-  // Centre: time left / status.
+  // Centre: time left (the full time while counting down), between two lit tubes.
   const b = state.battle;
   const rules = state.ruleset.combat;
-  let centre = '';
-  if (b?.stage === 'countdown') centre = 'READY';
-  else if (b?.combat && rules.timeoutTicks > 0) centre = String(Math.max(0, Math.ceil((rules.timeoutTicks - b.combat.tick) / rules.tickRate)));
-  text(ctx, 'TIME', mid, H.y + 18, { size: 9, color: C.dim, align: 'center' });
-  text(ctx, centre, mid, H.y + 38, { size: 16, color: centre === 'READY' ? C.ok : C.text, align: 'center' });
+  const plate = { x: Math.round(mid - 32), y: H.y + 2, w: 64, h: H.h - 4 };
+  tube(ctx, plate.x - 12, H.y + 7, H.h - 14);
+  tube(ctx, plate.x + plate.w + 7, H.y + 7, H.h - 14);
+  sectionPlate(ctx, plate);
+  if (b && rules.timeoutTicks > 0) {
+    const ticks = b.combat ? rules.timeoutTicks - b.combat.tick : rules.timeoutTicks;
+    const secs = String(Math.max(0, Math.ceil(ticks / rules.tickRate)));
+    const counting = !b.combat;
+    text(ctx, secs, mid + 1, H.y + 31, { size: 20, color: '#3a1606', align: 'center' });
+    text(ctx, secs, mid, H.y + 30, { size: 20, color: counting ? '#9a5a32' : '#f2a15e', align: 'center' });
+  }
 }
 
 /** Big 3-2-1 over the arena while the countdown runs, then BATTLE!. */
