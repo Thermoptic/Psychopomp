@@ -25,8 +25,8 @@ export function weaponTypeSelector(type: 'melee' | 'ranged' | undefined, onChang
   );
 }
 
-/** The sliders of the active type only (MELEE: 3, RANGED: 8). */
-export function weaponSettingsGroup(w: WeaponSettings, rules: Ruleset, edit: (fn: (w: WeaponSettings) => void) => void): HTMLElement | null {
+/** The sliders of the active type only (MELEE: 3, RANGED: 8), plus any `extra` rows (e.g. a Powerup's Charge). */
+export function weaponSettingsGroup(w: WeaponSettings, rules: Ruleset, edit: (fn: (w: WeaponSettings) => void) => void, extra: Array<HTMLElement | null> = []): HTMLElement | null {
   const type = w.type;
   if (!type) return null;
   const fields = type === 'melee' ? MELEE_FIELDS : RANGED_FIELDS;
@@ -70,6 +70,7 @@ export function weaponSettingsGroup(w: WeaponSettings, rules: Ruleset, edit: (fn
       ),
     ),
     colourRow,
+    ...extra,
   );
 }
 

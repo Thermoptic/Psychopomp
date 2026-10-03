@@ -17,7 +17,7 @@ import {
   setPowerupChargeTime,
   setPowerupDuration,
   setPowerupTimeLimit,
-  setPowerupType,
+  setPowerupCharge,
 } from '../src/devEditor/model';
 import { basePack, ok, prepareBothAndBegin, testCreature } from './helpers';
 
@@ -32,7 +32,10 @@ const fresh = (text: string | null = null) => {
 const RANGED_ATTACK: AttackDef = { type: 'ranged', ranged: { speed: 6, range: 7, rateOfFire: 3, impactSize: 4, homing: 2, trajectory: 3, bounce: 2 } };
 const MELEE_ATTACK: AttackDef = { type: 'melee', melee: { speed: 4, knockback: 6, range: 8 } };
 
-const charge = (over: Partial<PowerupDef> = {}): PowerupDef => ({ id: 'heavy', name: 'Heavy Charge', type: 'chargeAttack', duration: 'permanent', chargeTime: 3, ...over });
+/** A ranged Powerup (the RANGED_ATTACK stats) whose attack must be charged. */
+const charge = (over: Partial<PowerupDef> = {}): PowerupDef => ({ id: 'heavy', name: 'Heavy Charge', type: 'ranged', ranged: RANGED_ATTACK.ranged, duration: 'permanent', chargeTime: 3, ...over });
+/** The same, as a melee Powerup. */
+const meleeCharge = (over: Partial<PowerupDef> = {}) => charge({ type: 'melee', melee: MELEE_ATTACK.melee, ranged: undefined, ...over });
 const gun = (over: Partial<PowerupDef> = {}): PowerupDef => ({
   id: 'gun',
   name: 'Gun',
@@ -112,22 +115,22 @@ describe('Powerup creation (editor)', () => {
     expect(lib.validatePowerup(p, null)).toEqual([]);
   });
 
-  it('saves name, duration, time limit, Charge Attack type and charge time (and reads them back)', () => {
+  it('saves name, duration, time limit, type with all its settings, Charge and charge time (and reads them back)', () => {
     const { lib, storage } = fresh();
     const p = { ...lib.newPowerup(), id: 'heavy_charge', name: 'Heavy Charge' };
     setPowerupDuration(p, 'limited');
     setPowerupTimeLimit(p, 12);
-    setPowerupType(p, 'chargeAttack');
+    p.type = 'ranged';
+    setPowerupCharge(p, true);
     setPowerupChargeTime(p, 4);
     expect(lib.saveItem('powerup', p, null).ok).toBe(true);
     const back = new ContentLibrary(basePack(), memoryStorage(storage.text)).get('powerup', 'heavy_charge')!.item;
-    expect(back).toMatchObject({ name: 'Heavy Charge', duration: 'limited', timeLimit: 12, type: 'chargeAttack', chargeTime: 4 });
-    // Charge Attack has no attack settings of its own.
-    expect(back.melee).toBeUndefined();
-    expect(back.ranged).toBeUndefined();
+    expect(back).toMatchObject({ name: 'Heavy Charge', duration: 'limited', timeLimit: 12, type: 'ranged', chargeTime: 4 });
+    // Charge is part of the attack: the ranged settings are kept as they are.
+    expect(back.ranged).toEqual(p.ranged);
   });
 
-  it('Permanent is saved without a time limit; switching type away from Charge drops the charge time', () => {
+  it('Permanent is saved without a time limit; unticking Charge drops the charge time', () => {
     const { lib } = fresh();
     const p = lib.newPowerup();
     setPowerupDuration(p, 'limited');
@@ -135,11 +138,11 @@ describe('Powerup creation (editor)', () => {
     setPowerupDuration(p, 'permanent');
     expect(p.duration).toBe('permanent');
     expect(p.timeLimit).toBeUndefined();
-    setPowerupType(p, 'chargeAttack');
+    setPowerupCharge(p, true);
     expect(p.chargeTime).toBe(3);
-    setPowerupType(p, 'ranged');
+    setPowerupCharge(p, false);
     expect(p.chargeTime).toBeUndefined();
-    expect(p.ranged).toBeDefined();
+    expect(p.melee).toBeDefined();
     expect(lib.validatePowerup(p, null)).toEqual([]);
   });
 
@@ -166,17 +169,19 @@ describe('Powerup creation (editor)', () => {
     expect(bad({ duration: 'permanent', timeLimit: 10 })).toMatch(/timeLimit/);
     expect(bad({ chargeTime: 0 })).toMatch(/chargeTime/);
     expect(bad({ chargeTime: 11 })).toMatch(/chargeTime/);
-    expect(bad({ chargeTime: undefined })).toMatch(/chargeTime/);
+    expect(bad({ type: 'chargeAttack' as never })).toMatch(/type/);
     expect(bad({ type: 'laser' as never })).toMatch(/type/);
-    expect(lib.validatePowerup(gun({ chargeTime: 3 }), null).join()).toMatch(/chargeTime/);
+    // Charge is optional: without it the attack is a normal one.
+    expect(bad({ chargeTime: undefined })).toBe('');
     expect(bad({ duration: 'limited', timeLimit: 60, chargeTime: 10 })).toBe('');
   });
 
   it('editor texts and labels', () => {
     expect(POWERUP_TEXT.permanent).toMatch(/^Permanent: /);
     expect(POWERUP_TEXT.limited).toMatch(/^Limited: /);
-    expect(POWERUP_TEXT.chargeAttack).toMatch(/^Charge Attack: /);
-    expect(powerupLabel(charge())).toBe('Charge Attack · Permanent');
+    expect(POWERUP_TEXT.charge).toMatch(/^Charge: /);
+    expect(powerupLabel(charge())).toBe('Ranged · Charge 3s · Permanent');
+    expect(powerupLabel(meleeCharge({ chargeTime: 5, duration: 'limited', timeLimit: 20 }))).toBe('Melee · Charge 5s · Limited 20s');
     expect(powerupLabel(gun({ duration: 'limited', timeLimit: 8 }))).toBe('Ranged · Limited 8s');
   });
 });
@@ -249,7 +254,7 @@ describe('Powerup duration', () => {
 
 // --- CHARGE ---------------------------------------------------------------------------------
 
-describe('Charge Attack', () => {
+describe('Charge', () => {
   it('pressing attack starts charging instead of attacking; ready after exactly Charge Time', () => {
     let s = battle(charge({ chargeTime: 3 }), RANGED_ATTACK);
     let r = run(s, 1, PRESS);
@@ -316,7 +321,7 @@ describe('Charge Attack', () => {
 
   it('ranged: release after ready fires the configured ranged attack (same projectile, same cooldown)', () => {
     // Reference: the same own attack without a Powerup.
-    const ref = run(battle(null, RANGED_ATTACK), 1, PRESS).s;
+    const ref = run(battle(charge({ chargeTime: undefined })), 1, PRESS).s;
     const refShot = ref.battle!.combat!.projectiles[0];
     let s = battle(charge({ chargeTime: 2 }), RANGED_ATTACK);
     const weaponBefore = structuredClone(A(s).weapon);
@@ -349,7 +354,7 @@ describe('Charge Attack', () => {
   });
 
   it('melee: release after ready swings the configured melee attack (Power, Speed, Range, Knockback)', () => {
-    let s = closeIn(battle(charge({ chargeTime: 1 }), MELEE_ATTACK));
+    let s = closeIn(battle(meleeCharge({ chargeTime: 1 })));
     const weapon = structuredClone(A(s).weapon);
     expect(weapon).toMatchObject({ kind: 'melee', range: M.meleeRange(8), knockback: M.meleeKnockback(6) });
     const expected = computeDamage(A(s).stats, D(s).stats, s.ruleset.combat);
@@ -369,7 +374,7 @@ describe('Charge Attack', () => {
   });
 
   it('melee: the configured range still decides whether the charged swing connects', () => {
-    let s = battle(charge({ chargeTime: 1 }), { type: 'melee', melee: { speed: 1, knockback: 1, range: 1 } });
+    let s = battle(meleeCharge({ chargeTime: 1, melee: { speed: 1, knockback: 1, range: 1 } }));
     D(s).x = A(s).x + M.meleeRange(1) + 30;
     D(s).y = A(s).y;
     A(s).aim = { x: 100, y: 0 };
@@ -406,7 +411,7 @@ describe('Charge Attack', () => {
 
 // --- LIMITED + CHARGE -----------------------------------------------------------------------
 
-describe('Limited Charge Attack', () => {
+describe('Limited + Charge', () => {
   const limitedCharge = () => battle(charge({ chargeTime: 2, duration: 'limited', timeLimit: 10 }), RANGED_ATTACK);
 
   it('before activation the attack is normal (no charge); after activation it must be charged', () => {

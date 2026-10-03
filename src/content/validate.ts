@@ -225,15 +225,9 @@ export function validatePowerup(raw: unknown): ValidationResult {
   if (!isStr(raw.id)) errors.push(`${where}: missing "id"`);
   else if (!ID_RE.test(raw.id)) errors.push(`${where}: id must use a-z, 0-9 and _ only`);
   if (!isStr(raw.name) || !String(raw.name).trim()) errors.push(`${where}: missing "name"`);
-  if (raw.type === 'chargeAttack') {
-    // No attack settings of its own (the monster's attack is charged); only the charge time.
-    validateWeapon({ ...raw, type: undefined }, where, errors, false);
-    intIn(errors, `${where}.chargeTime`, raw.chargeTime, 1, 10);
-  } else {
-    if (raw.type !== 'melee' && raw.type !== 'ranged') errors.push(`${where}.type must be "melee", "ranged" or "chargeAttack"`);
-    else validateWeapon(raw, where, errors, true);
-    if (raw.chargeTime !== undefined) errors.push(`${where}.chargeTime is only used by a Charge Attack`);
-  }
+  validateWeapon(raw, where, errors, true);
+  // Charge (optional): seconds attack must be held.
+  if (raw.chargeTime !== undefined) intIn(errors, `${where}.chargeTime`, raw.chargeTime, 1, 10);
   if (raw.duration !== undefined && raw.duration !== 'permanent' && raw.duration !== 'limited') errors.push(`${where}.duration must be "permanent" or "limited"`);
   if (raw.duration === 'limited') intIn(errors, `${where}.timeLimit`, raw.timeLimit, 1, 60);
   else if (raw.timeLimit !== undefined) errors.push(`${where}.timeLimit is only used by a limited Powerup`);

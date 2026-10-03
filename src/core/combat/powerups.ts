@@ -67,7 +67,7 @@ export function ownWeapon(def: CreatureDef, rules: CombatRules): Weapon {
 /** Limited Powerup time limit, seconds. */
 export const TIME_LIMIT_MIN = 1;
 export const TIME_LIMIT_MAX = 60;
-/** Charge Attack charge time, seconds. */
+/** Charge time, seconds. */
 export const CHARGE_TIME_MIN = 1;
 export const CHARGE_TIME_MAX = 10;
 /** Movement while charging, percent of normal movement speed ("almost stationary"). */
@@ -76,13 +76,12 @@ export const CHARGE_MOVE_PERCENT = 15;
 const clampIn = (v: number | undefined, lo: number, hi: number, fallback: number) => Math.max(lo, Math.min(hi, Math.round(v ?? fallback)));
 
 /**
- * A creature's weapon: an equipped melee/ranged Powerup replaces the monster's
- * own attack; a Charge Attack Powerup keeps the own attack (it only adds the
- * charge). Without a Powerup: the own attack.
+ * A creature's weapon: an equipped Powerup replaces the monster's own attack;
+ * otherwise the monster's own attack settings; without those the classic melee.
  */
 export function resolveWeapon(def: CreatureDef, powerups: Record<string, PowerupDef>, rules: CombatRules): Weapon {
   const p = def.powerupId ? powerups[def.powerupId] : undefined;
-  if (p && p.type !== 'chargeAttack') return weaponFromSettings({ ...p, type: p.type }, p.id, rules);
+  if (p) return weaponFromSettings(p, p.id, rules);
   return ownWeapon(def, rules);
 }
 
@@ -91,7 +90,7 @@ export function fighterPowerup(def: CreatureDef, powerups: Record<string, Poweru
   const p = def.powerupId ? powerups[def.powerupId] : undefined;
   if (!p) return null;
   const limited = p.duration === 'limited';
-  const charge = p.type === 'chargeAttack';
+  const charge = p.chargeTime !== undefined;
   return {
     id: p.id,
     type: p.type,
@@ -100,7 +99,7 @@ export function fighterPowerup(def: CreatureDef, powerups: Record<string, Poweru
     ticksLeft: 0,
     limitTicks: limited ? secondsToTicks(clampIn(p.timeLimit, TIME_LIMIT_MIN, TIME_LIMIT_MAX, 10), rules) : 0,
     chargeTicks: charge ? secondsToTicks(clampIn(p.chargeTime, CHARGE_TIME_MIN, CHARGE_TIME_MAX, 3), rules) : 0,
-    weapon: p.type === 'chargeAttack' ? null : weaponFromSettings({ ...p, type: p.type }, p.id, rules),
+    weapon: weaponFromSettings(p, p.id, rules),
   };
 }
 

@@ -207,14 +207,8 @@ export interface CreatureDef {
   dash?: DashDef;
 }
 
-/**
- * What a Powerup does:
- *   'melee' / 'ranged'  a weapon that replaces the monster's own attack;
- *   'chargeAttack'      no weapon of its own: the monster's own (configured)
- *                       attack must be charged by holding attack for
- *                       `chargeTime` seconds, and fires on release.
- */
-export type PowerupType = 'melee' | 'ranged' | 'chargeAttack';
+/** A Powerup is a weapon (melee or ranged) that replaces the monster's own attack. */
+export type PowerupType = 'melee' | 'ranged';
 
 /**
  * 'permanent' (default): active the whole battle, from the start.
@@ -227,7 +221,7 @@ export type PowerupDuration = 'permanent' | 'limited';
  * A Powerup definition. Weapon values are designer levels (1-10);
  * core/combat/powerups.ts maps them to gameplay values.
  */
-export interface PowerupDef extends Omit<WeaponSettings, 'type'> {
+export interface PowerupDef extends WeaponSettings {
   id: string;
   name: string;
   type: PowerupType;
@@ -235,7 +229,11 @@ export interface PowerupDef extends Omit<WeaponSettings, 'type'> {
   duration?: PowerupDuration;
   /** Seconds a 'limited' Powerup stays active after activation (1-60). */
   timeLimit?: number;
-  /** Charge Attack: seconds attack must be held before the attack can be released (1-10). */
+  /**
+   * Charge: set = this attack must be charged. Attack is held for this many
+   * seconds (1-10), then the attack (with all its settings above) fires on
+   * release. Missing = a normal attack.
+   */
   chargeTime?: number;
 }
 
@@ -465,10 +463,10 @@ export interface FighterPowerup {
   /** Ticks left while a limited Powerup is active. */
   ticksLeft: number;
   limitTicks: number;
-  /** Charge Attack: ticks attack must be held (0 for other types). */
+  /** Charge: ticks attack must be held before the attack can be released (0 = no charge). */
   chargeTicks: number;
-  /** melee/ranged: the weapon used while active; null for Charge Attack. */
-  weapon: Weapon | null;
+  /** The Powerup's weapon, used while it is active. */
+  weapon: Weapon;
 }
 
 /** Gameplay values of an attack (combat units / ticks), see core/combat/powerups.ts. */

@@ -5,9 +5,9 @@
 
 import type { ContentKind, ContentLibrary, Entry } from '../content/library';
 import { DEFAULT_CATEGORIES } from '../core/types';
-import { defaultSpecial, defaultWeaponSettings } from '../content/library';
+import { defaultSpecial } from '../content/library';
 import { MOVE_PRESETS, PATTERN_RADIUS, isPatternMovement, patternCells } from '../core/board/movementPresets';
-import { powerupMapping as M, type Cell, type CreatureDef, type PowerupDef, type PowerupDuration, type PowerupType, type Ruleset, type SlotCondition, type WeaponSettings } from '../core';
+import { powerupMapping as M, type Cell, type CreatureDef, type PowerupDef, type PowerupDuration, type Ruleset, type SlotCondition, type WeaponSettings } from '../core';
 
 type ItemOf<K extends ContentKind> = K extends 'monster' ? CreatureDef : PowerupDef;
 
@@ -299,39 +299,20 @@ export function levelMeaning(group: 'melee' | 'ranged', key: string, level: numb
 
 // --- Powerup duration and type ---------------------------------------------------------------
 
-export const POWERUP_TYPES: ReadonlyArray<{ value: PowerupType; label: string }> = [
-  { value: 'melee', label: 'Melee' },
-  { value: 'ranged', label: 'Ranged' },
-  { value: 'chargeAttack', label: 'Charge Attack' },
-];
-
 export const POWERUP_TEXT = {
   permanent: 'Permanent: This ability remains active for the entire match, from the beginning of the match until the match ends.',
   limited: 'Limited: Activate this ability with the Powerup button. It remains active for the selected time, then expires and cannot be activated again during this round.',
-  chargeAttack:
-    'Charge Attack: Hold the attack button to charge your attack. Movement becomes extremely slow while charging. When ready, the monster flashes rapidly red and blue. Release the attack button to execute the configured attack.',
+  charge:
+    'Charge: Hold the attack button to charge your attack. Movement becomes extremely slow while charging. When ready, the monster flashes rapidly red and blue. Release the attack button to execute the configured attack.',
 } as const;
 
 export const DEFAULT_TIME_LIMIT = 10;
 export const DEFAULT_CHARGE_TIME = 3;
 
-/**
- * Switches a Powerup's type. Melee/Ranged keep (or get default) weapon
- * settings; Charge Attack has no attack settings of its own (the monster's
- * configured attack is used), only a charge time.
- */
-export function setPowerupType(p: PowerupDef, type: PowerupType): void {
-  p.type = type;
-  if (type === 'chargeAttack') {
-    delete p.melee;
-    delete p.ranged;
-    p.chargeTime ??= DEFAULT_CHARGE_TIME;
-  } else {
-    const d = defaultWeaponSettings();
-    p.melee ??= d.melee;
-    p.ranged ??= d.ranged;
-    delete p.chargeTime;
-  }
+/** Charge on (with the default charge time) or off (a normal attack). */
+export function setPowerupCharge(p: PowerupDef, on: boolean): void {
+  if (on) p.chargeTime ??= DEFAULT_CHARGE_TIME;
+  else delete p.chargeTime;
 }
 
 /** Permanent (no time limit stored) or Limited (with a time limit). */
@@ -349,8 +330,10 @@ export function setPowerupChargeTime(p: PowerupDef, seconds: number): void {
   p.chargeTime = Math.max(M.CHARGE_TIME_MIN, Math.min(M.CHARGE_TIME_MAX, Math.round(seconds)));
 }
 
-/** "Charge Attack · Limited 10s" style label. */
+/** "Ranged · Charge 3s · Limited 10s" style label. */
 export function powerupLabel(p: PowerupDef): string {
-  const type = POWERUP_TYPES.find((t) => t.value === p.type)?.label ?? p.type;
-  return p.duration === 'limited' ? `${type} · Limited ${p.timeLimit ?? DEFAULT_TIME_LIMIT}s` : `${type} · Permanent`;
+  const type = p.type === 'ranged' ? 'Ranged' : 'Melee';
+  const charge = p.chargeTime !== undefined ? ` · Charge ${p.chargeTime}s` : '';
+  const duration = p.duration === 'limited' ? `Limited ${p.timeLimit ?? DEFAULT_TIME_LIMIT}s` : 'Permanent';
+  return `${type}${charge} · ${duration}`;
 }

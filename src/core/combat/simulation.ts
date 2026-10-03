@@ -133,7 +133,7 @@ function createFighter(
 }
 
 /** Is the fighter's Charge Attack Powerup active right now? */
-export const chargeActive = (f: Fighter) => f.powerup?.type === 'chargeAttack' && f.powerup.state === 'active';
+export const chargeActive = (f: Fighter) => !!f.powerup && f.powerup.chargeTicks > 0 && f.powerup.state === 'active';
 
 /** Starts the fighter's current attack (ranged shot or melee swing). */
 function startAttack(combat: CombatState, f: Fighter, input: FighterInput, rules: CombatRules, events: GameEvent[]): void {
@@ -155,7 +155,7 @@ function expirePowerup(f: Fighter, events: GameEvent[]): void {
   const pu = f.powerup!;
   pu.state = 'spent';
   pu.ticksLeft = 0;
-  if (pu.weapon) f.weapon = f.baseWeapon;
+  f.weapon = f.baseWeapon;
   if (f.charge.state !== 'none') {
     f.charge = { state: 'none', ticks: 0 };
     events.push({ type: 'CHARGE_CANCELLED', side: f.side, reason: 'expired' });
@@ -511,7 +511,7 @@ export function stepCombat(
     if (input.special && pu?.limited && pu.state === 'inactive') {
       pu.state = 'active';
       pu.ticksLeft = pu.limitTicks;
-      if (pu.weapon) f.weapon = pu.weapon;
+      f.weapon = pu.weapon;
       events.push({ type: 'POWERUP_ACTIVATED', side: f.side, powerupId: pu.id });
     }
 
