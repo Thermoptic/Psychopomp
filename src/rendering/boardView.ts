@@ -8,6 +8,7 @@ import { drawBoardSurface, drawPowerPointMarker } from './boardArt';
 import { BOARD_AREA, HEADER, LEFT_PANEL, MESSAGE_BAR, RIGHT_PANEL, boardLayout, cellRect, type BoardLayout, type Rect } from './layout';
 import { aimReticle, boardUnits, combatToScreen, isBattleView, isCombatView, type BoardUnit } from './boardUnits';
 import { movementText } from './movementText';
+import { defaultFacing } from './art';
 import { drawCreature } from './sprites';
 import { SLASH_MS, coneHalfAngle, drawSwish } from './swordSwing';
 import { C, CATEGORY_COLOR, playerColor, playerLabel } from './theme';
@@ -102,7 +103,7 @@ export function drawPlayerPanel(ctx: Ctx, state: GameState, ui: MatchUi, player:
     // Portrait on the outer side, name + HP beside it (mirrored for P2).
     const portX = mirror ? r.x + r.w - 12 - 84 : r.x + 12;
     rect(ctx, { x: portX, y, w: 84, h: 84 }, '#0c0a08');
-    drawCreature(ctx, def.id, player, portX + 42, y + 42, 7, { portrait: def.art?.portrait });
+    drawCreature(ctx, def.id, player, portX + 42, y + 42, 7, { portrait: def.art?.portrait, face: defaultFacing(player) });
     const nx = mirror ? portX - 10 : portX + 94;
     const align = mirror ? 'right' : 'left';
     text(ctx, def.name.toUpperCase(), nx, y + 18, { size: 16, color: C.text, align });
@@ -269,7 +270,7 @@ export function drawUnits(ctx: Ctx, state: GameState, ui: MatchUi, l: BoardLayou
         const back = (travelled * k) / 4;
         ctx.globalAlpha = 0.12 * (4 - k);
         drawCreature(ctx, u.defId, u.owner, u.cx - (f.dashDir.x / len) * back, u.cy - (portrait ? 0 : 3) - (f.dashDir.y / len) * back, u.px, {
-          flip: f.facing < 0,
+          face: f.facing < 0 ? 'left' : 'right',
           flash: color,
           portrait,
           portraitSize,
@@ -278,7 +279,7 @@ export function drawUnits(ctx: Ctx, state: GameState, ui: MatchUi, l: BoardLayou
       ctx.restore();
     }
     const flash = f && ui.flash[f.side] > 0 && Math.floor(now / 60) % 2 === 0 ? '#ffffff' : undefined;
-    drawCreature(ctx, u.defId, u.owner, u.cx, u.cy - (portrait ? 0 : 3), u.px, { flip: f ? f.facing < 0 : u.owner === 'P2' && !!state.battle, flash, portrait, portraitSize });
+    drawCreature(ctx, u.defId, u.owner, u.cx, u.cy - (portrait ? 0 : 3), u.px, { face: f ? (f.facing < 0 ? 'left' : 'right') : defaultFacing(u.owner), flash, portrait, portraitSize });
     if (f && f.weapon.kind === 'melee') {
       // Swish across the aim cone, shown on the button press.
       const reach = f.weapon.range * unitScale;

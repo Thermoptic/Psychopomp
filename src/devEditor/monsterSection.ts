@@ -3,7 +3,7 @@
 
 import { baseBattleStats, cellCode, computeDashCooldown, describeRequirement, parseCell, type CreatureDef, type Effect, type Placement, type SlotCondition } from '../core';
 import { resolveDash } from '../core/combat/simulation';
-import { PORTRAIT_IDS, parsePortraitRef, portraitUrl } from '../rendering/art';
+import { PORTRAIT_IDS, defaultFacing, parsePortraitRef, portraitUrl } from '../rendering/art';
 import { drawCreature } from '../rendering/sprites';
 import { boardGrid, group, h, row, segmented, selectBox, slider, textInput } from './dom';
 import { setWeaponType, weaponSettingsGroup, weaponSummary, weaponTypeSelector } from './weaponFields';
@@ -430,7 +430,7 @@ export function monsterPreview(ed: ItemEditor<'monster'>): HTMLElement {
   if (ctx) {
     ctx.imageSmoothingEnabled = false;
     // Placeholder art is generated from the monster id (no art files yet).
-    drawCreature(ctx, d.id || '?', d.player ?? 'P1', 55, 55, 9, { portrait: d.art?.portrait });
+    drawCreature(ctx, d.id || '?', d.player ?? 'P1', 55, 55, 9, { portrait: d.art?.portrait, face: defaultFacing(d.player ?? 'P1') });
   }
   const stats = baseBattleStats(d, rules);
   const pu = d.powerupId ? ed.lib.get('powerup', d.powerupId)?.item : undefined;

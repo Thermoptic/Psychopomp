@@ -6,7 +6,7 @@
 // colour.
 
 import type { PlayerId } from '../core/types';
-import { portraitSprite } from './art';
+import { mirrorPortrait, portraitSprite, type Facing } from './art';
 import { drawSprite } from './boardArt';
 import type { Ctx } from './draw';
 import { C, playerColor, playerDark } from './theme';
@@ -53,6 +53,9 @@ function pattern(id: string): number[][] {
 }
 
 export interface CreatureDrawOpts {
+  /** Which way the creature should look; avatars are mirrored only if their picture looks the other way. */
+  face?: Facing;
+  /** Mirror the procedural sprite (avatars use `face`). */
   flip?: boolean;
   flash?: string;
   /** Content `art.portrait`: an avatar id (see art/portraits/). */
@@ -78,7 +81,7 @@ export function drawCreature(ctx: Ctx, defId: string, owner: PlayerId, cx: numbe
     ctx.fillRect(x0, y0, size, size);
     const b = size >= 60 ? 3 : 2;
     ctx.save();
-    if (opts.flip) {
+    if (opts.face && mirrorPortrait(opts.portrait, opts.face)) {
       ctx.translate(x0 + size / 2, 0);
       ctx.scale(-1, 1);
       ctx.translate(-(x0 + size / 2), 0);
@@ -104,7 +107,7 @@ export function drawCreature(ctx: Ctx, defId: string, owner: PlayerId, cx: numbe
   const shade = opts.flash ?? playerDark(owner);
   for (let y = 0; y < SIZE; y++) {
     for (let x = 0; x < SIZE; x++) {
-      const v = grid[y][opts.flip ? SIZE - 1 - x : x];
+      const v = grid[y][opts.flip || opts.face === 'left' ? SIZE - 1 - x : x];
       if (!v) continue;
       ctx.fillStyle = v === 1 ? body : v === 2 ? shade : opts.flash ? C.edgeDark : '#fff6d8';
       ctx.fillRect(x0 + x * px, y0 + y * px, px, px);

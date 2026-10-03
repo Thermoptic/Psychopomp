@@ -8,6 +8,7 @@ import { baseBattleStats, computeBuild, computeDashCooldown, slotConditionLabel,
 import { categoryIcon, die, hpBar, panel, playerTag, rect, strokeRect, text, wrapText, type Ctx } from './draw';
 import { prepPanelLayout, type Rect } from './layout';
 import { prepButton, prepPhaseLabel, shortRequirement } from './prepModel';
+import { defaultFacing } from './art';
 import { drawCreature } from './sprites';
 import { C, CATEGORY_COLOR, playerColor, playerLabel } from './theme';
 
@@ -62,7 +63,7 @@ export function drawPrepPanel(ctx: Ctx, state: GameState, ui: MatchUi, owner: Pl
   });
   const portX = mirror ? P.x + P.w - 14 - 40 : P.x + 14;
   rect(ctx, { x: portX, y: P.y + 36, w: 40, h: 40 }, '#0c0a08');
-  drawCreature(ctx, info.def.id, owner, portX + 20, P.y + 56, 3.3, { flip: mirror, portrait: info.def.art?.portrait });
+  drawCreature(ctx, info.def.id, owner, portX + 20, P.y + 56, 3.3, { face: defaultFacing(owner), portrait: info.def.art?.portrait });
   const nameX = mirror ? portX - 8 : portX + 48;
   const align = mirror ? 'right' : 'left';
   text(ctx, info.def.name.toUpperCase(), nameX, P.y + 50, { size: 14, align });

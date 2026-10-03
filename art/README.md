@@ -12,6 +12,7 @@ and works offline (bundled by Vite, no CDN).
 | `psychopomp-monsters-reference.webp` | 1254×1254 | The first portrait sheet (superseded by the two sheets below; kept as the original). |
 | `psychopomp-portraits-a.webp` | 1254×1254 | Avatar sheet A (16 portraits), cut out into `portraits/`. |
 | `psychopomp-portraits-b.webp` | 1254×1254 | Avatar sheet B (16 portraits), cut out into `portraits/`. |
+| `psychopomp-portraits-c.webp` | 1254×1254 | Avatar sheet C (16 forest creatures), cut out into `portraits/`. |
 | `psychopomp-environment-reference.webp` | 1565×1005 | The chamber around the UI (cropped at draw time, see below). |
 | `psychopomp-title-reference.webp` | 1565×1005 | The title screen, drawn full screen (see below). |
 
@@ -22,7 +23,7 @@ To change a crop, edit the constants in `art.ts` (the tests in
 
 ### Monster avatars (portraits/)
 
-32 avatars, cut out of the two avatar sheets: frame and corner marks removed,
+48 avatars, cut out of the three avatar sheets: frame and corner marks removed,
 exactly **256×256 PNG** each (`portraits/<id>.png`). `portraits/portraits.json`
 lists every id with its sheet and square crop (centred inside the frame, 26 px
 in so the coloured corner marks are cut away). Regenerate with:
@@ -35,6 +36,8 @@ Editor (/editor -> Monsters -> AVATAR) every avatar is offered as a thumbnail;
 NONE keeps the generated pixel sprite. The game draws the avatar framed in the
 owner's colour (P1 red/orange, P2 blue), so any avatar works for either player.
 Only avatars used by the content are loaded by the game; the editor loads all.
+
+**Facing.** Each avatar in `portraits.json` has `faces`: which way the creature looks in its picture (`right`: maw, vampire, werewolf, many-eyed-maw, brain-cyborg, bone-beast, rotting-ghoul, horned-reaper; `left`: dragon, plague-doctor, skull-automaton, vampire-queen; sheet C: antler-stag, moss-bear, briar-boar, moss-wolf, rabid-squirrel, moss-croc look right, bone-heron and carrion-crow left; the rest `front`). P1 creatures look right and P2 creatures left everywhere (board, player panels, dice panel, editor preview); in combat they look towards their aim. An avatar is mirrored only when its picture looks the other way; front-facing ones are never mirrored.
 Older content with `"monsters:<n>"` (first sheet) still resolves to the same
 creature (e.g. `monsters:0` -> `eye`).
 
@@ -51,6 +54,13 @@ creature (e.g. `monsters:0` -> `eye`).
 | brain-cyborg | bone-beast | skull-slime | plague-hood |
 | spiked-horror | beholder | vampire-queen | rune-golem |
 | rotting-ghoul | horned-reaper | frost-wraith | clockwork-eye |
+
+| Sheet C, forest (row-major) | | | |
+|---|---|---|---|
+| antler-stag (right) | moss-bear (right) | toadstool | bark-wraith |
+| briar-boar (right) | moss-spider | moss-owl | hollow-tree |
+| moss-wolf (right) | rabid-squirrel (right) | bone-heron (left) | fungal-eyes |
+| moss-croc (right) | root-eye | moss-golem | carrion-crow (left) |
 
 ### Board
 

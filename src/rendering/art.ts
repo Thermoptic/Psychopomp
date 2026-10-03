@@ -55,6 +55,27 @@ export function parsePortraitRef(ref: string | undefined): string | null {
   return id && PORTRAIT_IDS.includes(id) ? id : null;
 }
 
+export type Facing = 'left' | 'right';
+
+/** Which way an avatar looks in its picture ('front' = straight at the viewer). */
+export function portraitFacing(ref: string | undefined): Facing | 'front' | null {
+  const id = parsePortraitRef(ref);
+  const p = id ? portraitManifest.portraits.find((q) => q.id === id) : undefined;
+  return p ? ((p as { faces?: string }).faces as Facing | 'front' | undefined) ?? 'front' : null;
+}
+
+/**
+ * Whether to mirror an avatar so it looks towards `face`: only when the
+ * picture looks the other way. Front-facing pictures are never mirrored.
+ */
+export function mirrorPortrait(ref: string | undefined, face: Facing): boolean {
+  const natural = portraitFacing(ref);
+  return (natural === 'left' && face === 'right') || (natural === 'right' && face === 'left');
+}
+
+/** The way a player's creatures look by default: P1 right, P2 left (towards each other). */
+export const defaultFacing = (owner: 'P1' | 'P2'): Facing => (owner === 'P1' ? 'right' : 'left');
+
 /** URL of an avatar image (for the editor's picker), or null for an unknown id. */
 export function portraitUrl(id: string): string | null {
   return PORTRAIT_FILES[`../../art/portraits/${id}.png`] ?? null;

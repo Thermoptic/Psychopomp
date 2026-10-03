@@ -1,5 +1,5 @@
 {
-  "description": "Monster avatars cut out of the two portrait sheets in art/references/ (4x4 each, frames removed). Each crop is a square centred inside the frame, 26 px inside the frame so the coloured corner marks are cut away; output is <id>.png, exactly 256x256. Regenerate with tools/extract-portraits.mjs. Creature content selects one with art.portrait = <id>.",
+  "description": "Monster avatars cut out of the two portrait sheets in art/references/ (4x4 each, frames removed). Each crop is a square centred inside the frame, 26 px inside the frame so the coloured corner marks are cut away; output is <id>.png, exactly 256x256. Regenerate with tools/extract-portraits.mjs. Creature content selects one with art.portrait = <id>. faces = which way the creature looks in the picture (right / left / front, judged by eye); the game mirrors an avatar only when it looks the wrong way (P1 looks right, P2 left, in combat the aim direction).",
   "size": 256,
   "portraits": [
     {
@@ -10,7 +10,8 @@
         46,
         216,
         216
-      ]
+      ],
+      "faces": "front"
     },
     {
       "id": "maw",
@@ -20,7 +21,8 @@
         46,
         216,
         216
-      ]
+      ],
+      "faces": "right"
     },
     {
       "id": "hood",
@@ -30,7 +32,8 @@
         46,
         216,
         216
-      ]
+      ],
+      "faces": "front"
     },
     {
       "id": "dragon",
@@ -40,7 +43,8 @@
         46,
         216,
         216
-      ]
+      ],
+      "faces": "left"
     },
     {
       "id": "horned-skull",
@@ -50,7 +54,8 @@
         346,
         217,
         217
-      ]
+      ],
+      "faces": "front"
     },
     {
       "id": "slime",
@@ -60,7 +65,8 @@
         346,
         217,
         217
-      ]
+      ],
+      "faces": "front"
     },
     {
       "id": "lich-king",
@@ -70,7 +76,8 @@
         346,
         217,
         217
-      ]
+      ],
+      "faces": "front"
     },
     {
       "id": "automaton",
@@ -80,7 +87,8 @@
         346,
         217,
         217
-      ]
+      ],
+      "faces": "front"
     },
     {
       "id": "vampire",
@@ -90,7 +98,8 @@
         650,
         215,
         215
-      ]
+      ],
+      "faces": "right"
     },
     {
       "id": "werewolf",
@@ -100,7 +109,8 @@
         650,
         215,
         215
-      ]
+      ],
+      "faces": "right"
     },
     {
       "id": "plague-doctor",
@@ -110,7 +120,8 @@
         650,
         215,
         215
-      ]
+      ],
+      "faces": "left"
     },
     {
       "id": "tentacle-maw",
@@ -120,7 +131,8 @@
         650,
         215,
         215
-      ]
+      ],
+      "faces": "front"
     },
     {
       "id": "golem",
@@ -130,7 +142,8 @@
         960,
         224,
         224
-      ]
+      ],
+      "faces": "front"
     },
     {
       "id": "demon",
@@ -140,7 +153,8 @@
         961,
         222,
         222
-      ]
+      ],
+      "faces": "front"
     },
     {
       "id": "orb-drone",
@@ -150,7 +164,8 @@
         962,
         220,
         220
-      ]
+      ],
+      "faces": "front"
     },
     {
       "id": "skeleton-king",
@@ -160,7 +175,8 @@
         960,
         224,
         224
-      ]
+      ],
+      "faces": "front"
     },
     {
       "id": "cyclops-demon",
@@ -170,7 +186,8 @@
         43,
         224,
         224
-      ]
+      ],
+      "faces": "front"
     },
     {
       "id": "many-eyed-maw",
@@ -180,7 +197,8 @@
         42,
         225,
         225
-      ]
+      ],
+      "faces": "right"
     },
     {
       "id": "tentacle-cyclops",
@@ -190,7 +208,8 @@
         43,
         224,
         224
-      ]
+      ],
+      "faces": "front"
     },
     {
       "id": "skull-automaton",
@@ -200,7 +219,8 @@
         42,
         225,
         225
-      ]
+      ],
+      "faces": "left"
     },
     {
       "id": "brain-cyborg",
@@ -210,7 +230,8 @@
         348,
         218,
         218
-      ]
+      ],
+      "faces": "right"
     },
     {
       "id": "bone-beast",
@@ -220,7 +241,8 @@
         348,
         218,
         218
-      ]
+      ],
+      "faces": "right"
     },
     {
       "id": "skull-slime",
@@ -230,7 +252,8 @@
         348,
         218,
         218
-      ]
+      ],
+      "faces": "front"
     },
     {
       "id": "plague-hood",
@@ -240,7 +263,8 @@
         348,
         218,
         218
-      ]
+      ],
+      "faces": "front"
     },
     {
       "id": "spiked-horror",
@@ -250,7 +274,8 @@
         648,
         218,
         218
-      ]
+      ],
+      "faces": "front"
     },
     {
       "id": "beholder",
@@ -260,7 +285,8 @@
         648,
         218,
         218
-      ]
+      ],
+      "faces": "front"
     },
     {
       "id": "vampire-queen",
@@ -270,7 +296,8 @@
         648,
         218,
         218
-      ]
+      ],
+      "faces": "left"
     },
     {
       "id": "rune-golem",
@@ -280,7 +307,8 @@
         648,
         218,
         218
-      ]
+      ],
+      "faces": "front"
     },
     {
       "id": "rotting-ghoul",
@@ -290,7 +318,8 @@
         961,
         224,
         224
-      ]
+      ],
+      "faces": "right"
     },
     {
       "id": "horned-reaper",
@@ -300,7 +329,8 @@
         960,
         227,
         227
-      ]
+      ],
+      "faces": "right"
     },
     {
       "id": "frost-wraith",
@@ -310,7 +340,8 @@
         961,
         224,
         224
-      ]
+      ],
+      "faces": "front"
     },
     {
       "id": "clockwork-eye",
@@ -320,7 +351,184 @@
         960,
         226,
         226
-      ]
+      ],
+      "faces": "front"
+    },
+    {
+      "id": "antler-stag",
+      "sheet": "psychopomp-portraits-c.webp",
+      "crop": [
+        46,
+        42,
+        225,
+        225
+      ],
+      "faces": "right"
+    },
+    {
+      "id": "moss-bear",
+      "sheet": "psychopomp-portraits-c.webp",
+      "crop": [
+        358,
+        42,
+        225,
+        225
+      ],
+      "faces": "right"
+    },
+    {
+      "id": "toadstool",
+      "sheet": "psychopomp-portraits-c.webp",
+      "crop": [
+        676,
+        42,
+        225,
+        225
+      ],
+      "faces": "front"
+    },
+    {
+      "id": "bark-wraith",
+      "sheet": "psychopomp-portraits-c.webp",
+      "crop": [
+        989,
+        42,
+        225,
+        225
+      ],
+      "faces": "front"
+    },
+    {
+      "id": "briar-boar",
+      "sheet": "psychopomp-portraits-c.webp",
+      "crop": [
+        48,
+        346,
+        220,
+        220
+      ],
+      "faces": "right"
+    },
+    {
+      "id": "moss-spider",
+      "sheet": "psychopomp-portraits-c.webp",
+      "crop": [
+        360,
+        346,
+        220,
+        220
+      ],
+      "faces": "front"
+    },
+    {
+      "id": "moss-owl",
+      "sheet": "psychopomp-portraits-c.webp",
+      "crop": [
+        678,
+        346,
+        220,
+        220
+      ],
+      "faces": "front"
+    },
+    {
+      "id": "hollow-tree",
+      "sheet": "psychopomp-portraits-c.webp",
+      "crop": [
+        991,
+        346,
+        220,
+        220
+      ],
+      "faces": "front"
+    },
+    {
+      "id": "moss-wolf",
+      "sheet": "psychopomp-portraits-c.webp",
+      "crop": [
+        49,
+        648,
+        218,
+        218
+      ],
+      "faces": "right"
+    },
+    {
+      "id": "rabid-squirrel",
+      "sheet": "psychopomp-portraits-c.webp",
+      "crop": [
+        361,
+        648,
+        218,
+        218
+      ],
+      "faces": "right"
+    },
+    {
+      "id": "bone-heron",
+      "sheet": "psychopomp-portraits-c.webp",
+      "crop": [
+        679,
+        648,
+        218,
+        218
+      ],
+      "faces": "left"
+    },
+    {
+      "id": "fungal-eyes",
+      "sheet": "psychopomp-portraits-c.webp",
+      "crop": [
+        992,
+        648,
+        218,
+        218
+      ],
+      "faces": "front"
+    },
+    {
+      "id": "moss-croc",
+      "sheet": "psychopomp-portraits-c.webp",
+      "crop": [
+        45,
+        959,
+        226,
+        226
+      ],
+      "faces": "right"
+    },
+    {
+      "id": "root-eye",
+      "sheet": "psychopomp-portraits-c.webp",
+      "crop": [
+        356,
+        958,
+        228,
+        228
+      ],
+      "faces": "front"
+    },
+    {
+      "id": "moss-golem",
+      "sheet": "psychopomp-portraits-c.webp",
+      "crop": [
+        675,
+        959,
+        226,
+        226
+      ],
+      "faces": "front"
+    },
+    {
+      "id": "carrion-crow",
+      "sheet": "psychopomp-portraits-c.webp",
+      "crop": [
+        988,
+        959,
+        226,
+        226
+      ],
+      "faces": "left"
     }
   ]
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import portraits from '../art/portraits/portraits.json';
-import { BOARD_GRID_X, BOARD_GRID_Y, PORTRAIT_IDS, boardTileRect, boardTileSprite, parsePortraitRef, portraitSprite, portraitUrl } from '../src/rendering/art';
+import { BOARD_GRID_X, BOARD_GRID_Y, PORTRAIT_IDS, boardTileRect, boardTileSprite, defaultFacing, mirrorPortrait, parsePortraitRef, portraitFacing, portraitSprite, portraitUrl } from '../src/rendering/art';
 import { basePack } from './helpers';
 
 // The prototype art is cropped from art/references/ at draw time (1254×1254 sheets).
@@ -22,9 +22,9 @@ describe('prototype art mapping', () => {
     for (const bad of [undefined, '', 'monsters:16', 'monsters:x', 'nobody', 'EYE']) expect(parsePortraitRef(bad)).toBeNull();
   });
 
-  it('32 avatars: unique ids, a square crop inside its sheet and an exactly 256×256 PNG each', () => {
-    expect(PORTRAIT_IDS).toHaveLength(32);
-    expect(new Set(PORTRAIT_IDS).size).toBe(32);
+  it('48 avatars (3 sheets): unique ids, a square crop inside its sheet and an exactly 256×256 PNG each', () => {
+    expect(PORTRAIT_IDS).toHaveLength(48);
+    expect(new Set(PORTRAIT_IDS).size).toBe(48);
     for (const p of portraits.portraits) {
       const [x, y, w, h] = p.crop;
       expect(w).toBe(h);
@@ -36,6 +36,27 @@ describe('prototype art mapping', () => {
       expect(pngSize(PNGS[`../art/portraits/${p.id}.png`])).toEqual([256, 256]);
       expect(portraitUrl(p.id)).toMatch(/.png/);
     }
+  });
+
+  it('every avatar knows which way it looks in its picture', () => {
+    for (const id of PORTRAIT_IDS) expect(['left', 'right', 'front']).toContain(portraitFacing(id));
+    expect(portraitFacing('werewolf')).toBe('right');
+    expect(portraitFacing('dragon')).toBe('left');
+    expect(portraitFacing('eye')).toBe('front');
+    expect([portraitFacing('moss-wolf'), portraitFacing('carrion-crow'), portraitFacing('toadstool')]).toEqual(['right', 'left', 'front']);
+    expect(portraitFacing('monsters:2')).toBe('left'); // legacy ref -> dragon
+    expect(portraitFacing('nobody')).toBeNull();
+  });
+
+  it('P1 looks right and P2 left by default; avatars are mirrored only when they look the other way', () => {
+    expect([defaultFacing('P1'), defaultFacing('P2')]).toEqual(['right', 'left']);
+    // A right-looking picture: mirrored for P2, not for P1.
+    expect([mirrorPortrait('werewolf', 'right'), mirrorPortrait('werewolf', 'left')]).toEqual([false, true]);
+    // A left-looking picture: mirrored for P1, not for P2.
+    expect([mirrorPortrait('dragon', 'right'), mirrorPortrait('dragon', 'left')]).toEqual([true, false]);
+    // Front-facing pictures are never mirrored.
+    expect([mirrorPortrait('eye', 'right'), mirrorPortrait('eye', 'left')]).toEqual([false, false]);
+    expect(mirrorPortrait(undefined, 'left')).toBe(false);
   });
 
   it('the 9×9 board tiles are inside the board art and do not overlap', () => {
