@@ -287,3 +287,112 @@ export function categoryIcon(ctx: Ctx, category: string, x: number, y: number, c
     }
   }
 }
+
+// --- panel sections (player panels) ---------------------------------------------------------
+
+/** A recessed section plate inside a panel: steel rim, bolts in the corners, dark inset. */
+export function sectionPlate(ctx: Ctx, r: Rect): void {
+  rect(ctx, r, C.edgeDark);
+  rect(ctx, { x: r.x + 1, y: r.y + 1, w: r.w - 2, h: r.h - 2 }, '#2c261f');
+  ctx.fillStyle = '#4a4034';
+  ctx.fillRect(r.x + 1, r.y + 1, r.w - 2, 1);
+  ctx.fillRect(r.x + 1, r.y + 1, 1, r.h - 2);
+  rect(ctx, { x: r.x + 3, y: r.y + 3, w: r.w - 6, h: r.h - 6 }, '#070605');
+  rect(ctx, { x: r.x + 4, y: r.y + 4, w: r.w - 8, h: r.h - 8 }, '#100e0c');
+  // Faint scratches on the inset.
+  let seed = (r.x * 92821) ^ (r.y * 68917) ^ r.w;
+  for (let i = 0; i < Math.floor((r.w * r.h) / 900); i++) {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    const sx = r.x + 6 + (seed % Math.max(1, r.w - 12));
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    const sy = r.y + 6 + (seed % Math.max(1, r.h - 12));
+    ctx.fillStyle = 'rgba(255,235,200,0.025)';
+    ctx.fillRect(sx, sy, 3 + (seed % 6), 1);
+  }
+  for (const [x, y] of [
+    [r.x + 1, r.y + 1],
+    [r.x + r.w - 4, r.y + 1],
+    [r.x + 1, r.y + r.h - 4],
+    [r.x + r.w - 4, r.y + r.h - 4],
+  ]) {
+    ctx.fillStyle = C.rivet;
+    ctx.fillRect(x, y, 3, 3);
+    ctx.fillStyle = '#d8c7a4';
+    ctx.fillRect(x, y, 1, 1);
+  }
+}
+
+/** A coloured icon tile (the stat rows' square badges): face colour, dark icon, bevel. */
+export function iconTile(ctx: Ctx, x: number, y: number, size: number, face: string, category: string): void {
+  rect(ctx, { x, y, w: size, h: size }, C.edgeDark);
+  rect(ctx, { x: x + 1, y: y + 1, w: size - 2, h: size - 2 }, face);
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.fillRect(x + 2, y + 2, size - 4, 1);
+  ctx.fillStyle = 'rgba(0,0,0,0.30)';
+  ctx.fillRect(x + 2, y + size - 3, size - 4, 1);
+  const scale = Math.max(1, Math.floor((size - 6) / 7));
+  const iw = 7 * scale;
+  categoryIcon(ctx, category, Math.round(x + (size - iw) / 2), Math.round(y + (size - iw) / 2), '#1a0f0a', scale);
+}
+
+/** A segmented gauge: `max` cells, the first `value` lit in `color`. */
+export function segmentBar(ctx: Ctx, r: Rect, value: number, max: number, color: string): void {
+  rect(ctx, r, C.edgeDark);
+  const n = Math.max(1, max);
+  const cw = (r.w - 2) / n;
+  const lit = Math.max(0, Math.min(n, Math.round(value)));
+  for (let i = 0; i < n; i++) {
+    const x = Math.round(r.x + 1 + i * cw);
+    const w = Math.max(1, Math.round(r.x + 1 + (i + 1) * cw) - x - 1);
+    rect(ctx, { x, y: r.y + 1, w, h: r.h - 2 }, i < lit ? color : '#1f1c19');
+    if (i < lit) {
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.fillRect(x, r.y + 1, w, 1);
+    }
+  }
+}
+
+const SKULL = [
+  '..#######..',
+  '.#########.',
+  '###########',
+  '##..###..##',
+  '##..###..##',
+  '###########',
+  '.####.####.',
+  '..#######..',
+  '..#.#.#.#..',
+];
+
+/** A faint skull emblem watermark (behind panel sections), `px` = size of one pixel. */
+export function emblem(ctx: Ctx, cx: number, cy: number, px: number, alpha = 0.07): void {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = '#d8c7a4';
+  ctx.lineWidth = Math.max(1, px / 2);
+  ctx.beginPath();
+  ctx.arc(cx, cy, px * 8, 0, Math.PI * 2);
+  ctx.stroke();
+  for (let i = 0; i < 8; i++) {
+    const a = (i * Math.PI) / 4;
+    const r0 = px * (i % 2 ? 8 : 9.5);
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0);
+    ctx.lineTo(cx + Math.cos(a) * px * 6, cy + Math.sin(a) * px * 6);
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#d8c7a4';
+  const x0 = cx - (SKULL[0].length * px) / 2;
+  const y0 = cy - (SKULL.length * px) / 2;
+  SKULL.forEach((row, j) => [...row].forEach((c, i) => c === '#' && ctx.fillRect(Math.round(x0 + i * px), Math.round(y0 + j * px), px, px)));
+  ctx.restore();
+}
+
+/** A small lit indicator between two panel sections. */
+export function sectionLed(ctx: Ctx, cx: number, y: number, color: string): void {
+  rect(ctx, { x: cx - 9, y: y - 3, w: 18, h: 7 }, C.edgeDark);
+  rect(ctx, { x: cx - 8, y: y - 2, w: 16, h: 5 }, '#3a3229');
+  rect(ctx, { x: cx - 6, y: y - 1, w: 12, h: 3 }, color);
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.fillRect(cx - 5, y - 1, 10, 1);
+}

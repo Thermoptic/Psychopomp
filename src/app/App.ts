@@ -44,8 +44,6 @@ import { createMatchUi, createPrepCursor, type MatchUi } from './ui';
 type Screen = 'menu' | 'controls' | 'match' | 'error';
 type Frames = Record<PlayerId, ActionFrame>;
 
-const MOVE_KEYS: Record<PlayerId, string> = { P1: 'WASD + SPACE', P2: 'ARROWS + ENTER' };
-
 export class App {
   screen: Screen = 'menu';
   state: GameState | null = null;
@@ -355,7 +353,7 @@ export class App {
     const p = s.currentTurn.player;
     if (getMovableCreatures(s).length === 0) return `${playerLabel(p)}: NO LEGAL MOVES - PRESS CONFIRM TO PASS`;
     if (this.ui.selected) return `${playerLabel(p)}: MOVE TO A MARKED CELL (RED = ATTACK)  ·  CANCEL: DESELECT`;
-    return `${playerLabel(p)}: SELECT A CREATURE (${MOVE_KEYS[p]}, Q/E CYCLE)`;
+    return `TURN ${s.currentTurn.number} - ${playerLabel(p)} MAKE YOUR MOVE`;
   }
 
   // --- preparation (both players simultaneously) -----------------------------------

@@ -3,7 +3,7 @@
 
 import type { MatchUi } from '../app/ui';
 import { baseBattleStats, creatureAt, getLegalMoves, livingCreatures, resolveWeapon, type GameState, type PlayerId } from '../core';
-import { badge, categoryIcon, hpBar, measure, panel, playerTag, rect, strokeRect, text, wrapText, type Ctx } from './draw';
+import { badge, emblem, hpBar, iconTile, measure, panel, playerTag, rect, sectionLed, sectionPlate, segmentBar, strokeRect, text, wrapText, type Ctx } from './draw';
 import { drawBoardSurface, drawPowerPointMarker } from './boardArt';
 import { BOARD_AREA, HEADER, LEFT_PANEL, MESSAGE_BAR, RIGHT_PANEL, boardLayout, cellRect, type BoardLayout, type Rect } from './layout';
 import { aimReticle, boardUnits, combatToScreen, isBattleView, isCombatView, type BoardUnit } from './boardUnits';
@@ -45,31 +45,11 @@ export function drawHeader(ctx: Ctx, state: GameState): void {
   text(ctx, 'PSYCHOPOMP', mid + 2, cy + 10, { size: 22, color: '#2a0c06', align: 'center' });
   text(ctx, 'PSYCHOPOMP', mid, cy + 8, { size: 22, color: C.text, align: 'center' });
 
-  // Turn (left).
-  const p = state.currentTurn.player;
-  const left = H.x + 14;
-  badge(ctx, left + 6, cy - 5, 11, p, playerColor(p));
-  if (state.phase === 'gameOver') text(ctx, 'OVER', left + 16, cy - 1, { size: 13, color: playerColor(p) });
-  else text(ctx, `TURN ${state.currentTurn.number}`, left + 16, cy - 1, { size: 13, color: playerColor(p) });
-  text(ctx, playerLabel(p), left, cy + 13, { size: 9, color: C.dim });
-
-  // Power Points held (right).
+  // Power Points held: P1 on the left, P2 on the right, in their colours.
   const count = (o: PlayerId) => state.powerPoints.filter((pp) => pp.owner === o).length;
   const total = state.powerPoints.length;
-  const R = H.x + H.w - 14;
-  text(ctx, 'POWER POINTS', R, cy - 5, { size: 9, color: C.dim, align: 'right' });
-  badge(ctx, R - 82, cy + 7, 10, 'P1', C.p1);
-  text(ctx, `${count('P1')}/${total}`, R - 74, cy + 12, { size: 13, color: C.p1 });
-  badge(ctx, R - 34, cy + 7, 10, 'P2', C.p2);
-  text(ctx, `${count('P2')}/${total}`, R - 26, cy + 12, { size: 13, color: C.p2 });
-}
-
-/** One stat row: category icon + coloured label + value. */
-function statLine(ctx: Ctx, x: number, y: number, label: string, value: string, category?: string): void {
-  const col = (category && CATEGORY_COLOR[category]) || C.dim;
-  if (category) categoryIcon(ctx, category, x, y - 11, col, 2);
-  text(ctx, label, x + 20, y, { size: 13, color: col });
-  text(ctx, value, x + 118, y, { size: 14, color: C.text });
+  text(ctx, `${count('P1')}/${total}`, H.x + 16, cy + 8, { size: 20, color: C.p1 });
+  text(ctx, `${count('P2')}/${total}`, H.x + H.w - 16, cy + 8, { size: 20, color: C.p2, align: 'right' });
 }
 
 /** Chooses which creature a player's panel shows: hovered, selected, else first alive. */
@@ -83,43 +63,87 @@ function panelCreature(state: GameState, ui: MatchUi, player: PlayerId): string 
   return livingCreatures(state, player)[0]?.id ?? null;
 }
 
+/** Icon tile / gauge colour per stat in the player panel (as in the reference panel). */
+const STAT_TILE: Record<string, string> = { power: '#e0562c', speed: '#3f88d8', shield: '#e7c25a', dash: '#79b84c', block: '#7f93ad' };
+
+/** The stat rows of the player panel (all five dice categories). */
+const PANEL_STATS = [
+  { key: 'power', label: 'POWER' },
+  { key: 'speed', label: 'SPEED' },
+  { key: 'shield', label: 'SHIELD' },
+  { key: 'dash', label: 'DASH' },
+  { key: 'block', label: 'BLOCK' },
+] as const;
+
+/**
+ * A player's panel beside the board, in three sections like the reference:
+ * the creature (avatar, name, HP, attack type), its stats (all five, each
+ * with an icon tile and a gauge) and its Special. P2 is mirrored where it
+ * reads naturally (avatar on the outer side).
+ */
 export function drawPlayerPanel(ctx: Ctx, state: GameState, ui: MatchUi, player: PlayerId, r: Rect): void {
   const color = playerColor(player);
   const mirror = player === 'P2';
   panel(ctx, r, color);
+  const x = r.x + 8;
+  const w = r.w - 16;
+
   // Header: P1/P2 tag (outer corner) and player name.
-  const tagX = mirror ? r.x + r.w - 12 - 40 : r.x + 12;
-  playerTag(ctx, tagX, r.y + 10, player);
-  text(ctx, playerLabel(player), mirror ? tagX - 8 : tagX + 48, r.y + 27, { size: 14, color, align: mirror ? 'right' : 'left' });
+  sectionPlate(ctx, { x, y: r.y + 7, w, h: 32 });
+  const tagX = mirror ? r.x + r.w - 14 - 40 : r.x + 14;
+  playerTag(ctx, tagX, r.y + 12, player);
+  text(ctx, playerLabel(player), mirror ? tagX - 8 : tagX + 48, r.y + 29, { size: 14, color, align: mirror ? 'right' : 'left' });
 
   const id = panelCreature(state, ui, player);
-  let y = r.y + 42;
-  if (id) {
-    const cr = state.creatures[id];
-    const def = state.creatureDefs[cr.defId];
-    // Portrait on the outer side, name + HP beside it (mirrored for P2).
-    const portX = mirror ? r.x + r.w - 12 - 84 : r.x + 12;
-    rect(ctx, { x: portX, y, w: 84, h: 84 }, '#0c0a08');
-    drawCreature(ctx, def.id, player, portX + 42, y + 42, 7, { portrait: def.art?.portrait, face: defaultFacing(player) });
-    const nx = mirror ? portX - 10 : portX + 94;
-    const align = mirror ? 'right' : 'left';
-    text(ctx, def.name.toUpperCase(), nx, y + 18, { size: 16, color: C.text, align });
-    text(ctx, `${cr.hp}/${def.stats.maxHp} HP`, nx, y + 42, { size: 14, color: cr.hp < def.stats.maxHp ? C.danger : color, align });
-    const barW = r.w - 120;
-    hpBar(ctx, { x: mirror ? nx - barW : nx, y: y + 50, w: barW, h: 10 }, cr.hp, def.stats.maxHp, color);
-    // Attack type of the weapon it fights with (an equipped Powerup replaces its own attack).
-    const weapon = resolveWeapon(def, state.powerupDefs, state.ruleset.combat);
-    text(ctx, weapon.kind === 'ranged' ? 'RANGE' : 'MELEE', nx, y + 76, { size: 13, color: C.text, align });
-    y += 110;
-    const base = baseBattleStats(def, state.ruleset);
-    statLine(ctx, r.x + 14, y, 'POWER', String(base.power), 'power');
-    statLine(ctx, r.x + 14, (y += 21), 'SPEED', String(base.speed), 'speed');
-    statLine(ctx, r.x + 14, (y += 21), 'SHIELD', String(base.shield), 'shield');
-    y += 26;
-    if (def.special) {
-      text(ctx, def.special.name.toUpperCase(), r.x + 14, y, { size: 13, color: C.ok });
-      if (def.special.description) wrapText(ctx, def.special.description, r.x + 14, y + 18, r.w - 28, { size: 11, color: C.dim });
-    }
+  if (!id) return;
+  const cr = state.creatures[id];
+  const def = state.creatureDefs[cr.defId];
+
+  // 1. The creature.
+  const mon: Rect = { x, y: r.y + 45, w, h: 90 };
+  sectionPlate(ctx, mon);
+  emblem(ctx, mirror ? mon.x + 34 : mon.x + mon.w - 34, mon.y + mon.h / 2, 3);
+  const portX = mirror ? mon.x + mon.w - 8 - 74 : mon.x + 8;
+  rect(ctx, { x: portX - 1, y: mon.y + 7, w: 76, h: 76 }, C.edgeDark);
+  drawCreature(ctx, def.id, player, portX + 37, mon.y + 45, 6.2, { portrait: def.art?.portrait, face: defaultFacing(player) });
+  const nx = mirror ? portX - 9 : portX + 84;
+  const align = mirror ? 'right' : 'left';
+  text(ctx, def.name.toUpperCase(), nx, mon.y + 24, { size: 15, color: C.text, align });
+  text(ctx, `${cr.hp}/${def.stats.maxHp} HP`, nx, mon.y + 46, { size: 13, color: cr.hp < def.stats.maxHp ? C.danger : color, align });
+  const barW = mon.w - 100;
+  hpBar(ctx, { x: mirror ? nx - barW : nx, y: mon.y + 53, w: barW, h: 9 }, cr.hp, def.stats.maxHp, color);
+  // Attack type of the weapon it fights with (an equipped Powerup replaces its own attack).
+  const weapon = resolveWeapon(def, state.powerupDefs, state.ruleset.combat);
+  text(ctx, weapon.kind === 'ranged' ? 'RANGE' : 'MELEE', nx, mon.y + 79, { size: 12, color: C.dim, align });
+  sectionLed(ctx, r.x + r.w / 2, mon.y + mon.h + 3, color);
+
+  // 2. Stats: icon tile, label, value, gauge (0-10).
+  const stats: Rect = { x, y: mon.y + mon.h + 7, w, h: 142 };
+  sectionPlate(ctx, stats);
+  const base = baseBattleStats(def, state.ruleset);
+  PANEL_STATS.forEach((st, i) => {
+    const ry = stats.y + 7 + i * 26;
+    rect(ctx, { x: stats.x + 5, y: ry - 1, w: stats.w - 10, h: 25 }, i % 2 ? '#0d0b09' : '#13110e');
+    iconTile(ctx, stats.x + 8, ry + 1, 21, STAT_TILE[st.key], st.key);
+    text(ctx, st.label, stats.x + 36, ry + 17, { size: 13, color: CATEGORY_COLOR[st.key] });
+    const v = base[st.key];
+    text(ctx, String(v), stats.x + 120, ry + 17, { size: 14, color: C.text, align: 'right' });
+    segmentBar(ctx, { x: stats.x + 128, y: ry + 7, w: stats.w - 136, h: 9 }, v, 10, STAT_TILE[st.key]);
+  });
+  sectionLed(ctx, r.x + r.w / 2, stats.y + stats.h + 3, color);
+
+  // 3. Special.
+  const sp: Rect = { x, y: stats.y + stats.h + 7, w, h: r.y + r.h - 8 - (stats.y + stats.h + 7) };
+  sectionPlate(ctx, sp);
+  emblem(ctx, sp.x + sp.w - 40, sp.y + sp.h / 2 + 10, 3, 0.06);
+  iconTile(ctx, sp.x + 8, sp.y + 8, 21, STAT_TILE.dash, 'special');
+  if (def.special) {
+    text(ctx, def.special.name.toUpperCase(), sp.x + 36, sp.y + 24, { size: 13, color: C.ok });
+    ctx.fillStyle = 'rgba(184,234,121,0.18)';
+    ctx.fillRect(sp.x + 8, sp.y + 34, sp.w - 16, 1);
+    if (def.special.description) wrapText(ctx, def.special.description, sp.x + 10, sp.y + 52, sp.w - 20, { size: 11, color: C.text });
+  } else {
+    text(ctx, 'NO SPECIAL', sp.x + 36, sp.y + 24, { size: 13, color: C.faint });
   }
 }
 
@@ -189,12 +213,23 @@ export function drawMessageBar(ctx: Ctx, msg: string, color: string = C.text): v
   const B = MESSAGE_BAR;
   panel(ctx, B, undefined, '#0e0c0a');
   const maxW = B.w - 30;
+  const mid = B.x + B.w / 2;
   if (measure(ctx, msg, 14) <= maxW) {
-    text(ctx, msg, B.x + 15, B.y + B.h / 2 + 5, { size: 14, color });
+    text(ctx, msg, mid, B.y + B.h / 2 + 5, { size: 14, color, align: 'center' });
     return;
   }
-  // Two lines at body size.
-  wrapText(ctx, msg, B.x + 15, B.y + 15, maxW, { size: 11, color, lineH: 12 });
+  // Two centred lines at body size.
+  const lines: string[] = [];
+  let line = '';
+  for (const word of msg.split(' ')) {
+    const next = line ? `${line} ${word}` : word;
+    if (line && measure(ctx, next, 11) > maxW) {
+      lines.push(line);
+      line = word;
+    } else line = next;
+  }
+  if (line) lines.push(line);
+  lines.slice(0, 2).forEach((l, i) => text(ctx, l, mid, B.y + 15 + i * 12, { size: 11, color, align: 'center' }));
 }
 
 /** Plain board mode (also used for the short battle intro). */
