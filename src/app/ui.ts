@@ -43,6 +43,8 @@ export interface MatchUi {
   pauseFocus: number;
   pauseReason: string | null;
   flash: Record<BattleSide, number>;
+  /** Dash pressed while on cooldown: the avatar frame strobes in colours for this many ms. */
+  dashDenied: Record<BattleSide, number>;
   floaters: Floater[];
   /** Projectile shockwaves being shown (combat units), purely visual. */
   impacts: Array<{ x: number; y: number; radius: number; ms: number; color: string }>;
@@ -71,6 +73,7 @@ export function createMatchUi(): MatchUi {
     pauseFocus: 0,
     pauseReason: null,
     flash: { attacker: 0, defender: 0 },
+    dashDenied: { attacker: 0, defender: 0 },
     floaters: [],
     impacts: [],
     slashes: [],

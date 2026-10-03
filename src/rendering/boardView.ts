@@ -12,6 +12,10 @@ import { drawCreature } from './sprites';
 import { SLASH_MS, coneHalfAngle, drawSwish } from './swordSwing';
 import { C, CATEGORY_COLOR, STAT_TILE, playerColor, playerLabel } from './theme';
 
+/** How long the avatar frame strobes after a dash on cooldown, and its colours. */
+export const DASH_DENIED_MS = 500;
+const DASH_DENIED_COLORS = ['#ff2a2a', '#ffe14a', '#3dff6e', '#38c8ff', '#ff3dff', '#ffffff'];
+
 /** A hanging pennant in a player's colour (the reference's banners beside the title). */
 function pennant(ctx: Ctx, x: number, y: number, h: number, color: string, dark: string): void {
   const w = 22;
@@ -298,6 +302,12 @@ export function drawUnits(ctx: Ctx, state: GameState, ui: MatchUi, l: BoardLayou
     }
     const flash = f && ui.flash[f.side] > 0 && Math.floor(now / 60) % 2 === 0 ? '#ffffff' : undefined;
     drawCreature(ctx, u.defId, u.owner, u.cx, u.cy - (portrait ? 0 : 3), u.px, { face: f ? (f.facing < 0 ? 'left' : 'right') : defaultFacing(u.owner), flash, portrait, portraitSize });
+    if (f && ui.dashDenied[f.side] > 0) {
+      // Dash on cooldown: the avatar frame strobes through colours, very fast.
+      const size = Math.round(portrait ? portraitSize : u.px * 12);
+      const strobe = DASH_DENIED_COLORS[Math.floor(now / 35) % DASH_DENIED_COLORS.length];
+      strokeRect(ctx, { x: Math.round(u.cx - size / 2) - 2, y: Math.round(u.cy - (portrait ? 0 : 3) - size / 2) - 2, w: size + 4, h: size + 4 }, strobe, 4);
+    }
     if (f && f.weapon.kind === 'melee') {
       // Swish across the aim cone, shown on the button press.
       const reach = f.weapon.range * unitScale;

@@ -24,7 +24,7 @@ import { aimToward, emptyQueue, queuePresses, toFighterInput } from '../input/co
 import { ARENA_EXPAND_MS, drawArena, drawCombatHud, drawCountdown } from '../rendering/arenaView';
 import { SLASH_MS } from '../rendering/swordSwing';
 import { combatHint, drawPrepPanel, drawResult, sideOf } from '../rendering/battleView';
-import { drawBoard, drawBoardScreen, drawHeader, drawMessageBar } from '../rendering/boardView';
+import { DASH_DENIED_MS, drawBoard, drawBoardScreen, drawHeader, drawMessageBar } from '../rendering/boardView';
 import { scanlines, type Ctx } from '../rendering/draw';
 import { drawEnvironment } from '../rendering/environment';
 import { cellAtPoint, inRect, prepItemAt, prepPanelLayout, type PrepItem } from '../rendering/layout';
@@ -186,8 +186,13 @@ export class App {
           this.ui.impacts.push({ x: e.x, y: e.y, radius: e.radius, ms: 350, color: playerColor(s.creatures[e.side === 'attacker' ? s.battle!.attackerId : s.battle!.defenderId].owner) });
           break;
         case 'DASH_DENIED': {
+          // On cooldown: the avatar frame strobes instead of a text.
+          if (e.reason === 'cooldown') {
+            this.ui.dashDenied[e.side] = DASH_DENIED_MS;
+            break;
+          }
           const f = s.battle?.combat?.fighters[e.side];
-          const label = e.reason === 'noDirection' ? 'NO DIR' : e.reason === 'blocked' ? 'BLOCKED' : e.reason === 'noDash' ? 'NO DASH' : 'COOLDOWN';
+          const label = e.reason === 'noDirection' ? 'NO DIR' : e.reason === 'blocked' ? 'BLOCKED' : 'NO DASH';
           if (f) this.ui.floaters.push({ x: f.x, y: f.y - 40, text: label, color: C.dim, ms: 600 });
           break;
         }
@@ -223,6 +228,8 @@ export class App {
     ui.arenaMs = Math.max(0, ui.arenaMs - dtMs);
     ui.flash.attacker = Math.max(0, ui.flash.attacker - dtMs);
     ui.flash.defender = Math.max(0, ui.flash.defender - dtMs);
+    ui.dashDenied.attacker = Math.max(0, ui.dashDenied.attacker - dtMs);
+    ui.dashDenied.defender = Math.max(0, ui.dashDenied.defender - dtMs);
     ui.floaters = ui.floaters.filter((f) => (f.ms -= dtMs) > 0);
     ui.impacts = ui.impacts.filter((f) => (f.ms -= dtMs) > 0);
     ui.slashes = ui.slashes.filter((f) => (f.ms -= dtMs) > 0);
