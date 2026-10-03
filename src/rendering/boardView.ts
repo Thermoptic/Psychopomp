@@ -2,12 +2,11 @@
 // Legal moves are *queried* from the core; nothing here decides legality.
 
 import type { MatchUi } from '../app/ui';
-import { baseBattleStats, creatureAt, describeRequirement, getLegalMoves, livingCreatures, type GameState, type PlayerId } from '../core';
+import { baseBattleStats, creatureAt, getLegalMoves, livingCreatures, resolveWeapon, type GameState, type PlayerId } from '../core';
 import { badge, categoryIcon, hpBar, measure, panel, playerTag, rect, strokeRect, text, wrapText, type Ctx } from './draw';
 import { drawBoardSurface, drawPowerPointMarker } from './boardArt';
 import { BOARD_AREA, HEADER, LEFT_PANEL, MESSAGE_BAR, RIGHT_PANEL, boardLayout, cellRect, type BoardLayout, type Rect } from './layout';
 import { aimReticle, boardUnits, combatToScreen, isBattleView, isCombatView, type BoardUnit } from './boardUnits';
-import { movementText } from './movementText';
 import { defaultFacing } from './art';
 import { drawCreature } from './sprites';
 import { SLASH_MS, coneHalfAngle, drawSwish } from './swordSwing';
@@ -87,13 +86,11 @@ function panelCreature(state: GameState, ui: MatchUi, player: PlayerId): string 
 export function drawPlayerPanel(ctx: Ctx, state: GameState, ui: MatchUi, player: PlayerId, r: Rect): void {
   const color = playerColor(player);
   const mirror = player === 'P2';
-  const active = state.currentTurn.player === player && state.phase === 'board';
   panel(ctx, r, color);
-  // Header: P1/P2 tag (outer corner), player name, turn marker.
+  // Header: P1/P2 tag (outer corner) and player name.
   const tagX = mirror ? r.x + r.w - 12 - 40 : r.x + 12;
   playerTag(ctx, tagX, r.y + 10, player);
   text(ctx, playerLabel(player), mirror ? tagX - 8 : tagX + 48, r.y + 27, { size: 14, color, align: mirror ? 'right' : 'left' });
-  if (active) text(ctx, 'TO MOVE', mirror ? r.x + 14 : r.x + r.w - 14, r.y + 26, { size: 11, color: C.pp, align: mirror ? 'left' : 'right' });
 
   const id = panelCreature(state, ui, player);
   let y = r.y + 42;
@@ -110,32 +107,19 @@ export function drawPlayerPanel(ctx: Ctx, state: GameState, ui: MatchUi, player:
     text(ctx, `${cr.hp}/${def.stats.maxHp} HP`, nx, y + 42, { size: 14, color: cr.hp < def.stats.maxHp ? C.danger : color, align });
     const barW = r.w - 120;
     hpBar(ctx, { x: mirror ? nx - barW : nx, y: y + 50, w: barW, h: 10 }, cr.hp, def.stats.maxHp, color);
-    text(ctx, cr === state.creatures[ui.selected ?? ''] ? 'SELECTED' : '', nx, y + 76, { size: 11, color: C.pp, align });
+    // Attack type of the weapon it fights with (an equipped Powerup replaces its own attack).
+    const weapon = resolveWeapon(def, state.powerupDefs, state.ruleset.combat);
+    text(ctx, weapon.kind === 'ranged' ? 'RANGE' : 'MELEE', nx, y + 76, { size: 13, color: C.text, align });
     y += 110;
-    statLine(ctx, r.x + 14, y, 'MOVEMENT', movementText(def));
     const base = baseBattleStats(def, state.ruleset);
-    statLine(ctx, r.x + 14, (y += 21), 'POWER', String(base.power), 'power');
+    statLine(ctx, r.x + 14, y, 'POWER', String(base.power), 'power');
     statLine(ctx, r.x + 14, (y += 21), 'SPEED', String(base.speed), 'speed');
     statLine(ctx, r.x + 14, (y += 21), 'SHIELD', String(base.shield), 'shield');
     y += 26;
     if (def.special) {
-      text(ctx, 'SPECIAL', r.x + 14, y, { size: 11, color: C.dim });
-      text(ctx, def.special.name.toUpperCase(), r.x + 76, y, { size: 13, color: C.ok });
-      y = wrapText(ctx, describeRequirement(def.special.requirement), r.x + 14, y + 18, r.w - 28, { size: 11, color: C.text });
-      if (def.special.description) y = wrapText(ctx, def.special.description, r.x + 14, y, r.w - 28, { size: 11, color: C.dim });
+      text(ctx, def.special.name.toUpperCase(), r.x + 14, y, { size: 13, color: C.ok });
+      if (def.special.description) wrapText(ctx, def.special.description, r.x + 14, y + 18, r.w - 28, { size: 11, color: C.dim });
     }
-  }
-
-  // Roster
-  const roster = Object.values(state.creatures).filter((c) => c.owner === player);
-  let ry = r.y + r.h - 16 - roster.length * 18;
-  text(ctx, 'ROSTER', r.x + 14, ry - 8, { size: 10, color: C.dim });
-  for (const c of roster) {
-    const def = state.creatureDefs[c.defId];
-    const col = c.alive ? C.text : C.faint;
-    text(ctx, c.alive ? def.name.toUpperCase() : `${def.name.toUpperCase()} (DEAD)`, r.x + 14, ry + 10, { size: 11, color: col });
-    if (c.alive) hpBar(ctx, { x: r.x + 124, y: ry + 2, w: r.w - 138, h: 8 }, c.hp, def.stats.maxHp, color);
-    ry += 18;
   }
 }
 
