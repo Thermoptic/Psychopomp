@@ -12,18 +12,26 @@ import type { BattleBuild, BattleStats, CombatRules, CreatureDef, DicePrep, Effe
 /** Categories whose dice add directly to a battle stat of the same name. */
 const STAT_CATEGORIES: ReadonlyArray<keyof BattleStats> = ['power', 'shield', 'speed', 'block', 'dash'];
 
-/** Ruleset base + the creature's start modifiers (before dice and Special). */
-export function baseBattleStats(def: CreatureDef, rules: Ruleset): BattleStats {
+/**
+ * Ruleset base + the creature's start modifiers + its level-up bonuses
+ * (before dice and Special).
+ */
+export function baseBattleStats(def: CreatureDef, rules: Ruleset, bonus: Partial<BattleStats> = {}): BattleStats {
   const m = def.modifiers ?? {};
   const b = rules.creatureBase;
   return {
-    power: b.power + (m.power ?? 0),
-    shield: b.shield + (m.shield ?? 0),
-    speed: b.speed + (m.speed ?? 0),
-    block: b.block + (m.block ?? 0),
-    dash: b.dash + (m.dash ?? 0),
+    power: b.power + (m.power ?? 0) + (bonus.power ?? 0),
+    shield: b.shield + (m.shield ?? 0) + (bonus.shield ?? 0),
+    speed: b.speed + (m.speed ?? 0) + (bonus.speed ?? 0),
+    block: b.block + (m.block ?? 0) + (bonus.block ?? 0),
+    dash: b.dash + (m.dash ?? 0) + (bonus.dash ?? 0),
   };
 }
+
+/** The stats a level-up can raise. */
+export const LEVEL_UP_STATS: ReadonlyArray<keyof BattleStats> = ['power', 'speed', 'shield', 'dash', 'block'];
+/** How many different stats get +1 on a level-up. */
+export const LEVEL_UP_GAINS = 2;
 
 /**
  * Dash cooldown in seconds: base cooldown (7 s) minus the dash value (DASH die
@@ -58,14 +66,14 @@ export function applyEffect(stats: BattleStats, effect: Effect): void {
 }
 
 /** Computes the temporary build from a creature's content and its final dice. */
-export function computeBuild(def: CreatureDef, prep: DicePrep, rules: Ruleset): BattleBuild {
+export function computeBuild(def: CreatureDef, prep: DicePrep, rules: Ruleset, bonus: Partial<BattleStats> = {}): BattleBuild {
   const view = diceView(prep);
   const diceByCategory: Record<StatCategory, number> = {};
   for (const [cat, values] of Object.entries(view.byCategory)) {
     diceByCategory[cat] = values.reduce((a, b) => a + b, 0);
   }
 
-  const stats = baseBattleStats(def, rules);
+  const stats = baseBattleStats(def, rules, bonus);
   for (const key of STAT_CATEGORIES) stats[key] += diceByCategory[key] ?? 0;
 
   const specialActive = def.special ? evaluateRequirement(def.special.requirement, view) : false;

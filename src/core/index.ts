@@ -30,6 +30,8 @@ export * as powerupMapping from './combat/powerups';
 export { resolveWeapon } from './combat/powerups';
 export {
   computeBuild,
+  LEVEL_UP_GAINS,
+  LEVEL_UP_STATS,
   computeDamage,
   computeMoveSpeed,
   computeAttackCooldown,

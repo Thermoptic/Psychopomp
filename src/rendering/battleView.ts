@@ -69,12 +69,13 @@ export function drawPrepPanel(ctx: Ctx, state: GameState, ui: MatchUi, owner: Pl
   drawCreature(ctx, info.def.id, owner, portX + 20, cs.y + 25, 3.3, { face: defaultFacing(owner), portrait: info.def.art?.portrait });
   const nameX = mirror ? portX - 8 : portX + 48;
   text(ctx, info.def.name.toUpperCase(), nameX, cs.y + 18, { size: 14, align });
+  text(ctx, `LV.${info.cr.level}`, mirror ? cs.x + 8 : cs.x + cs.w - 8, cs.y + 18, { size: 13, color: info.color, align: mirror ? 'left' : 'right' });
   text(ctx, `${info.cr.hp}/${info.def.stats.maxHp} HP`, nameX, cs.y + 34, { size: 12, align, color: info.cr.hp < info.def.stats.maxHp ? C.danger : info.color });
   const barW = cs.w - 64;
   hpBar(ctx, { x: mirror ? nameX - barW : nameX, y: cs.y + 39, w: barW, h: 6 }, info.cr.hp, info.def.stats.maxHp, info.color);
 
-  const build = computeBuild(info.def, prep, state.ruleset);
-  const base = baseBattleStats(info.def, state.ruleset);
+  const build = computeBuild(info.def, prep, state.ruleset, info.cr.bonus);
+  const base = baseBattleStats(info.def, state.ruleset, info.cr.bonus);
   const slotReq = info.def.special?.requirement.type === 'slots' ? info.def.special.requirement.slots : null;
   const focusOn = (kind: 'die' | 'slot', i: number) => editable && cur.row === i && cur.col === kind;
 

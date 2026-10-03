@@ -111,13 +111,15 @@ export function drawPlayerPanel(ctx: Ctx, state: GameState, ui: MatchUi, player:
   hpBar(ctx, { x: mirror ? nx - barW : nx, y: mon.y + 53, w: barW, h: 9 }, cr.hp, def.stats.maxHp, color);
   // Attack type of the weapon it fights with (an equipped Powerup replaces its own attack).
   const weapon = resolveWeapon(def, state.powerupDefs, state.ruleset.combat);
-  text(ctx, weapon.kind === 'ranged' ? 'RANGE' : 'MELEE', nx, mon.y + 79, { size: 12, color: C.dim, align });
+  text(ctx, weapon.kind === 'ranged' ? 'RANGE' : 'MELEE', nx, mon.y + 80, { size: 14, color: C.text, align });
+  // Level (grows when it wins a battle by killing its opponent), on the inner end of the row.
+  text(ctx, `LV.${cr.level}`, mirror ? mon.x + 10 : mon.x + mon.w - 10, mon.y + 80, { size: 14, color, align: mirror ? 'left' : 'right' });
   sectionLed(ctx, r.x + r.w / 2, mon.y + mon.h + 3, color);
 
   // 2. Stats: icon tile, label, value, gauge (0-10).
   const stats: Rect = { x, y: mon.y + mon.h + 7, w, h: 142 };
   sectionPlate(ctx, stats);
-  const base = baseBattleStats(def, state.ruleset);
+  const base = baseBattleStats(def, state.ruleset, cr.bonus);
   PANEL_STATS.forEach((st, i) => {
     const ry = stats.y + 7 + i * 26;
     rect(ctx, { x: stats.x + 5, y: ry - 1, w: stats.w - 10, h: 25 }, i % 2 ? '#0d0b09' : '#13110e');

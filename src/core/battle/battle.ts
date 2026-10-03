@@ -12,9 +12,10 @@
 
 import { rule } from '../errors';
 import { createCombat, stepCombat } from '../combat/simulation';
-import { computeBuild } from '../combat/stats';
+import { LEVEL_UP_GAINS, LEVEL_UP_STATS, computeBuild } from '../combat/stats';
+import { nextInt } from '../rng';
 import { createDicePrep, roll } from '../dice/dice';
-import type { BattleSide, BattleState, Cell, DicePrep, FighterInput, GameEvent, GameState, PlayerId } from '../types';
+import type { BattleSide, BattleState, BattleStats, Cell, CreatureState, DicePrep, FighterInput, GameEvent, GameState, PlayerId } from '../types';
 import { BATTLE_SIDES } from '../types';
 
 export function startBattle(
@@ -83,7 +84,8 @@ export function onPlayerReady(state: GameState, events: GameEvent[]): void {
   const builds = {} as Record<BattleSide, ReturnType<typeof computeBuild>>;
   for (const side of BATTLE_SIDES) {
     const prep = b.prep[side];
-    builds[side] = computeBuild(state.creatureDefs[state.creatures[prep.creatureId].defId], prep, state.ruleset);
+    const cr = state.creatures[prep.creatureId];
+    builds[side] = computeBuild(state.creatureDefs[cr.defId], prep, state.ruleset, cr.bonus);
   }
   b.builds = builds;
   events.push({ type: 'BUILDS_REVEALED' });
@@ -158,6 +160,11 @@ export function endBattle(state: GameState, events: GameEvent[]): void {
     }
   }
 
+  // Level up: the creature that killed its opponent and survived gains a level
+  // and +1 to two different random stats (from the game's seeded RNG).
+  const winner = b.result.outcome === 'ATTACKER_WINS' ? attacker : b.result.outcome === 'DEFENDER_WINS' ? defender : null;
+  if (winner && winner.alive) levelUp(state, winner, events);
+
   if (b.result.outcome === 'ATTACKER_WINS') {
     events.push({ type: 'CREATURE_MOVED', creatureId: attacker.id, from: { ...b.from }, to: { ...b.cell } });
     attacker.x = b.cell.x;
@@ -166,4 +173,17 @@ export function endBattle(state: GameState, events: GameEvent[]): void {
 
   state.battle = null;
   state.phase = 'board';
+}
+
+/** +1 level and +1 to LEVEL_UP_GAINS different stats, picked with the game RNG. */
+export function levelUp(state: GameState, cr: CreatureState, events: GameEvent[]): void {
+  const pool = [...LEVEL_UP_STATS];
+  const gains: Array<keyof BattleStats> = [];
+  for (let i = 0; i < LEVEL_UP_GAINS && pool.length; i++) {
+    const [stat] = pool.splice(nextInt(state.rng, 0, pool.length - 1), 1);
+    gains.push(stat);
+    cr.bonus = { ...cr.bonus, [stat]: (cr.bonus[stat] ?? 0) + 1 };
+  }
+  cr.level += 1;
+  events.push({ type: 'LEVEL_UP', creatureId: cr.id, level: cr.level, gains });
 }

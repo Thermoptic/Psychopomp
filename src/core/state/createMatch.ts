@@ -53,6 +53,8 @@ export function createMatch(setup: MatchSetup): GameState {
       x: p.x,
       y: p.y,
       alive: true,
+      level: 1,
+      bonus: {},
     };
   }
 

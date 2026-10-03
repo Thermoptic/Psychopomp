@@ -311,6 +311,10 @@ export interface CreatureState {
   x: number;
   y: number;
   alive: boolean;
+  /** Level, starting at 1; +1 for every battle it wins by killing its opponent. */
+  level: number;
+  /** Permanent stat bonuses from level-ups (added to every later battle). */
+  bonus: Partial<BattleStats>;
 }
 
 export interface PowerPointState extends Cell {
@@ -603,6 +607,8 @@ export type GameEvent =
   | { type: 'KNOCKBACK'; side: BattleSide; distance: number }
   | { type: 'COMBAT_ENDED'; outcome: BattleOutcome }
   | { type: 'CREATURE_DIED'; creatureId: string }
+  /** A creature won a battle by killing its opponent: +1 level and +1 to each of `gains`. */
+  | { type: 'LEVEL_UP'; creatureId: string; level: number; gains: Array<keyof BattleStats> }
   | { type: 'POWER_POINT_CAPTURED'; x: number; y: number; owner: PlayerId }
   | { type: 'TURN_STARTED'; player: PlayerId; number: number }
   | { type: 'MATCH_ENDED'; result: MatchResult };

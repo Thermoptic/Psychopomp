@@ -158,6 +158,12 @@ export class App {
         case 'POWER_POINT_CAPTURED':
           this.say(`${playerLabel(e.owner)} CAPTURES A POWER POINT`, playerColor(e.owner));
           break;
+        case 'LEVEL_UP': {
+          const c = s.creatures[e.creatureId];
+          const gains = e.gains.map((g) => `+1 ${g.toUpperCase()}`).join(', ');
+          this.say(`${s.creatureDefs[c.defId].name.toUpperCase()} REACHES LV.${e.level}! ${gains}`, playerColor(c.owner));
+          break;
+        }
         case 'CREATURE_DIED': {
           const c = s.creatures[e.creatureId];
           this.say(`${s.creatureDefs[c.defId].name.toUpperCase()} (${playerLabel(c.owner)}) IS DESTROYED`, C.danger);
