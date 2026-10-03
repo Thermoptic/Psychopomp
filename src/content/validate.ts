@@ -226,6 +226,8 @@ export function validatePowerup(raw: unknown): ValidationResult {
   else if (!ID_RE.test(raw.id)) errors.push(`${where}: id must use a-z, 0-9 and _ only`);
   if (!isStr(raw.name) || !String(raw.name).trim()) errors.push(`${where}: missing "name"`);
   validateWeapon(raw, where, errors, true);
+  // Power override (optional).
+  if (raw.power !== undefined) intIn(errors, `${where}.power`, raw.power, 1, 10);
   // Charge (optional): seconds attack must be held.
   if (raw.chargeTime !== undefined) intIn(errors, `${where}.chargeTime`, raw.chargeTime, 1, 10);
   if (raw.duration !== undefined && raw.duration !== 'permanent' && raw.duration !== 'limited') errors.push(`${where}.duration must be "permanent" or "limited"`);

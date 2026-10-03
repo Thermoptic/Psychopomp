@@ -326,6 +326,13 @@ export function setPowerupTimeLimit(p: PowerupDef, seconds: number): void {
   p.timeLimit = Math.max(M.TIME_LIMIT_MIN, Math.min(M.TIME_LIMIT_MAX, Math.round(seconds)));
 }
 
+/** Power override: 1-10, or 0 = use the monster's own Power (nothing stored). */
+export function setPowerupPower(p: PowerupDef, level: number): void {
+  const v = Math.max(0, Math.min(M.POWER_MAX, Math.round(level)));
+  if (v === 0) delete p.power;
+  else p.power = v;
+}
+
 export function setPowerupChargeTime(p: PowerupDef, seconds: number): void {
   p.chargeTime = Math.max(M.CHARGE_TIME_MIN, Math.min(M.CHARGE_TIME_MAX, Math.round(seconds)));
 }

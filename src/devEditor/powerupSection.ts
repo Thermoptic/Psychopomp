@@ -17,6 +17,7 @@ import {
   setPowerupCharge,
   setPowerupChargeTime,
   setPowerupDuration,
+  setPowerupPower,
   setPowerupTimeLimit,
   type ItemEditor,
 } from './model';
@@ -34,8 +35,19 @@ export function powerupForm(ed: ItemEditor<'powerup'>, refresh: () => void, rebu
   };
   const limited = d.duration === 'limited';
   const charged = d.chargeTime !== undefined;
-  // Charge: part of this attack's settings (shown under the melee/ranged sliders).
-  const chargeRows = [
+  // Power and Charge: part of this attack's settings (shown under the melee/ranged sliders).
+  const attackRows = [
+    row(
+      'Power',
+      slider({
+        min: 0,
+        max: M.POWER_MAX,
+        value: d.power ?? 0,
+        meaning: (v) => (v === 0 ? "monster's Power" : `POWER ${v}`),
+        onInput: (v) => edit((p) => setPowerupPower(p, v)),
+      }),
+      "damage of this attack: 1-10 replaces the monster's Power, 0 = use the monster's Power",
+    ),
     row(
       'Charge',
       h('input', { type: 'checkbox', checked: charged, on: { change: (e: Event) => edit((p) => setPowerupCharge(p, (e.target as HTMLInputElement).checked), true) } }),
@@ -90,7 +102,7 @@ export function powerupForm(ed: ItemEditor<'powerup'>, refresh: () => void, rebu
         : null,
       row('Type', weaponTypeSelector(d.type, (t) => edit((p) => setWeaponType(p, t), true))),
     ),
-    weaponSettingsGroup(d, rules, (fn) => edit((p) => fn(p)), chargeRows),
+    weaponSettingsGroup(d, rules, (fn) => edit((p) => fn(p)), attackRows),
     h('div', { class: 'hint dim', text: `A monster with this Powerup equipped uses it instead of its own attack${limited ? ' while it is active' : ''}.` }),
   );
 }
@@ -111,6 +123,7 @@ export function powerupPreview(ed: ItemEditor<'powerup'>): HTMLElement {
       'table',
       {},
       ...fields.map((f) => h('tr', {}, h('td', { class: 'k', text: `${f.label} ${values[f.key] ?? '-'}` }), h('td', { text: levelMeaning(d.type, f.key, values[f.key] ?? fieldDefault(f.key), rules) }))),
+      h('tr', {}, h('td', { class: 'k', text: 'Power' }), h('td', { text: d.power !== undefined ? String(d.power) : "monster's" })),
       d.chargeTime !== undefined ? h('tr', {}, h('td', { class: 'k', text: 'Charge' }), h('td', { text: `${d.chargeTime}s hold` })) : null,
     ),
     h('div', { class: 'sub', text: '' }),

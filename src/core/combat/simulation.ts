@@ -227,6 +227,7 @@ function fireProjectile(combat: CombatState, f: Fighter, input: FighterInput, ru
     curveCos: cos,
     curveSin: sin,
     impactRadius: w.impactRadius,
+    ...(w.power !== undefined ? { power: w.power } : {}),
   });
 }
 
@@ -246,11 +247,14 @@ function impact(p: Projectile, target: Fighter, shooter: Fighter, rules: CombatR
   if (!hit) return;
   if (target.guard > 0) events.push({ type: 'BLOCKED', side: target.side });
   else {
-    const dmg = computeDamage(shooter.stats, target.stats, rules);
+    const dmg = computeDamage(withPower(shooter.stats, p.power), target.stats, rules);
     damage[target.side] += dmg;
     events.push({ type: 'HIT', side: p.side, damage: dmg });
   }
 }
+
+/** The attacker's stats with a weapon's Power override applied (if it has one). */
+const withPower = (stats: Fighter['stats'], power: number | undefined) => (power === undefined ? stats : { ...stats, power });
 
 function stepProjectiles(combat: CombatState, rules: CombatRules, damage: Record<BattleSide, number>, events: GameEvent[]): void {
   const r = PROJECTILE_RADIUS * FP;
@@ -614,7 +618,7 @@ export function stepCombat(
       events.push({ type: 'BLOCKED', side: other.side });
       continue;
     }
-    const dmg = computeDamage(f.stats, other.stats, rules);
+    const dmg = computeDamage(withPower(f.stats, f.weapon.power), other.stats, rules);
     damage[other.side] += dmg;
     events.push({ type: 'HIT', side: f.side, damage: dmg });
     // Knockback: push the target along the attack direction (stops at walls).

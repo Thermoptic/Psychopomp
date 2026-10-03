@@ -81,8 +81,19 @@ const clampIn = (v: number | undefined, lo: number, hi: number, fallback: number
  */
 export function resolveWeapon(def: CreatureDef, powerups: Record<string, PowerupDef>, rules: CombatRules): Weapon {
   const p = def.powerupId ? powerups[def.powerupId] : undefined;
-  if (p) return weaponFromSettings(p, p.id, rules);
+  if (p) return powerupWeapon(p, rules);
   return ownWeapon(def, rules);
+}
+
+/** Power override range (Powerups). */
+export const POWER_MIN = 1;
+export const POWER_MAX = 10;
+
+/** A Powerup's weapon, with its Power override if it has one. */
+export function powerupWeapon(p: PowerupDef, rules: CombatRules): Weapon {
+  const w = weaponFromSettings(p, p.id, rules);
+  if (p.power !== undefined) w.power = clampIn(p.power, POWER_MIN, POWER_MAX, POWER_MAX);
+  return w;
 }
 
 /** The battle state of a creature's equipped Powerup (fresh every battle), or null. */
@@ -99,7 +110,7 @@ export function fighterPowerup(def: CreatureDef, powerups: Record<string, Poweru
     ticksLeft: 0,
     limitTicks: limited ? secondsToTicks(clampIn(p.timeLimit, TIME_LIMIT_MIN, TIME_LIMIT_MAX, 10), rules) : 0,
     chargeTicks: charge ? secondsToTicks(clampIn(p.chargeTime, CHARGE_TIME_MIN, CHARGE_TIME_MAX, 3), rules) : 0,
-    weapon: weaponFromSettings(p, p.id, rules),
+    weapon: powerupWeapon(p, rules),
   };
 }
 

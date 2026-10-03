@@ -225,6 +225,11 @@ export interface PowerupDef extends WeaponSettings {
   id: string;
   name: string;
   type: PowerupType;
+  /**
+   * Power for this Powerup's attacks (1-10), replacing the monster's Power
+   * (dice, modifiers, Special) for their damage. Missing = the monster's Power.
+   */
+  power?: number;
   /** Missing = 'permanent' (older content). */
   duration?: PowerupDuration;
   /** Seconds a 'limited' Powerup stays active after activation (1-60). */
@@ -479,6 +484,8 @@ export type Weapon =
       cooldownTicks: number | null;
       range: number;
       knockback: number;
+      /** Power used for this attack's damage instead of the monster's Power (a Powerup's override). */
+      power?: number;
     }
   | {
       kind: 'ranged';
@@ -497,6 +504,8 @@ export type Weapon =
       bounces: number;
       /** How it looks (no effect on the game): size 1-10, trail 0-10, colour or null = owner colour. */
       look: { size: number; trail: number; color: string | null };
+      /** Power used for this attack's damage instead of the monster's Power (a Powerup's override). */
+      power?: number;
     };
 
 /** A projectile in flight. Positions/velocity in combat units × 256 (fixed point). */
@@ -517,6 +526,8 @@ export interface Projectile {
   curveCos: number;
   curveSin: number;
   impactRadius: number;
+  /** Power override of the weapon that fired it (missing = the shooter's Power). */
+  power?: number;
 }
 
 /** A static wall in the combat arena: 1-3 arena cells in a row (see combat/walls.ts). */

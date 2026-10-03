@@ -179,7 +179,8 @@ function hudData(state: GameState, owner: PlayerId): HudData | null {
     name: def.name.toUpperCase(),
     hp: f ? f.hp : cr.hp,
     maxHp: def.stats.maxHp,
-    power: build.stats.power,
+    // A weapon's Power override (Powerup) is the Power its attacks hit with.
+    power: f?.weapon.power ?? build.stats.power,
     shield: build.stats.shield,
     speed: build.stats.speed,
     guard: f ? f.blockCharges : computeBlockCharges(build.stats, state.ruleset.combat),

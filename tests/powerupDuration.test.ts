@@ -18,6 +18,7 @@ import {
   setPowerupDuration,
   setPowerupTimeLimit,
   setPowerupCharge,
+  setPowerupPower,
 } from '../src/devEditor/model';
 import { basePack, ok, prepareBothAndBegin, testCreature } from './helpers';
 
@@ -488,4 +489,56 @@ describe('Without Charge nothing changes', () => {
     }
   });
 
+});
+
+// --- POWER OVERRIDE -------------------------------------------------------------------------
+
+describe('Powerup Power override', () => {
+  it('editor: 1-10 is stored, 0 = the monster Power (nothing stored); validation 1-10', () => {
+    const { lib } = fresh();
+    const p = lib.newPowerup('ranged');
+    setPowerupPower(p, 10);
+    expect(p.power).toBe(10);
+    setPowerupPower(p, 99);
+    expect(p.power).toBe(10);
+    setPowerupPower(p, 0);
+    expect(p.power).toBeUndefined();
+    expect(lib.validatePowerup({ ...p, power: 7 }, null)).toEqual([]);
+    expect(lib.validatePowerup({ ...p, power: 0 }, null).join()).toMatch(/power/);
+    expect(lib.validatePowerup({ ...p, power: 11 }, null).join()).toMatch(/power/);
+  });
+
+  it('melee: the swing hits with the Powerup Power instead of the monster Power', () => {
+    let s = closeIn(battle(meleeCharge({ chargeTime: undefined, power: 10 })));
+    const expected = computeDamage({ ...A(s).stats, power: 10 }, D(s).stats, s.ruleset.combat);
+    expect(expected).not.toBe(computeDamage(A(s).stats, D(s).stats, s.ruleset.combat));
+    s = run(s, 1, PRESS).s;
+    const r = run(s, s.ruleset.combat.windupTicks);
+    expect(r.events).toContainEqual({ type: 'HIT', side: 'attacker', damage: expected });
+    expect(A(r.s).stats.power).not.toBe(10); // the monster's own Power is untouched
+  });
+
+  it('ranged + Charge: the charged shot hits with the Powerup Power', () => {
+    let s = battle(charge({ chargeTime: 1, power: 10 }));
+    D(s).x = A(s).x + 400;
+    const expected = computeDamage({ ...A(s).stats, power: 10 }, D(s).stats, s.ruleset.combat);
+    s = chargeAndRelease(s, 1).s;
+    expect(s.battle!.combat!.projectiles[0].power).toBe(10);
+    const r = run(s, 400);
+    expect(r.events).toContainEqual({ type: 'HIT', side: 'attacker', damage: expected });
+  });
+
+  it('without an override the monster Power is used (as before)', () => {
+    let s = closeIn(battle(meleeCharge({ chargeTime: undefined })));
+    expect(A(s).weapon.power).toBeUndefined();
+    const expected = computeDamage(A(s).stats, D(s).stats, s.ruleset.combat);
+    s = run(s, 1, PRESS).s;
+    expect(run(s, s.ruleset.combat.windupTicks).events).toContainEqual({ type: 'HIT', side: 'attacker', damage: expected });
+  });
+
+  it('a Limited Powerup Power only counts while it is active', () => {
+    const s = battle(meleeCharge({ chargeTime: undefined, power: 10, duration: 'limited', timeLimit: 5 }));
+    expect(A(s).weapon.power).toBeUndefined();
+    expect(A(run(s, 1, { special: true }).s).weapon.power).toBe(10);
+  });
 });
