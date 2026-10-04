@@ -15,6 +15,7 @@ import {
   levelMeaning,
   powerupLabel,
   setPowerupCharge,
+  setPowerupChargeMoveSpeed,
   setPowerupChargeTime,
   setPowerupDuration,
   setPowerupPower,
@@ -51,7 +52,7 @@ export function powerupForm(ed: ItemEditor<'powerup'>, refresh: () => void, rebu
     row(
       'Charge',
       h('input', { type: 'checkbox', checked: charged, on: { change: (e: Event) => edit((p) => setPowerupCharge(p, (e.target as HTMLInputElement).checked), true) } }),
-      'hold attack to charge, release to fire this attack',
+      'hold the charge button (Left Trigger) to charge, release to fire this attack',
     ),
     charged
       ? row(
@@ -63,7 +64,20 @@ export function powerupForm(ed: ItemEditor<'powerup'>, refresh: () => void, rebu
             meaning: (v) => `CHARGE TIME: ${v}s`,
             onInput: (v) => edit((p) => setPowerupChargeTime(p, v)),
           }),
-          'seconds attack must be held',
+          'seconds the charge button must be held',
+        )
+      : null,
+    charged
+      ? row(
+          'Movement Speed',
+          slider({
+            min: M.CHARGE_MOVE_MIN,
+            max: M.CHARGE_MOVE_MAX,
+            value: d.chargeMoveSpeed ?? M.DEFAULT_CHARGE_MOVE,
+            meaning: (v) => (v === 0 ? 'STANDS STILL' : v === M.CHARGE_MOVE_MAX ? 'FULL SPEED' : `${v * 10}% SPEED`),
+            onInput: (v) => edit((p) => setPowerupChargeMoveSpeed(p, v)),
+          }),
+          'movement while charging: 0 = standing still, 10 = moves as usual',
         )
       : null,
     charged ? h('div', { class: 'hint dim', text: POWERUP_TEXT.charge }) : null,

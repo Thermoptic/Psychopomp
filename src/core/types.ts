@@ -246,6 +246,11 @@ export interface PowerupDef extends WeaponSettings {
    * release. Missing = a normal attack.
    */
   chargeTime?: number;
+  /**
+   * Charge: how fast the monster can move while charging, 0-10 (0 = stands still,
+   * 10 = full speed, each step 10 % of the normal movement speed). Only with chargeTime.
+   */
+  chargeMoveSpeed?: number;
 }
 
 export interface CombatRules {
@@ -484,6 +489,8 @@ export interface FighterPowerup {
   limitTicks: number;
   /** Charge: ticks the Left Trigger must be held before the attack can be released (0 = no charge). */
   chargeTicks: number;
+  /** Charge: movement while charging, percent of the normal movement speed (0-100). */
+  chargeMovePercent: number;
   /** The Powerup's weapon, used while it is active. */
   weapon: Weapon;
 }

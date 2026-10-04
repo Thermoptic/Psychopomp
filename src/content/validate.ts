@@ -232,6 +232,11 @@ export function validatePowerup(raw: unknown): ValidationResult {
   if (raw.power !== undefined) intIn(errors, `${where}.power`, raw.power, 1, 10);
   // Charge (optional): seconds attack must be held.
   if (raw.chargeTime !== undefined) intIn(errors, `${where}.chargeTime`, raw.chargeTime, 1, 10);
+  // Movement Speed while charging (optional, only with Charge): 0 = standing still ... 10 = full speed.
+  if (raw.chargeMoveSpeed !== undefined) {
+    if (raw.chargeTime === undefined) errors.push(`${where}.chargeMoveSpeed is only used by a Charge Powerup`);
+    else intIn(errors, `${where}.chargeMoveSpeed`, raw.chargeMoveSpeed, 0, 10);
+  }
   if (raw.duration !== undefined && raw.duration !== 'permanent' && raw.duration !== 'limited') errors.push(`${where}.duration must be "permanent" or "limited"`);
   if (raw.duration === 'limited') intIn(errors, `${where}.timeLimit`, raw.timeLimit, 1, 60);
   else if (raw.timeLimit !== undefined) errors.push(`${where}.timeLimit is only used by a limited Powerup`);

@@ -70,8 +70,10 @@ export const TIME_LIMIT_MAX = 60;
 /** Charge time, seconds. */
 export const CHARGE_TIME_MIN = 1;
 export const CHARGE_TIME_MAX = 10;
-/** Movement while charging, percent of normal movement speed ("almost stationary"). */
-export const CHARGE_MOVE_PERCENT = 15;
+/** Movement Speed while charging (0 = standing still, 10 = full speed), and the default for a Charge Powerup without one. */
+export const CHARGE_MOVE_MIN = 0;
+export const CHARGE_MOVE_MAX = 10;
+export const DEFAULT_CHARGE_MOVE = 2;
 
 const clampIn = (v: number | undefined, lo: number, hi: number, fallback: number) => Math.max(lo, Math.min(hi, Math.round(v ?? fallback)));
 
@@ -109,6 +111,7 @@ export function fighterPowerup(def: CreatureDef, powerups: Record<string, Poweru
     state: limited ? 'inactive' : 'active',
     ticksLeft: 0,
     limitTicks: limited ? secondsToTicks(clampIn(p.timeLimit, TIME_LIMIT_MIN, TIME_LIMIT_MAX, 10), rules) : 0,
+    chargeMovePercent: clampIn(p.chargeMoveSpeed, CHARGE_MOVE_MIN, CHARGE_MOVE_MAX, DEFAULT_CHARGE_MOVE) * 10,
     chargeTicks: charge ? secondsToTicks(clampIn(p.chargeTime, CHARGE_TIME_MIN, CHARGE_TIME_MAX, 3), rules) : 0,
     weapon: powerupWeapon(p, rules),
   };

@@ -303,7 +303,7 @@ export const POWERUP_TEXT = {
   permanent: 'Permanent: This ability remains active for the entire match, from the beginning of the match until the match ends.',
   limited: 'Limited: Activate this ability with the Powerup button. It remains active for the selected time, then expires and cannot be activated again during this round.',
   charge:
-    'Charge: Hold the Left Trigger (keyboard: the Powerup key) to charge. The attack button (Right Trigger) stays the normal attack without this Powerup. Movement becomes extremely slow while charging. When ready, the monster flashes rapidly red and blue. Release to execute the configured attack; releasing earlier cancels the charge.',
+    'Charge: Hold the Left Trigger (keyboard: the Powerup key) to charge. The attack button (Right Trigger) stays the normal attack without this Powerup. Movement Speed sets how fast the monster can move while charging (0 = standing still, 10 = full speed). When ready, the monster flashes rapidly red and blue. Release to execute the configured attack; releasing earlier cancels the charge.',
 } as const;
 
 export const DEFAULT_TIME_LIMIT = 10;
@@ -311,8 +311,13 @@ export const DEFAULT_CHARGE_TIME = 3;
 
 /** Charge on (with the default charge time) or off (a normal attack). */
 export function setPowerupCharge(p: PowerupDef, on: boolean): void {
-  if (on) p.chargeTime ??= DEFAULT_CHARGE_TIME;
-  else delete p.chargeTime;
+  if (on) {
+    p.chargeTime ??= DEFAULT_CHARGE_TIME;
+    p.chargeMoveSpeed ??= M.DEFAULT_CHARGE_MOVE;
+  } else {
+    delete p.chargeTime;
+    delete p.chargeMoveSpeed;
+  }
 }
 
 /** Permanent (no time limit stored) or Limited (with a time limit). */
@@ -335,6 +340,10 @@ export function setPowerupPower(p: PowerupDef, level: number): void {
 
 export function setPowerupChargeTime(p: PowerupDef, seconds: number): void {
   p.chargeTime = Math.max(M.CHARGE_TIME_MIN, Math.min(M.CHARGE_TIME_MAX, Math.round(seconds)));
+}
+
+export function setPowerupChargeMoveSpeed(p: PowerupDef, v: number): void {
+  p.chargeMoveSpeed = Math.max(M.CHARGE_MOVE_MIN, Math.min(M.CHARGE_MOVE_MAX, Math.round(v)));
 }
 
 /** "Ranged · Charge 3s · Limited 10s" style label. */

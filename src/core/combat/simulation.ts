@@ -29,7 +29,7 @@ import type {
   WallSegment,
   Weapon,
 } from '../types';
-import { CHARGE_MOVE_PERCENT, PROJECTILE_RADIUS, fighterPowerup, ownWeapon, resolveWeapon, smallAngleCosSin } from './powerups';
+import { PROJECTILE_RADIUS, fighterPowerup, ownWeapon, resolveWeapon, smallAngleCosSin } from './powerups';
 import { circleHitsWall } from './walls';
 import { applyEffect, computeAttackCooldown, computeBlockCharges, computeDamage, computeDashCooldown, computeMoveSpeed } from './stats';
 
@@ -606,9 +606,10 @@ export function stepCombat(
       }
     } else if (f.windup === 0 && f.guard === 0) {
       if (f.charge.state !== 'none') {
-        // Charging: almost stationary (CHARGE_MOVE_PERCENT of the speed, spread over the ticks).
+        // Charging: the Powerup's Movement Speed (percent of the speed, spread evenly over the ticks).
+        const pct = f.powerup!.chargeMovePercent;
         const t = f.charge.ticks;
-        const step = Math.trunc((f.moveSpeed * CHARGE_MOVE_PERCENT * t) / 100) - Math.trunc((f.moveSpeed * CHARGE_MOVE_PERCENT * Math.max(0, t - 1)) / 100);
+        const step = Math.trunc((f.moveSpeed * pct * t) / 100) - Math.trunc((f.moveSpeed * pct * Math.max(0, t - 1)) / 100);
         move(f, other, input, rules, combat, step);
       } else move(f, other, input, rules, combat);
     }

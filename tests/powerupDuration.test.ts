@@ -19,6 +19,7 @@ import {
 import {
   POWERUP_TEXT,
   powerupLabel,
+  setPowerupChargeMoveSpeed,
   setPowerupChargeTime,
   setPowerupDuration,
   setPowerupTimeLimit,
@@ -664,6 +665,88 @@ describe('Powerup unlocked by its slot conditions', () => {
 
   it('the default Special has an empty effect: slot conditions only gate the Powerup', () => {
     expect(defaultSpecial(5).effect).toEqual({ type: 'multi', effects: [] });
+  });
+});
+
+// --- CHARGE MOVEMENT SPEED ------------------------------------------------------------------
+
+describe('Charge Movement Speed (0-10)', () => {
+  const right = { dx: 100, dy: 0 };
+  /** Distance moved in 60 ticks while charging (Left Trigger held) with the given Movement Speed. */
+  const charged = (v: number | undefined) => {
+    const s0 = battle(charge({ chargeTime: 10, chargeMoveSpeed: v }), RANGED_ATTACK);
+    const s1 = startCharge(s0).s;
+    const x0 = A(s1).x;
+    const s2 = run(s1, 60, { ...CHOLD, ...right }).s;
+    return { moved: A(s2).x - x0, normal: 60 * A(s2).moveSpeed, state: A(s2).charge.state };
+  };
+
+  it('0 = stands completely still while charging (and can still aim and charge)', () => {
+    const r = charged(0);
+    expect(r.moved).toBe(0);
+    expect(r.state).toBe('charging');
+  });
+
+  it('10 = moves exactly as usual while charging', () => {
+    const r = charged(10);
+    expect(r.moved).toBe(r.normal);
+  });
+
+  it('in between: each step is 10 % of the normal movement speed', () => {
+    for (const v of [1, 3, 5, 8]) {
+      const r = charged(v);
+      expect(r.moved).toBeGreaterThanOrEqual(Math.floor((r.normal * v) / 10) - 1);
+      expect(r.moved).toBeLessThanOrEqual(Math.ceil((r.normal * v) / 10));
+    }
+    expect(charged(5).moved).toBeGreaterThan(charged(2).moved);
+  });
+
+  it('the old fixed slow-down no longer applies: the setting alone decides (10 is not slowed)', () => {
+    expect(charged(10).moved).toBeGreaterThan(charged(2).moved * 4);
+  });
+
+  it('a Charge Powerup without the setting uses the default (2 = 20 %)', () => {
+    const r = charged(undefined);
+    expect(r.moved).toBeGreaterThan(0);
+    expect(r.moved).toBeLessThanOrEqual(r.normal * 0.2);
+  });
+
+  it('movement is normal again after the charge ends, whatever the setting', () => {
+    let s = startCharge(battle(charge({ chargeTime: 10, chargeMoveSpeed: 0 }), RANGED_ATTACK)).s;
+    s = run(s, 5, CHOLD).s;
+    s = run(s, 1).s; // released early
+    const x0 = A(s).x;
+    expect(A(run(s, 10, right).s).x - x0).toBe(10 * A(s).moveSpeed);
+  });
+
+  it('editor: ticking Charge adds the default Movement Speed, unticking removes it; clamped 0-10; validated', () => {
+    const { lib } = fresh();
+    const p = lib.newPowerup();
+    expect(p.chargeMoveSpeed).toBeUndefined();
+    setPowerupCharge(p, true);
+    expect(p.chargeMoveSpeed).toBe(2);
+    setPowerupChargeMoveSpeed(p, 0);
+    expect(p.chargeMoveSpeed).toBe(0);
+    setPowerupChargeMoveSpeed(p, 99);
+    expect(p.chargeMoveSpeed).toBe(10);
+    setPowerupChargeMoveSpeed(p, -4);
+    expect(p.chargeMoveSpeed).toBe(0);
+    expect(lib.validatePowerup(p, null)).toEqual([]);
+    expect(lib.validatePowerup({ ...p, chargeMoveSpeed: 11 }, null).join()).toMatch(/chargeMoveSpeed/);
+    expect(lib.validatePowerup({ ...p, chargeMoveSpeed: 0.5 }, null).join()).toMatch(/chargeMoveSpeed/);
+    setPowerupCharge(p, false);
+    expect(p.chargeMoveSpeed).toBeUndefined();
+    expect(lib.validatePowerup({ ...p, chargeMoveSpeed: 5 }, null).join()).toMatch(/chargeMoveSpeed/);
+  });
+
+  it('saves and reads back, including 0', () => {
+    const { lib, storage } = fresh();
+    const p = { ...lib.newPowerup(), id: 'still_charge', name: 'Still Charge' };
+    setPowerupCharge(p, true);
+    setPowerupChargeMoveSpeed(p, 0);
+    expect(lib.saveItem('powerup', p, null).ok).toBe(true);
+    const back = new ContentLibrary(basePack(), memoryStorage(storage.text)).get('powerup', 'still_charge')!.item;
+    expect(back.chargeMoveSpeed).toBe(0);
   });
 });
 
