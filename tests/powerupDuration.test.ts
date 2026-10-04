@@ -19,6 +19,7 @@ import {
   setPowerupTimeLimit,
   setPowerupCharge,
   setPowerupPower,
+  setSlotCondition,
 } from '../src/devEditor/model';
 import { basePack, ok, prepareBothAndBegin, testCreature } from './helpers';
 
@@ -540,5 +541,76 @@ describe('Powerup Power override', () => {
     const s = battle(meleeCharge({ chargeTime: undefined, power: 10, duration: 'limited', timeLimit: 5 }));
     expect(A(s).weapon.power).toBeUndefined();
     expect(A(run(s, 1, { special: true }).s).weapon.power).toBe(10);
+  });
+});
+
+// --- POWERUP NEEDS THE SPECIAL TRIGGER --------------------------------------------------------
+
+describe('Powerup tied to the Special trigger', () => {
+  /** P1 monster 'a' with trigger "slot 1 = Even" and a Powerup; its slot-1 die is `die`. */
+  function triggered(die: number, needs: boolean, powerup: PowerupDef = charge({ chargeTime: 2 })): GameState {
+    const a = testCreature('a', { maxHp: 500 }, { powerupId: powerup.id, powerupNeedsTrigger: needs, attack: RANGED_ATTACK, dice: { sides: 6, slots: { speed: 1, power: 1, shield: 1, dash: 1, block: 1 } } });
+    setSlotCondition(a, 0, 'even', 5);
+    const pack = basePack();
+    let s = createMatch({
+      ruleset: { ...pack.ruleset, combat: { ...pack.ruleset.combat, walls: false } },
+      creatures: [a, testCreature('b', { maxHp: 500 })],
+      powerups: [powerup],
+      seed: 1,
+      board: {
+        id: 't', name: 't', width: 9, height: 9, allowDiagonal: false, passThroughCreatures: false, blockedCells: [], powerPoints: [{ x: 4, y: 0 }],
+        placements: [{ creature: 'a', owner: 'P1', x: 3, y: 2 }, { creature: 'b', owner: 'P2', x: 5, y: 2 }, { creature: 'b', owner: 'P2', x: 8, y: 8 }],
+      },
+    });
+    s = ok(s, { type: 'MOVE_CREATURE', creatureId: 'P1-a-1', to: { x: 5, y: 2 } });
+    for (const pl of ['P1', 'P2'] as const) {
+      const prep = Object.values(s.battle!.prep).find((p) => p.player === pl)!;
+      if (pl === 'P1') prep.dice[0] = die;
+      for (let i = 0; i < prep.slots.length; i++) s = ok(s, { type: 'ALLOCATE_DIE', die: i, slot: i, player: pl });
+      s = ok(s, { type: 'CONFIRM_ALLOCATION', player: pl });
+    }
+    while (s.battle!.stage === 'countdown') s = ok(s, { type: 'COMBAT_TICK', inputs: { attacker: idle, defender: idle } });
+    return s;
+  }
+
+  it('trigger met (even die): the Powerup works, and the build is not locked', () => {
+    const s = triggered(2, true);
+    expect(s.battle!.builds!.attacker).toMatchObject({ specialActive: true, powerupLocked: false });
+    expect(A(s).powerup!.state).toBe('active');
+    expect(has(run(s, 1, PRESS).events, 'CHARGE_STARTED')).toBe(true);
+  });
+
+  it('trigger NOT met (odd die): the Powerup is locked for the whole battle and the own attack is used', () => {
+    let s = triggered(3, true);
+    expect(s.battle!.builds!.attacker).toMatchObject({ specialActive: false, powerupLocked: true });
+    expect(A(s).powerup!.state).toBe('locked');
+    expect(A(s).weapon).toEqual(A(s).baseWeapon);
+    const r = run(s, 1, PRESS);
+    s = r.s;
+    expect(has(r.events, 'CHARGE_STARTED')).toBe(false);
+    expect(has(r.events, 'PROJECTILE_FIRED')).toBe(true); // the own (ranged) attack, at once
+    expect(A(run(s, 600, HOLD).s).powerup!.state).toBe('locked');
+  });
+
+  it('a locked Limited Powerup cannot be activated with the Powerup button', () => {
+    const s = triggered(3, true, gun({ duration: 'limited', timeLimit: 5 }));
+    const r = run(s, 5, { special: true });
+    expect(has(r.events, 'POWERUP_ACTIVATED')).toBe(false);
+    expect(A(r.s).powerup!.state).toBe('locked');
+    expect(A(r.s).weapon.powerupId).toBeNull();
+  });
+
+  it('without "needs trigger" the Powerup works whatever the dice are (as before)', () => {
+    const s = triggered(3, false);
+    expect(s.battle!.builds!.attacker).toMatchObject({ specialActive: false, powerupLocked: false });
+    expect(A(s).powerup!.state).toBe('active');
+  });
+
+  it('a Powerup that needs the trigger on a monster without a Special is always locked; validation accepts the flag', () => {
+    const a = testCreature('a', {}, { powerupId: 'gun', powerupNeedsTrigger: true });
+    const { lib } = fresh();
+    expect(lib.validateMonster({ ...lib.newMonster(), powerupNeedsTrigger: true }, null).join()).not.toMatch(/powerupNeedsTrigger/);
+    expect(lib.validateMonster({ ...lib.newMonster(), powerupNeedsTrigger: 'yes' as never }, null).join()).toMatch(/powerupNeedsTrigger/);
+    expect(a.special).toBeNull();
   });
 });

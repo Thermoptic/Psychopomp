@@ -147,6 +147,8 @@ export function validateCreature(raw: unknown, ruleset: Ruleset, ctx: CreatureCo
     else if (ctx.powerupIds && !ctx.powerupIds.has(raw.powerupId)) errors.push(`${where}: unknown Powerup "${raw.powerupId}"`);
   }
 
+  if (raw.powerupNeedsTrigger !== undefined && typeof raw.powerupNeedsTrigger !== 'boolean') errors.push(`${where}.powerupNeedsTrigger must be true or false`);
+
   if (!isObj(raw.dice) || !isObj(raw.dice.slots)) errors.push(`${where}: missing "dice.slots"`);
   else {
     if (raw.dice.sides !== undefined) intIn(errors, `${where}.dice.sides`, raw.dice.sides, 1, 100);

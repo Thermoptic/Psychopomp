@@ -94,6 +94,8 @@ function createFighter(
   const spawn = cellCentre(combatSpawnCell(arenaGrid(rules), creature.owner), rules);
   const dash = resolveDash(def, rules, build.stats.dash);
   const powerup = fighterPowerup(def, powerups, rules);
+  // A Powerup that needs the Special trigger stays locked when the dice did not meet it.
+  if (powerup && build.powerupLocked) powerup.state = 'locked';
   const facing = creature.owner === 'P1' ? 1 : -1;
   return {
     creatureId: creature.id,
@@ -125,7 +127,7 @@ function createFighter(
     dashHit: false,
     special: !build.specialName || !build.specialActive ? 'none' : build.specialManual ? 'ready' : 'passive',
     // A limited Powerup's weapon is only used once it is activated.
-    weapon: powerup?.limited ? ownWeapon(def, rules) : resolveWeapon(def, powerups, rules),
+    weapon: powerup && (powerup.limited || powerup.state === 'locked') ? ownWeapon(def, rules) : resolveWeapon(def, powerups, rules),
     baseWeapon: ownWeapon(def, rules),
     powerup,
     charge: { state: 'none', ticks: 0 },

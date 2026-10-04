@@ -188,6 +188,12 @@ export interface CreatureDef {
   /** Weapon/attack from the Powerups content (by id). None = classic melee. */
   powerupId?: string | null;
   /**
+   * true: the equipped Powerup only works in a battle where this monster's
+   * Special trigger (its dice-slot conditions) is met; otherwise it is locked
+   * for the whole battle and the monster uses its own attack.
+   */
+  powerupNeedsTrigger?: boolean;
+  /**
    * Board movement rule. Missing or 'default' = up to `stats.movement` steps
    * in the four cardinal directions (the original rule). 'pattern' = exactly
    * these destinations, as offsets from the creature's cell (x = columns,
@@ -409,6 +415,8 @@ export interface BattleBuild {
   specialActive: boolean;
   /** 'manual' specials are applied in combat with the SPECIAL input. */
   specialManual: boolean;
+  /** The monster's Powerup needs the Special trigger and it is not met: the Powerup is locked this battle. */
+  powerupLocked: boolean;
   stats: BattleStats;
 }
 
@@ -456,6 +464,7 @@ export interface Fighter {
 
 /**
  * An equipped Powerup during one battle (= round).
+ *   locked:    the dice trigger it needs was not met: never usable this battle.
  *   permanent: 'active' from the first tick to the end of the battle.
  *   limited:   'inactive' -> (SPECIAL input) 'active' for limitTicks -> 'spent'.
  * A new battle starts from scratch, so a spent Powerup is available again.
@@ -464,7 +473,7 @@ export interface FighterPowerup {
   id: string;
   type: PowerupType;
   limited: boolean;
-  state: 'inactive' | 'active' | 'spent';
+  state: 'locked' | 'inactive' | 'active' | 'spent';
   /** Ticks left while a limited Powerup is active. */
   ticksLeft: number;
   limitTicks: number;

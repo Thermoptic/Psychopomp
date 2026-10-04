@@ -90,6 +90,7 @@ export function computeBuild(def: CreatureDef, prep: DicePrep, rules: Ruleset, b
     specialName: def.special?.name ?? null,
     specialActive,
     specialManual,
+    powerupLocked: !!def.powerupId && def.powerupNeedsTrigger === true && !specialActive,
     stats,
   };
 }

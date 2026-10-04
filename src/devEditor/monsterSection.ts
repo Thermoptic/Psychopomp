@@ -357,6 +357,16 @@ export function monsterForm(ed: ItemEditor<'monster'>, refresh: () => void, rebu
       ),
       'stored as the Powerup id, never a copy; replaces the own attack',
     ),
+    d.powerupId
+      ? row(
+          'Needs trigger',
+          h('input', { type: 'checkbox', checked: d.powerupNeedsTrigger === true, on: { change: (e: Event) => edit((m) => (m.powerupNeedsTrigger = (e.target as HTMLInputElement).checked), true) } }),
+          "the Powerup only works if the SPECIAL slot conditions below are met by the dice; otherwise it is locked for the battle",
+        )
+      : null,
+    d.powerupId && d.powerupNeedsTrigger && !(d.special && slots.some((c) => c !== null))
+      ? h('div', { class: 'note', text: 'No Special slot condition is set, so this Powerup would never unlock. Set at least one SLOT in SPECIAL below.' })
+      : null,
   );
 
   // --- behaviour / advanced --------------------------------------------------------------------
