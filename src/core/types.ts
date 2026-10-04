@@ -461,11 +461,10 @@ export interface Fighter {
   /** The equipped Powerup's state in this battle, or null. */
   powerup: FighterPowerup | null;
   /**
-   * Charge Attack: 'none'; 'holding' (attack pressed, not yet held long enough: a release
-   * is a tap = the own attack); 'charging' (held; ticks counted from the start of charging);
+   * Charge Attack (Left Trigger held): 'none'; 'charging' (ticks counted since it started);
    * 'ready' (fires on release).
    */
-  charge: { state: 'none' | 'holding' | 'charging' | 'ready'; ticks: number };
+  charge: { state: 'none' | 'charging' | 'ready'; ticks: number };
 }
 
 /**
@@ -483,9 +482,7 @@ export interface FighterPowerup {
   /** Ticks left while a limited Powerup is active. */
   ticksLeft: number;
   limitTicks: number;
-  /** Charge: ticks attack must be held before charging starts (a shorter press = a tap, the own attack). */
-  holdTicks: number;
-  /** Charge: ticks the attack is then charged before it can be released (0 = no charge). */
+  /** Charge: ticks the Left Trigger must be held before the attack can be released (0 = no charge). */
   chargeTicks: number;
   /** The Powerup's weapon, used while it is active. */
   weapon: Weapon;
@@ -647,6 +644,8 @@ export interface FighterInput {
   dash?: boolean;
   /** Special pressed this tick (edge, Left Trigger). Also activates a limited Powerup. */
   special?: boolean;
+  /** Special held (Left Trigger held): charges a Charge Powerup. */
+  specialHeld?: boolean;
 }
 
 export const IDLE_INPUT: FighterInput = { dx: 0, dy: 0, attack: false, block: false };

@@ -280,7 +280,7 @@ describe('twin-stick: Special (Left Trigger) and Left Bumper', () => {
     const lb = pad([0, 0, 0, 0], { 4: 1 });
     expect([...readPad(lb, DEFAULT_BINDINGS).held]).toEqual(['previous']); // board-cursor only
     const input = inputFrom(lb, ['previous']);
-    expect(input).toEqual({ dx: 0, dy: 0, aimX: 0, aimY: 0, attack: false, attackHeld: false, block: false, dash: false, special: false });
+    expect(input).toEqual({ dx: 0, dy: 0, aimX: 0, aimY: 0, attack: false, attackHeld: false, block: false, dash: false, special: false, specialHeld: false });
     const s0 = fight(manual);
     expect(step(s0, input).s).toEqual(step(s0, idle).s);
   });

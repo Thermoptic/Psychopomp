@@ -165,9 +165,8 @@ function expirePowerup(f: Fighter, events: GameEvent[]): void {
   pu.ticksLeft = 0;
   f.weapon = f.baseWeapon;
   if (f.charge.state !== 'none') {
-    // A tap still pending (not yet held long enough to charge) is just dropped.
-    if (f.charge.state !== 'holding') events.push({ type: 'CHARGE_CANCELLED', side: f.side, reason: 'expired' });
     f.charge = { state: 'none', ticks: 0 };
+    events.push({ type: 'CHARGE_CANCELLED', side: f.side, reason: 'expired' });
   }
   events.push({ type: 'POWERUP_EXPIRED', side: f.side, powerupId: pu.id });
 }
@@ -520,7 +519,9 @@ export function stepCombat(
     }
     // The same input activates a limited Powerup (once per battle).
     const pu = f.powerup;
+    let justActivated = false;
     if (input.special && pu?.limited && pu.state === 'inactive') {
+      justActivated = true;
       pu.state = 'active';
       pu.ticksLeft = pu.limitTicks;
       f.weapon = pu.weapon;
@@ -531,29 +532,25 @@ export function stepCombat(
     const my = clampAxis(input.dy);
     const busy = f.windup > 0 || f.guard > 0 || f.dashTicks > 0;
     const wantsAttack = input.attack || (f.autoFire && input.attackHeld === true);
-    // Charge Attack: a tap fires the own attack (on release); holding attack for
-    // holdTicks starts charging, then chargeTicks later it is ready and releasing fires
-    // the Powerup's attack (releasing earlier cancels). Nothing else (block, dash, a new
-    // attack) starts meanwhile.
+    // Charge Attack (Left Trigger / special): pressing it starts charging, holding it for
+    // chargeTicks makes the charge ready, releasing then fires the Powerup's attack
+    // (releasing earlier cancels). Nothing else (block, dash, a normal attack) starts
+    // meanwhile. The press that activates a Limited Powerup does not also start a charge.
     const charging = f.charge.state !== 'none';
     if (charging) {
-      if (input.attackHeld) {
+      if (input.specialHeld) {
         f.charge.ticks++;
-        if (f.charge.state === 'holding' && f.charge.ticks >= f.powerup!.holdTicks) {
-          f.charge = { state: 'charging', ticks: 0 };
-          events.push({ type: 'CHARGE_STARTED', side: f.side });
-        } else if (f.charge.state === 'charging' && f.charge.ticks >= f.powerup!.chargeTicks) {
+        if (f.charge.state === 'charging' && f.charge.ticks >= f.powerup!.chargeTicks) {
           f.charge.state = 'ready';
           events.push({ type: 'CHARGE_READY', side: f.side });
         }
       } else {
-        const was = f.charge.state;
+        const ready = f.charge.state === 'ready';
         f.charge = { state: 'none', ticks: 0 };
-        if (was === 'ready') {
+        if (ready) {
           events.push({ type: 'CHARGE_RELEASED', side: f.side });
           startAttack(combat, f, f.weapon, input, rules, events);
-        } else if (was === 'holding') startAttack(combat, f, f.baseWeapon, input, rules, events); // quick tap: the own attack
-        else events.push({ type: 'CHARGE_CANCELLED', side: f.side, reason: 'early' });
+        } else events.push({ type: 'CHARGE_CANCELLED', side: f.side, reason: 'early' });
       }
     } else if (input.block && !busy && f.blockCharges > 0) {
       f.blockCharges--;
@@ -578,11 +575,12 @@ export function stepCombat(
         f.dashHit = false;
         events.push({ type: 'DASH', side: f.side });
       }
+    } else if (input.special && !justActivated && chargeActive(f) && !busy && f.cooldown === 0) {
+      f.charge = { state: 'charging', ticks: 0 };
+      events.push({ type: 'CHARGE_STARTED', side: f.side });
     } else if (wantsAttack && !busy && f.cooldown === 0) {
-      if (chargeActive(f)) {
-        // Charge Attack: wait to see whether this is a tap or a hold (see above).
-        f.charge = { state: 'holding', ticks: 0 };
-      } else startAttack(combat, f, f.weapon, input, rules, events);
+      // With a Charge Powerup the attack button is always the own (normal) attack.
+      startAttack(combat, f, chargeActive(f) ? f.baseWeapon : f.weapon, input, rules, events);
     }
 
     if (f.dashTicks > 0) {
@@ -606,7 +604,7 @@ export function stepCombat(
         f.dashTicks = 0; // a dash stops when it runs into the opponent
       }
     } else if (f.windup === 0 && f.guard === 0) {
-      if (f.charge.state === 'charging' || f.charge.state === 'ready') {
+      if (f.charge.state !== 'none') {
         // Charging: almost stationary (CHARGE_MOVE_PERCENT of the speed, spread over the ticks).
         const t = f.charge.ticks;
         const step = Math.trunc((f.moveSpeed * CHARGE_MOVE_PERCENT * t) / 100) - Math.trunc((f.moveSpeed * CHARGE_MOVE_PERCENT * Math.max(0, t - 1)) / 100);

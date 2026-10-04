@@ -56,6 +56,7 @@ export function toFighterInput(f: ActionFrame, q: QueuedPresses, autoAim: { x: n
     block: q.block,
     dash: q.dash,
     special: q.special,
+    specialHeld: f.held.has('special'),
   };
 }
 
