@@ -4,7 +4,7 @@
 // etc.); the panels only send commands, the core decides what is legal.
 
 import type { MatchUi, PrepCursor } from '../app/ui';
-import { baseBattleStats, computeBuild, computeDashCooldown, slotConditionLabel, type BattleBuild, type BattleSide, type BattleStats, type CombatRules, type GameState, type PlayerId } from '../core';
+import { baseBattleStats, computeBuild, powerupIsGated, computeDashCooldown, slotConditionLabel, type BattleBuild, type BattleSide, type BattleStats, type CombatRules, type GameState, type PlayerId } from '../core';
 import { categoryIcon, die, emblem, hpBar, panel, playerTag, rect, sectionPlate, segmentBar, strokeRect, text, wrapText, type Ctx } from './draw';
 import { prepPanelLayout, type Rect } from './layout';
 import { prepButton, prepPhaseLabel, shortRequirement } from './prepModel';
@@ -158,9 +158,9 @@ export function drawPrepPanel(ctx: Ctx, state: GameState, ui: MatchUi, owner: Pl
     if (anyInSpecial) {
       text(ctx, build.specialActive ? 'ACTIVE' : 'NOT MET', sp.x + sp.w - 8, sp.y + 17, { size: 11, color: build.specialActive ? C.ok : C.danger, align: 'right' });
     }
-    if (info.def.powerupId && info.def.powerupNeedsTrigger) {
-      // The Powerup is tied to the Special trigger: its state replaces the description line.
-      const pu = state.powerupDefs[info.def.powerupId];
+    if (powerupIsGated(info.def)) {
+      // The Powerup is tied to the slot conditions: its state replaces the description line.
+      const pu = state.powerupDefs[info.def.powerupId!];
       const open = !build.powerupLocked;
       text(ctx, `${(pu?.name ?? 'POWERUP').toUpperCase()} ${open ? 'UNLOCKED' : 'LOCKED'}`, sp.x + 8, sp.y + 36, { size: 11, color: open ? C.ok : C.danger });
     } else wrapText(ctx, info.def.special.description ?? '', sp.x + 8, sp.y + 34, sp.w - 16, { size: 11, color: C.text });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ContentLibrary, memoryStorage } from '../src/content/library';
+import { ContentLibrary, defaultSpecial, memoryStorage } from '../src/content/library';
+import { powerupIsGated } from '../src/core';
 import {
   applyCommand,
   computeDamage,
@@ -546,11 +547,11 @@ describe('Powerup Power override', () => {
 
 // --- POWERUP NEEDS THE SPECIAL TRIGGER --------------------------------------------------------
 
-describe('Powerup tied to the Special trigger', () => {
-  /** P1 monster 'a' with trigger "slot 1 = Even" and a Powerup; its slot-1 die is `die`. */
-  function triggered(die: number, needs: boolean, powerup: PowerupDef = charge({ chargeTime: 2 })): GameState {
-    const a = testCreature('a', { maxHp: 500 }, { powerupId: powerup.id, powerupNeedsTrigger: needs, attack: RANGED_ATTACK, dice: { sides: 6, slots: { speed: 1, power: 1, shield: 1, dash: 1, block: 1 } } });
-    setSlotCondition(a, 0, 'even', 5);
+describe('Powerup unlocked by its slot conditions', () => {
+  /** P1 monster 'a' with a Powerup and (if `gated`) the condition "slot 1 = Even"; its slot-1 die is `die`. */
+  function triggered(die: number, gated: boolean, powerup: PowerupDef = charge({ chargeTime: 2 })): GameState {
+    const a = testCreature('a', { maxHp: 500 }, { powerupId: powerup.id, attack: RANGED_ATTACK, dice: { sides: 6, slots: { speed: 1, power: 1, shield: 1, dash: 1, block: 1 } } });
+    if (gated) setSlotCondition(a, 0, 'even', 5);
     const pack = basePack();
     let s = createMatch({
       ruleset: { ...pack.ruleset, combat: { ...pack.ruleset.combat, walls: false } },
@@ -600,17 +601,19 @@ describe('Powerup tied to the Special trigger', () => {
     expect(A(r.s).weapon.powerupId).toBeNull();
   });
 
-  it('without "needs trigger" the Powerup works whatever the dice are (as before)', () => {
+  it('without any slot condition the Powerup is always available (nothing to meet)', () => {
     const s = triggered(3, false);
-    expect(s.battle!.builds!.attacker).toMatchObject({ specialActive: false, powerupLocked: false });
+    expect(s.battle!.builds!.attacker).toMatchObject({ powerupLocked: false });
     expect(A(s).powerup!.state).toBe('active');
   });
 
-  it('a Powerup that needs the trigger on a monster without a Special is always locked; validation accepts the flag', () => {
-    const a = testCreature('a', {}, { powerupId: 'gun', powerupNeedsTrigger: true });
-    const { lib } = fresh();
-    expect(lib.validateMonster({ ...lib.newMonster(), powerupNeedsTrigger: true }, null).join()).not.toMatch(/powerupNeedsTrigger/);
-    expect(lib.validateMonster({ ...lib.newMonster(), powerupNeedsTrigger: 'yes' as never }, null).join()).toMatch(/powerupNeedsTrigger/);
+  it('a monster without a Special has no condition: its Powerup is never locked', () => {
+    const a = testCreature('a', {}, { powerupId: 'gun' });
     expect(a.special).toBeNull();
+    expect(powerupIsGated(a)).toBe(false);
+  });
+
+  it('the default Special has an empty effect: slot conditions only gate the Powerup', () => {
+    expect(defaultSpecial(5).effect).toEqual({ type: 'multi', effects: [] });
   });
 });

@@ -55,13 +55,17 @@ export type SaveResult<T> = { ok: true; item: T } | { ok: false; errors: string[
 const ID_RE = /^[a-z0-9_]+$/;
 const COLLECTION = { monster: 'monsters', powerup: 'powerups' } as const;
 
-/** Default Special for new monsters: five unused trigger slots (never triggers until one is set). */
+/**
+ * Default Special for new monsters: five unused slot conditions. They only gate
+ * the monster's Powerup (see powerupIsGated); the effect is empty, so meeting
+ * them changes no stats.
+ */
 export function defaultSpecial(slotCount: number): NonNullable<CreatureDef['special']> {
   return {
     name: 'Special',
     description: '',
     requirement: { type: 'slots', slots: new Array(slotCount).fill(null) },
-    effect: { type: 'addPower', value: 2 },
+    effect: { type: 'multi', effects: [] },
     activation: 'auto',
   };
 }

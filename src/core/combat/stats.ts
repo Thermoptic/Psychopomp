@@ -65,6 +65,17 @@ export function applyEffect(stats: BattleStats, effect: Effect): void {
   }
 }
 
+/**
+ * Is the monster's Powerup gated by dice? A monster with a Powerup is gated when
+ * it has a requirement (the slot conditions in the editor); a 'slots' requirement
+ * with no slot set means "no requirement", so the Powerup is always available.
+ */
+export function powerupIsGated(def: CreatureDef): boolean {
+  if (!def.powerupId || !def.special) return false;
+  const req = def.special.requirement;
+  return req.type !== 'slots' || req.slots.some((c) => c !== null);
+}
+
 /** Computes the temporary build from a creature's content and its final dice. */
 export function computeBuild(def: CreatureDef, prep: DicePrep, rules: Ruleset, bonus: Partial<BattleStats> = {}): BattleBuild {
   const view = diceView(prep);
@@ -90,7 +101,8 @@ export function computeBuild(def: CreatureDef, prep: DicePrep, rules: Ruleset, b
     specialName: def.special?.name ?? null,
     specialActive,
     specialManual,
-    powerupLocked: !!def.powerupId && def.powerupNeedsTrigger === true && !specialActive,
+    // The Powerup is only available while its slot conditions are met by the dice.
+    powerupLocked: powerupIsGated(def) && !specialActive,
     stats,
   };
 }

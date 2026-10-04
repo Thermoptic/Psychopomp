@@ -1,7 +1,8 @@
 // MONSTERS section: identity, health, player, 9×9 position, start modifiers,
-// Special slot conditions, Powerup reference, behaviour. Edits CreatureDef.
+// attack, Powerup reference + the dice slot conditions that unlock it, behaviour.
+// Edits CreatureDef.
 
-import { baseBattleStats, cellCode, computeDashCooldown, describeRequirement, parseCell, type CreatureDef, type Effect, type Placement, type SlotCondition } from '../core';
+import { baseBattleStats, cellCode, computeDashCooldown, describeRequirement, powerupIsGated, parseCell, type CreatureDef, type Placement, type SlotCondition } from '../core';
 import { resolveDash } from '../core/combat/simulation';
 import { PORTRAIT_IDS, defaultFacing, parsePortraitRef, portraitUrl } from '../rendering/art';
 import { drawCreature } from '../rendering/sprites';
@@ -30,8 +31,6 @@ import {
 } from './model';
 
 const idSanitize = (v: string) => v.toLowerCase().replace(/\s/g, '_').replace(/[^a-z0-9_]/g, '').slice(0, 32);
-const EFFECTS: Array<Exclude<Effect['type'], 'multi'>> = ['addPower', 'addShield', 'addSpeed', 'addBlock', 'addDash'];
-const EFFECT_LABELS = ['+ Power', '+ Shield', '+ Speed', '+ Block', '+ Dash (-1 s cooldown each)'];
 const signed = (n: number) => (n > 0 ? `+${n}` : String(n));
 
 /** The board cell of the selected piece of the monster being edited (kept across form rebuilds). */
@@ -269,7 +268,7 @@ export function monsterForm(ed: ItemEditor<'monster'>, refresh: () => void, rebu
     ...modRows,
   );
 
-  // --- Special --------------------------------------------------------------------------------
+  // --- Powerup slot conditions ----------------------------------------------------------------
   const count = rules.dice.count;
   const cats = slotCategories(d);
   const { slots, legacy } = slotConditions(d, count);
@@ -289,44 +288,6 @@ export function monsterForm(ed: ItemEditor<'monster'>, refresh: () => void, rebu
       ),
     ),
   );
-  const sp = d.special;
-  const special = group(
-    'SPECIAL',
-    legacy ? h('div', { class: 'note', text: `Uses an older trigger (${describeRequirement(sp!.requirement)}). Setting a slot replaces it.` }) : null,
-    slotEls,
-    h('div', { class: 'hint dim', text: 'Slot N checks the die placed in the monster\'s Nth dice slot. None = not used. All used slots must match; with no slot set the Special never triggers.' }),
-    sp
-      ? h(
-          'div',
-          {},
-          row('Name', textInput(sp.name, (v) => edit((m) => m.special && (m.special.name = v)))),
-          sp.effect.type === 'multi'
-            ? row('Effect', h('span', { class: 'dim', text: 'combined effect (edit as JSON)' }))
-            : row(
-                'Effect',
-                h(
-                  'div',
-                  { class: 'slider' },
-                  selectBox(EFFECT_LABELS, Math.max(0, EFFECTS.indexOf(sp.effect.type)), (i) =>
-                    edit((m) => m.special && m.special.effect.type !== 'multi' && (m.special.effect = { type: EFFECTS[i], value: m.special.effect.value })),
-                  ),
-                  h('input', {
-                    type: 'number',
-                    min: '-99',
-                    max: '99',
-                    value: String(sp.effect.value),
-                    on: { input: (e: Event) => edit((m) => m.special && m.special.effect.type !== 'multi' && (m.special.effect = { ...m.special.effect, value: Math.round(Number((e.target as HTMLInputElement).value) || 0) })) },
-                  }),
-                ),
-              ),
-          row(
-            'Activation',
-            selectBox(['Auto (when READY)', 'Manual (Left Trigger)'], sp.activation === 'manual' ? 1 : 0, (i) => edit((m) => m.special && (m.special.activation = i ? 'manual' : 'auto'))),
-          ),
-        )
-      : null,
-  );
-
   // --- Attack: the monster's own melee/ranged weapon ------------------------------------------
   const pus = lib.powerups();
   const equipped = d.powerupId ? pus.find((p) => p.id === d.powerupId) : undefined;
@@ -355,17 +316,15 @@ export function monsterForm(ed: ItemEditor<'monster'>, refresh: () => void, rebu
       selectBox(['None (use own attack)', ...pus.map((p) => `${p.name} · ${powerupLabel(p)}`)], d.powerupId ? pus.findIndex((p) => p.id === d.powerupId) + 1 : 0, (i) =>
         edit((m) => (m.powerupId = i === 0 ? null : pus[i - 1].id), true),
       ),
-      'stored as the Powerup id, never a copy; replaces the own attack',
+      'stored as the Powerup id, never a copy; replaces the own attack while unlocked',
     ),
+    d.powerupId && legacy ? h('div', { class: 'note', text: `Uses an older trigger (${describeRequirement(d.special!.requirement)}). Setting a slot replaces it.` }) : null,
+    d.powerupId ? slotEls : null,
     d.powerupId
-      ? row(
-          'Needs trigger',
-          h('input', { type: 'checkbox', checked: d.powerupNeedsTrigger === true, on: { change: (e: Event) => edit((m) => (m.powerupNeedsTrigger = (e.target as HTMLInputElement).checked), true) } }),
-          "the Powerup only works if the SPECIAL slot conditions below are met by the dice; otherwise it is locked for the battle",
-        )
-      : null,
-    d.powerupId && d.powerupNeedsTrigger && !(d.special && slots.some((c) => c !== null))
-      ? h('div', { class: 'note', text: 'No Special slot condition is set, so this Powerup would never unlock. Set at least one SLOT in SPECIAL below.' })
+      ? h('div', {
+          class: 'hint dim',
+          text: "The Powerup is only available in an arena fight if the dice in these slots meet the conditions (e.g. SLOT 2 = ODD: a d5 there unlocks it). All used slots must match. If not met, the monster fights with its own Melee/Ranged attack as normal. None = not used; with no slot set the Powerup is always available.",
+        })
       : null,
   );
 
@@ -430,7 +389,7 @@ export function monsterForm(ed: ItemEditor<'monster'>, refresh: () => void, rebu
     ),
   );
 
-  return h('div', {}, identity, avatar, health, player, position, movement, modifiers, attack, powerup, special, behaviour);
+  return h('div', {}, identity, avatar, health, player, position, movement, modifiers, attack, powerup, behaviour);
 }
 
 export function monsterPreview(ed: ItemEditor<'monster'>): HTMLElement {
@@ -469,8 +428,7 @@ export function monsterPreview(ed: ItemEditor<'monster'>): HTMLElement {
       tr('Attack', weaponSummary(d.attack, rules)),
       tr('Powerup', pu ? `${pu.name} (${pu.type}) - replaces attack` : 'none'),
       tr('Auto Fire', d.attack?.autoFire ? 'yes' : 'no'),
-      tr('Special', d.special ? `${d.special.name} · ${d.special.activation === 'manual' ? 'LT' : 'auto'}` : 'none'),
-      tr('Trigger', d.special ? describeRequirement(d.special.requirement) : '-'),
+      tr('Unlocked by', pu ? (powerupIsGated(d) ? describeRequirement(d.special!.requirement) : 'always') : '-'),
     ),
   );
 }
