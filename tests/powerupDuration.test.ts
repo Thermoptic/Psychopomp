@@ -99,9 +99,15 @@ const closeIn = (s: GameState) => {
 };
 const HOLD = { attackHeld: true };
 const PRESS = { attack: true, attackHeld: true };
-/** Press, hold until fully charged (chargeTime seconds), then release. */
+/** Press and hold for the 1 s hold time: the charge has just started (a shorter press is a tap). */
+const startCharge = (s: GameState, extra: Partial<FighterInput> = {}) => {
+  const a = run(s, 1, { ...PRESS, ...extra });
+  const b = run(a.s, TICK, { ...HOLD, ...extra });
+  return { s: b.s, events: [...a.events, ...b.events] };
+};
+/** Press, hold until fully charged (chargeTime seconds after the hold time), then release. */
 const chargeAndRelease = (s: GameState, seconds: number) => {
-  s = run(s, 1, PRESS).s;
+  s = startCharge(s).s;
   s = run(s, seconds * TICK, HOLD).s;
   return run(s, 1);
 };
@@ -258,12 +264,45 @@ describe('Powerup duration', () => {
 // --- CHARGE ---------------------------------------------------------------------------------
 
 describe('Charge', () => {
-  it('pressing attack starts charging instead of attacking; ready after exactly Charge Time', () => {
+  it('a quick tap fires the own attack (not the Powerup attack) when released, without charging', () => {
+    const own = structuredClone(A(battle(charge({ chargeTime: 3 }), RANGED_ATTACK)).baseWeapon);
     let s = battle(charge({ chargeTime: 3 }), RANGED_ATTACK);
     let r = run(s, 1, PRESS);
     s = r.s;
+    expect(A(s).charge).toEqual({ state: 'holding', ticks: 0 });
+    expect(has(r.events, 'PROJECTILE_FIRED')).toBe(false); // decided on release
+    r = run(s, 10, HOLD);
+    expect(has(r.events, 'CHARGE_STARTED')).toBe(false);
+    r = run(r.s, 1);
+    expect(count(r.events, 'PROJECTILE_FIRED')).toBe(1);
+    expect(has(r.events, 'CHARGE_STARTED')).toBe(false);
+    expect(has(r.events, 'CHARGE_CANCELLED')).toBe(false);
+    expect(A(r.s).charge).toEqual({ state: 'none', ticks: 0 });
+    // The own attack's rate of fire, not the Powerup's.
+    expect(A(r.s).cooldown).toBe(own.kind === 'ranged' ? own.cooldownTicks : A(r.s).attackCooldownTicks);
+  });
+
+  it('a quick tap with a melee own attack swings the own attack (own Range/Power), not the Powerup melee', () => {
+    let s = closeIn(battle(meleeCharge({ chargeTime: 1, melee: { speed: 1, knockback: 10, range: 10 } })));
+    const own = A(s).baseWeapon;
+    expect(own).not.toEqual(A(s).weapon);
+    s = run(s, 1, PRESS).s;
+    const r = run(s, 1);
+    expect(has(r.events, 'ATTACK_STARTED')).toBe(true);
+    expect(A(r.s).swingWeapon).toEqual(own);
+    expect(A(r.s).cooldown).toBe(own.kind === 'melee' ? (own.cooldownTicks ?? A(r.s).attackCooldownTicks) : -1);
+  });
+
+  it('holding attack for 1 s starts charging (not before); ready after exactly Charge Time more', () => {
+    let s = battle(charge({ chargeTime: 3 }), RANGED_ATTACK);
+    s = run(s, 1, PRESS).s;
+    let r = run(s, TICK - 1, HOLD);
+    expect(has(r.events, 'CHARGE_STARTED')).toBe(false);
+    expect(A(r.s).charge.state).toBe('holding');
+    r = run(r.s, 1, HOLD);
     expect(has(r.events, 'CHARGE_STARTED')).toBe(true);
     expect(has(r.events, 'PROJECTILE_FIRED')).toBe(false);
+    s = r.s;
     expect(A(s).charge).toEqual({ state: 'charging', ticks: 0 });
     r = run(s, 3 * TICK - 1, HOLD);
     s = r.s;
@@ -282,7 +321,7 @@ describe('Charge', () => {
 
   it('respects other charge times (1 s and 10 s)', () => {
     for (const secs of [1, 10]) {
-      let s = run(battle(charge({ chargeTime: secs }), RANGED_ATTACK), 1, PRESS).s;
+      let s = startCharge(battle(charge({ chargeTime: secs }), RANGED_ATTACK)).s;
       s = run(s, secs * TICK - 1, HOLD).s;
       expect(A(s).charge.state).toBe('charging');
       expect(A(run(s, 1, HOLD).s).charge.state).toBe('ready');
@@ -294,7 +333,8 @@ describe('Charge', () => {
     const plain = battle(charge(), RANGED_ATTACK);
     const x0 = A(plain).x;
     const normal = A(run(plain, 60, right).s).x - x0;
-    let s = run(battle(charge(), RANGED_ATTACK), 1, { ...PRESS, ...right }).s;
+    // Holding (the first second) moves normally; only the charge itself slows down.
+    let s = startCharge(battle(charge(), RANGED_ATTACK), right).s;
     const c0 = A(s).x;
     s = run(s, 60, { ...HOLD, ...right }).s;
     const charged = A(s).x - c0;
@@ -310,7 +350,7 @@ describe('Charge', () => {
   });
 
   it('releasing early cancels: no attack, back to normal, and can charge again', () => {
-    let s = run(battle(charge({ chargeTime: 3 }), RANGED_ATTACK), 1, PRESS).s;
+    let s = startCharge(battle(charge({ chargeTime: 3 }), RANGED_ATTACK)).s;
     s = run(s, TICK, HOLD).s;
     let r = run(s, 1);
     s = r.s;
@@ -318,8 +358,7 @@ describe('Charge', () => {
     expect(has(r.events, 'PROJECTILE_FIRED')).toBe(false);
     expect(A(s).charge).toEqual({ state: 'none', ticks: 0 });
     expect(A(s).cooldown).toBe(0); // nothing was spent
-    r = run(s, 1, PRESS);
-    expect(has(r.events, 'CHARGE_STARTED')).toBe(true);
+    expect(has(startCharge(s).events, 'CHARGE_STARTED')).toBe(true);
   });
 
   it('ranged: release after ready fires the configured ranged attack (same projectile, same cooldown)', () => {
@@ -329,7 +368,7 @@ describe('Charge', () => {
     let s = battle(charge({ chargeTime: 2 }), RANGED_ATTACK);
     const weaponBefore = structuredClone(A(s).weapon);
     const statsBefore = structuredClone(A(s).stats);
-    s = run(s, 1, PRESS).s;
+    s = startCharge(s).s;
     s = run(s, 2 * TICK, HOLD).s;
     // Aim and position as in the reference shot.
     const r = run(s, 1);
@@ -362,7 +401,7 @@ describe('Charge', () => {
     expect(weapon).toMatchObject({ kind: 'melee', range: M.meleeRange(8), knockback: M.meleeKnockback(6) });
     const expected = computeDamage(A(s).stats, D(s).stats, s.ruleset.combat);
     const hp = D(s).hp;
-    s = run(s, 1, PRESS).s;
+    s = startCharge(s).s;
     expect(A(s).windup).toBe(0); // charging, not swinging
     s = run(s, TICK, HOLD).s;
     let r = run(s, 1);
@@ -393,9 +432,9 @@ describe('Charge', () => {
     let r = run(s, 1, PRESS);
     expect(has(r.events, 'CHARGE_STARTED')).toBe(false);
     s = run(r.s, M.rateOfFireTicks(3, s.ruleset.combat)).s;
-    r = run(s, 1, PRESS);
+    r = startCharge(s);
     expect(has(r.events, 'CHARGE_STARTED')).toBe(true);
-    s = run(r.s, TICK, HOLD).s;
+    s = run(r.s, 1 * TICK, HOLD).s;
     r = run(s, 1);
     expect(count(r.events, 'PROJECTILE_FIRED')).toBe(1);
   });
@@ -425,14 +464,14 @@ describe('Limited + Charge', () => {
     s = run(r.s, 200).s; // cooldown over
     s = run(s, 1, { special: true }).s;
     expect(A(s).powerup!.state).toBe('active');
-    r = run(s, 1, PRESS);
+    r = startCharge(s);
     expect(has(r.events, 'CHARGE_STARTED')).toBe(true);
     expect(has(r.events, 'PROJECTILE_FIRED')).toBe(false);
     s = run(r.s, 2 * TICK, HOLD).s;
     r = run(s, 1);
     expect(count(r.events, 'PROJECTILE_FIRED')).toBe(1);
-    // Countdown tracked: after activation, 1 (press) + 120 (hold) + 1 (release) ticks of 600 used.
-    expect(A(r.s).powerup!.ticksLeft).toBe(10 * TICK - 122);
+    // Countdown tracked: after activation, 1 (press) + 60 (hold time) + 120 (charge) + 1 (release) ticks of 600 used.
+    expect(A(r.s).powerup!.ticksLeft).toBe(10 * TICK - 182);
   });
 
   it('when the timer reaches 0 the charge is no longer available (attacks are normal again)', () => {
@@ -446,9 +485,9 @@ describe('Limited + Charge', () => {
 
   it('a charge in progress when the Powerup expires is cancelled, without firing', () => {
     let s = run(limitedCharge(), 1, { special: true }).s;
-    s = run(s, 10 * TICK - 30).s;
+    s = run(s, 10 * TICK - 90).s;
     s = run(s, 1, PRESS).s;
-    const r = run(s, 60, HOLD);
+    const r = run(s, 90, HOLD);
     expect(r.events).toContainEqual({ type: 'CHARGE_CANCELLED', side: 'attacker', reason: 'expired' });
     expect(has(r.events, 'POWERUP_EXPIRED')).toBe(true);
     expect(has(r.events, 'CHARGE_READY')).toBe(false);
@@ -456,6 +495,17 @@ describe('Limited + Charge', () => {
     expect(A(r.s).charge).toEqual({ state: 'none', ticks: 0 });
     // Releasing afterwards does nothing either.
     expect(has(run(r.s, 1).events, 'PROJECTILE_FIRED')).toBe(false);
+  });
+
+  it('a press that has not yet become a charge when the Powerup expires is dropped quietly', () => {
+    let s = run(limitedCharge(), 1, { special: true }).s;
+    s = run(s, 10 * TICK - 30).s;
+    s = run(s, 1, PRESS).s;
+    const r = run(s, 60, HOLD);
+    expect(has(r.events, 'POWERUP_EXPIRED')).toBe(true);
+    expect(has(r.events, 'CHARGE_CANCELLED')).toBe(false);
+    expect(has(r.events, 'PROJECTILE_FIRED')).toBe(false);
+    expect(A(r.s).charge).toEqual({ state: 'none', ticks: 0 });
   });
 
   it('cannot be activated again in the same battle', () => {
@@ -578,7 +628,7 @@ describe('Powerup unlocked by its slot conditions', () => {
     const s = triggered(2, true);
     expect(s.battle!.builds!.attacker).toMatchObject({ specialActive: true, powerupLocked: false });
     expect(A(s).powerup!.state).toBe('active');
-    expect(has(run(s, 1, PRESS).events, 'CHARGE_STARTED')).toBe(true);
+    expect(has(startCharge(s).events, 'CHARGE_STARTED')).toBe(true);
   });
 
   it('trigger NOT met (odd die): the Powerup is locked for the whole battle and the own attack is used', () => {

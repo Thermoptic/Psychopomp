@@ -70,6 +70,8 @@ export const TIME_LIMIT_MAX = 60;
 /** Charge time, seconds. */
 export const CHARGE_TIME_MIN = 1;
 export const CHARGE_TIME_MAX = 10;
+/** A Charge Powerup: holding attack this long (seconds) starts the charge; a shorter press is a normal attack. */
+export const CHARGE_HOLD_SECONDS = 1;
 /** Movement while charging, percent of normal movement speed ("almost stationary"). */
 export const CHARGE_MOVE_PERCENT = 15;
 
@@ -109,6 +111,7 @@ export function fighterPowerup(def: CreatureDef, powerups: Record<string, Poweru
     state: limited ? 'inactive' : 'active',
     ticksLeft: 0,
     limitTicks: limited ? secondsToTicks(clampIn(p.timeLimit, TIME_LIMIT_MIN, TIME_LIMIT_MAX, 10), rules) : 0,
+    holdTicks: secondsToTicks(CHARGE_HOLD_SECONDS, rules),
     chargeTicks: charge ? secondsToTicks(clampIn(p.chargeTime, CHARGE_TIME_MIN, CHARGE_TIME_MAX, 3), rules) : 0,
     weapon: powerupWeapon(p, rules),
   };
