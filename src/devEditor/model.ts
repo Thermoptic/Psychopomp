@@ -303,7 +303,7 @@ export const POWERUP_TEXT = {
   permanent: 'Permanent: This ability remains active for the entire match, from the beginning of the match until the match ends.',
   limited: 'Limited: Activate this ability with the Powerup button. It remains active for the selected time, then expires and cannot be activated again during this round.',
   charge:
-    'Charge: Hold the attack button to charge your attack. Movement becomes extremely slow while charging. When ready, the monster flashes rapidly red and blue. Release the attack button to execute the configured attack.',
+    'Charge: A quick tap of the attack button is the normal attack. Hold the attack button for 1 second to start charging; the Charge Time then counts from that moment. Movement becomes extremely slow while charging. When ready, the monster flashes rapidly red and blue. Release the attack button to execute the configured attack; releasing earlier cancels the charge.',
 } as const;
 
 export const DEFAULT_TIME_LIMIT = 10;

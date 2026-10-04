@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { ContentLibrary, defaultSpecial, memoryStorage } from '../src/content/library';
 import { powerupIsGated } from '../src/core';
+import { DEFAULT_BINDINGS } from '../src/input/bindings';
+import { emptyFrame, type Action, type ActionFrame } from '../src/input/actions';
+import { readPad } from '../src/input/gamepad';
+import { emptyQueue, queuePresses, toFighterInput } from '../src/input/combatInput';
 import {
   applyCommand,
   computeDamage,
@@ -665,5 +669,114 @@ describe('Powerup unlocked by its slot conditions', () => {
 
   it('the default Special has an empty effect: slot conditions only gate the Powerup', () => {
     expect(defaultSpecial(5).effect).toEqual({ type: 'multi', effects: [] });
+  });
+});
+
+// --- CHARGE: TAP vs HOLD THROUGH THE REAL INPUT PIPELINE --------------------------------------
+
+/**
+ * Plays one attack-button press of `pressMs` through the game's input path (ActionFrame ->
+ * queuePresses -> toFighterInput -> COMBAT_TICK) at a given display refresh rate, then idles
+ * `tailMs`. `held` builds the frame's held set: keyboard and gamepad both just yield 'attack'.
+ */
+function playPress(s: GameState, pressMs: number, tailMs: number, hz = 60, held: () => Set<Action> = () => new Set<Action>(['attack'])) {
+  const events: GameEvent[] = [];
+  const dt = 1000 / hz;
+  const step = 1000 / s.ruleset.combat.tickRate;
+  let acc = 0;
+  let q = emptyQueue();
+  let prev = false;
+  const states: string[] = [];
+  for (let t = 0; t < pressMs + tailMs; t += dt) {
+    const down = t < pressMs;
+    const f: ActionFrame = emptyFrame();
+    if (down) f.held = held();
+    if (down && !prev) f.pressed.add('attack');
+    prev = down;
+    queuePresses(q, f);
+    acc += dt;
+    while (acc >= step) {
+      acc -= step;
+      const input = toFighterInput(f, q, null);
+      q = emptyQueue();
+      const r = applyCommand(s, { type: 'COMBAT_TICK', inputs: { attacker: input, defender: idle } });
+      if (r.error) throw new Error(r.error);
+      s = r.state;
+      events.push(...r.events);
+      states.push(A(s).charge.state);
+    }
+  }
+  return { s, events, states };
+}
+
+describe('Charge: tap = normal attack, hold 1 s = charge (real input path)', () => {
+  const fresh3 = () => battle(charge({ chargeTime: 3 }), RANGED_ATTACK);
+  for (const hz of [60, 144]) {
+    for (const ms of [30, 100, 500, 900]) {
+      it(`${hz} Hz: a ${ms} ms press fires the normal attack and never starts a charge`, () => {
+        const r = playPress(fresh3(), ms, 400, hz);
+        expect(count(r.events, 'PROJECTILE_FIRED')).toBe(1);
+        expect(has(r.events, 'CHARGE_STARTED')).toBe(false);
+        expect(has(r.events, 'CHARGE_CANCELLED')).toBe(false);
+        expect(r.states).not.toContain('charging');
+        // Responsive: the shot leaves within one tick of the release.
+        expect(A(r.s).charge.state).toBe('none');
+      });
+    }
+
+    it(`${hz} Hz: holding 1 s enters Charge and stays there; releasing before ready cancels (no shot)`, () => {
+      const held = playPress(fresh3(), 1200, 0, hz);
+      expect(has(held.events, 'CHARGE_STARTED')).toBe(true);
+      expect(A(held.s).charge.state).toBe('charging');
+      const r = playPress(fresh3(), 2000, 400, hz);
+      expect(r.events).toContainEqual({ type: 'CHARGE_CANCELLED', side: 'attacker', reason: 'early' });
+      expect(has(r.events, 'PROJECTILE_FIRED')).toBe(false);
+      expect(A(r.s).charge.state).toBe('none');
+    });
+
+    it(`${hz} Hz: holding 1 s + Charge Time reaches READY, and releasing fires the charged attack`, () => {
+      const ready = playPress(fresh3(), 4100, 0, hz);
+      expect(A(ready.s).charge.state).toBe('ready');
+      expect(count(ready.events, 'CHARGE_READY')).toBe(1);
+      const r = playPress(fresh3(), 4100, 300, hz);
+      expect(has(r.events, 'CHARGE_RELEASED')).toBe(true);
+      expect(count(r.events, 'PROJECTILE_FIRED')).toBe(1);
+    });
+  }
+
+  it('the visual charge states never appear during the first second; ring/flash only at charging/ready', () => {
+    const r = playPress(fresh3(), 4100, 0, 60);
+    const firstCharging = r.states.indexOf('charging');
+    const firstReady = r.states.indexOf('ready');
+    expect(r.states.slice(0, firstCharging).every((x) => x === 'holding')).toBe(true);
+    expect(firstCharging).toBeGreaterThanOrEqual(TICK - 2);
+    expect(firstCharging).toBeLessThanOrEqual(TICK + 2);
+    expect(firstReady).toBeGreaterThanOrEqual(firstCharging + 3 * TICK - 1);
+  });
+
+  it('gamepad (RT) goes through the same path: tap = attack, hold = charge', () => {
+    const pad = { connected: true, axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: i === 7, value: i === 7 ? 1 : 0 })) };
+    const padHeld = () => readPad(pad, DEFAULT_BINDINGS).held;
+    expect(padHeld().has('attack')).toBe(true);
+    const tap = playPress(fresh3(), 100, 400, 60, padHeld);
+    expect(count(tap.events, 'PROJECTILE_FIRED')).toBe(1);
+    expect(has(tap.events, 'CHARGE_STARTED')).toBe(false);
+    const hold = playPress(fresh3(), 1200, 0, 60, padHeld);
+    expect(has(hold.events, 'CHARGE_STARTED')).toBe(true);
+  });
+
+  it('a monster without Charge attacks immediately on press, exactly as before', () => {
+    const r = playPress(battle(null, RANGED_ATTACK), 1000, 0, 60);
+    expect(count(r.events, 'PROJECTILE_FIRED')).toBeGreaterThanOrEqual(1);
+    expect(r.states.every((x) => x === 'none')).toBe(true);
+    const first = playPress(battle(null, RANGED_ATTACK), 16, 0, 60);
+    expect(count(first.events, 'PROJECTILE_FIRED')).toBe(1);
+  });
+
+  it('is deterministic: the same press timing gives the same state', () => {
+    const a = playPress(fresh3(), 2500, 300, 144);
+    const b = playPress(fresh3(), 2500, 300, 144);
+    expect(a.s.battle!.combat).toEqual(b.s.battle!.combat);
+    expect(a.events).toEqual(b.events);
   });
 });
