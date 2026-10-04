@@ -64,6 +64,9 @@ export function ownWeapon(def: CreatureDef, rules: CombatRules): Weapon {
   return classicWeapon(rules);
 }
 
+/** Longest Powerup description (it has to fit the monster panel). */
+export const DESCRIPTION_MAX = 160;
+
 /** Limited Powerup time limit, seconds. */
 export const TIME_LIMIT_MIN = 1;
 export const TIME_LIMIT_MAX = 60;

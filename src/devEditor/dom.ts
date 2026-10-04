@@ -17,6 +17,12 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, props: Props = 
   return el;
 }
 
+export function textArea(value: string, onInput: (v: string) => void, opts: { placeholder?: string; maxLength?: number } = {}): HTMLTextAreaElement {
+  const area = h('textarea', { value, placeholder: opts.placeholder ?? '', rows: 3, maxLength: opts.maxLength ?? 500 });
+  area.addEventListener('input', () => onInput(area.value));
+  return area;
+}
+
 export function row(label: string, control: Node, hint?: string): HTMLElement {
   return h('div', { class: 'row' }, h('label', { text: label }), control, hint ? h('div', { class: 'hint', text: hint }) : null);
 }

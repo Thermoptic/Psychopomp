@@ -142,7 +142,14 @@ export function drawPlayerPanel(ctx: Ctx, state: GameState, ui: MatchUi, player:
   sectionPlate(ctx, sp);
   emblem(ctx, sp.x + sp.w - 40, sp.y + sp.h / 2 + 10, 3, 0.06);
   iconTile(ctx, sp.x + 8, sp.y + 8, 21, STAT_TILE.dash, 'special');
-  if (def.special) {
+  const powerup = def.powerupId ? state.powerupDefs[def.powerupId] : undefined;
+  if (powerup) {
+    // The monster's Powerup: its name, then its description.
+    text(ctx, powerup.name.toUpperCase(), sp.x + 36, sp.y + 24, { size: 13, color: C.ok });
+    ctx.fillStyle = 'rgba(184,234,121,0.18)';
+    ctx.fillRect(sp.x + 8, sp.y + 34, sp.w - 16, 1);
+    if (powerup.description) wrapText(ctx, powerup.description, sp.x + 10, sp.y + 52, sp.w - 20, { size: 11, color: C.text });
+  } else if (def.special) {
     text(ctx, def.special.name.toUpperCase(), sp.x + 36, sp.y + 24, { size: 13, color: C.ok });
     ctx.fillStyle = 'rgba(184,234,121,0.18)';
     ctx.fillRect(sp.x + 8, sp.y + 34, sp.w - 16, 1);

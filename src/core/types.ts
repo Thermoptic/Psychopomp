@@ -230,6 +230,8 @@ export type PowerupDuration = 'permanent' | 'limited';
 export interface PowerupDef extends WeaponSettings {
   id: string;
   name: string;
+  /** Short free text about how the ability works; shown under the Powerup's name on the monster panel. */
+  description?: string;
   type: PowerupType;
   /**
    * Power for this Powerup's attacks (1-10), replacing the monster's Power

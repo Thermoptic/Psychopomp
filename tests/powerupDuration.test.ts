@@ -20,6 +20,7 @@ import {
   POWERUP_TEXT,
   powerupLabel,
   setPowerupChargeMoveSpeed,
+  setPowerupDescription,
   setPowerupChargeTime,
   setPowerupDuration,
   setPowerupTimeLimit,
@@ -665,6 +666,38 @@ describe('Powerup unlocked by its slot conditions', () => {
 
   it('the default Special has an empty effect: slot conditions only gate the Powerup', () => {
     expect(defaultSpecial(5).effect).toEqual({ type: 'multi', effects: [] });
+  });
+});
+
+// --- DESCRIPTION ---------------------------------------------------------------------------
+
+describe('Powerup description', () => {
+  it('is optional free text: set, trimmed to the max length, and not stored when empty', () => {
+    const { lib } = fresh();
+    const p = lib.newPowerup();
+    expect(p.description).toBeUndefined();
+    setPowerupDescription(p, 'Hold LT to charge a heavy shot.');
+    expect(p.description).toBe('Hold LT to charge a heavy shot.');
+    setPowerupDescription(p, 'x'.repeat(500));
+    expect(p.description!.length).toBe(M.DESCRIPTION_MAX);
+    setPowerupDescription(p, '   ');
+    expect(p.description).toBeUndefined();
+  });
+
+  it('saves, reads back and validates', () => {
+    const { lib, storage } = fresh();
+    const p = { ...lib.newPowerup(), id: 'described', name: 'Described' };
+    setPowerupDescription(p, 'A short note about how it works.');
+    expect(lib.saveItem('powerup', p, null).ok).toBe(true);
+    const back = new ContentLibrary(basePack(), memoryStorage(storage.text)).get('powerup', 'described')!.item;
+    expect(back.description).toBe('A short note about how it works.');
+    expect(lib.validatePowerup({ ...p, description: 'x'.repeat(M.DESCRIPTION_MAX + 1) }, null).join()).toMatch(/description/);
+    expect(lib.validatePowerup({ ...p, description: 5 as unknown as string }, null).join()).toMatch(/description/);
+  });
+
+  it('reaches the game state, where the monster panel reads name and description', () => {
+    const s = battle(charge({ description: 'Heavy charged shot' }));
+    expect(Object.values(s.powerupDefs).find((d) => d.id === 'heavy')?.description).toBe('Heavy charged shot');
   });
 });
 

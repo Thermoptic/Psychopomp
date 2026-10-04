@@ -342,6 +342,13 @@ export function setPowerupChargeTime(p: PowerupDef, seconds: number): void {
   p.chargeTime = Math.max(M.CHARGE_TIME_MIN, Math.min(M.CHARGE_TIME_MAX, Math.round(seconds)));
 }
 
+/** Free-text description; an empty one is not stored. */
+export function setPowerupDescription(p: PowerupDef, text: string): void {
+  const t = text.slice(0, M.DESCRIPTION_MAX);
+  if (t.trim() === '') delete p.description;
+  else p.description = t;
+}
+
 export function setPowerupChargeMoveSpeed(p: PowerupDef, v: number): void {
   p.chargeMoveSpeed = Math.max(M.CHARGE_MOVE_MIN, Math.min(M.CHARGE_MOVE_MAX, Math.round(v)));
 }

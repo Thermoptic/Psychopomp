@@ -4,7 +4,7 @@
 // Edits PowerupDef (levels); core/combat/powerups.ts maps them to gameplay.
 
 import { powerupMapping as M, type PowerupDef } from '../core';
-import { group, h, row, segmented, slider, textInput } from './dom';
+import { group, h, row, segmented, slider, textArea, textInput } from './dom';
 import {
   DEFAULT_CHARGE_TIME,
   DEFAULT_TIME_LIMIT,
@@ -16,6 +16,7 @@ import {
   powerupLabel,
   setPowerupCharge,
   setPowerupChargeMoveSpeed,
+  setPowerupDescription,
   setPowerupChargeTime,
   setPowerupDuration,
   setPowerupPower,
@@ -89,6 +90,11 @@ export function powerupForm(ed: ItemEditor<'powerup'>, refresh: () => void, rebu
       'POWERUP',
       row('ID', textInput(d.id, (v) => edit((p) => (p.id = v)), { sanitize: idSanitize }), 'stable id monsters refer to'),
       row('Name', textInput(d.name, (v) => edit((p) => (p.name = v)))),
+      row(
+        'Description',
+        textArea(d.description ?? '', (v) => edit((p) => setPowerupDescription(p, v)), { maxLength: M.DESCRIPTION_MAX, placeholder: 'e.g. Hold LT to charge a heavy shot' }),
+        `shown under the Powerup name when picking monsters on the board (max ${M.DESCRIPTION_MAX} characters)`,
+      ),
       row(
         'Duration',
         segmented(
