@@ -542,6 +542,8 @@ export interface Projectile {
   impactRadius: number;
   /** Power override of the weapon that fired it (missing = the shooter's Power). */
   power?: number;
+  /** How the weapon that fired it looks (size, trail, colour): fixed at the shot, whatever the shooter fires next. */
+  look: { size: number; trail: number; color: string | null };
 }
 
 /** A static wall in the combat arena: 1-3 arena cells in a row (see combat/walls.ts). */

@@ -331,12 +331,11 @@ export function drawUnits(ctx: Ctx, state: GameState, ui: MatchUi, l: BoardLayou
       rect(ctx, { x: frame.x + frame.w - w - 1, y: frame.y + 1, w, h: 14 }, C.edgeDark);
       text(ctx, secs, frame.x + frame.w - 1 - w / 2, frame.y + 12, { size: 11, bold: true, mono: true, align: 'center', color: '#fff6d8' });
     }
-    if (f && f.weapon.kind === 'melee') {
-      // Swish across the aim cone, shown on the button press.
-      const reach = f.weapon.range * unitScale;
+    if (f) {
+      // Swish across the aim cone, shown on the button press; sized by the swing that was started.
       const half = coneHalfAngle(rules.attackConeCos);
       for (const sl of ui.slashes) {
-        if (sl.side === f.side) drawSwish(ctx, u.cx, u.cy, sl.aim, half, reach, 1 - sl.ms / SLASH_MS, color);
+        if (sl.side === f.side) drawSwish(ctx, u.cx, u.cy, sl.aim, half, sl.reach * unitScale, 1 - sl.ms / SLASH_MS, color);
       }
     }
     if (f) {

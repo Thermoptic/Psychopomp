@@ -76,8 +76,7 @@ function drawProjectiles(ctx: Ctx, state: GameState, ui: MatchUi, l: BoardLayout
   const scale = l.cell / state.ruleset.combat.cellUnits;
   for (const p of combat.projectiles) {
     const owner = state.creatures[p.side === 'attacker' ? state.battle!.attackerId : state.battle!.defenderId].owner;
-    const w = combat.fighters[p.side].weapon;
-    const look = w.kind === 'ranged' ? w.look : { size: 1, trail: 0, color: null };
+    const look = p.look;
     const color = look.color ?? playerColor(owner);
     const s = combatToScreen(state, l, p.x / 256, p.y / 256);
     const radius = 2 + look.size * 1.4;

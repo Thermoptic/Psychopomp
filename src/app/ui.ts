@@ -51,7 +51,7 @@ export interface MatchUi {
   /** Recent positions (combat units) of each projectile in flight, by id, for trails. */
   trails: Record<number, Array<{ x: number; y: number }>>;
   /** Melee swishes being drawn (a fast arc in the swing's aim direction). */
-  slashes: Array<{ side: BattleSide; ms: number; aim: { x: number; y: number } }>;
+  slashes: Array<{ side: BattleSide; ms: number; aim: { x: number; y: number }; reach: number }>;
   /** Queued combat button presses, consumed by the next fixed tick. */
   queued: Record<BattleSide, QueuedPresses>;
   /** Right stick currently deflected (reticle highlighted). */

@@ -234,6 +234,7 @@ function fireProjectile(combat: CombatState, f: Fighter, w: Weapon, input: Fight
     curveCos: cos,
     curveSin: sin,
     impactRadius: w.impactRadius,
+    look: { ...w.look },
     ...(w.power !== undefined ? { power: w.power } : {}),
   });
 }

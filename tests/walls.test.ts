@@ -172,7 +172,7 @@ describe('combat walls in a battle', () => {
     let s = walled();
     // A projectile flying straight at the wall.
     const c = s.battle!.combat!;
-    c.projectiles.push({ id: 1, side: 'attacker', x: 120 * 256, y: 360 * 256, vx: 8 * 256, vy: 0, speed: 8 * 256, travelled: 0, maxTravel: 4000 * 256, bouncesLeft: 0, homing: 0, curveCos: 65536, curveSin: 0, impactRadius: 10 });
+    c.projectiles.push({ id: 1, side: 'attacker', x: 120 * 256, y: 360 * 256, vx: 8 * 256, vy: 0, speed: 8 * 256, travelled: 0, maxTravel: 4000 * 256, bouncesLeft: 0, homing: 0, curveCos: 65536, curveSin: 0, impactRadius: 10, look: { size: 1, trail: 0, color: null } });
     for (let i = 0; i < 30; i++) s = tick(s);
     expect(s.battle!.combat!.projectiles).toHaveLength(0);
   });
@@ -180,7 +180,7 @@ describe('combat walls in a battle', () => {
   it('a projectile with a bounce left reflects off a wall', () => {
     let s = walled();
     const c = s.battle!.combat!;
-    c.projectiles.push({ id: 1, side: 'attacker', x: 120 * 256, y: 360 * 256, vx: 8 * 256, vy: 0, speed: 8 * 256, travelled: 0, maxTravel: 4000 * 256, bouncesLeft: 1, homing: 0, curveCos: 65536, curveSin: 0, impactRadius: 10 });
+    c.projectiles.push({ id: 1, side: 'attacker', x: 120 * 256, y: 360 * 256, vx: 8 * 256, vy: 0, speed: 8 * 256, travelled: 0, maxTravel: 4000 * 256, bouncesLeft: 1, homing: 0, curveCos: 65536, curveSin: 0, impactRadius: 10, look: { size: 1, trail: 0, color: null } });
     for (let i = 0; i < 30; i++) s = tick(s);
     const p = s.battle!.combat!.projectiles[0];
     expect(p).toBeDefined();

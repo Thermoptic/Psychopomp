@@ -667,6 +667,51 @@ describe('Powerup unlocked by its slot conditions', () => {
   });
 });
 
+// --- OWN ATTACK AND POWERUP ATTACK DO NOT SHARE SETTINGS -------------------------------------
+
+describe('Own attack and Powerup attack stay separate', () => {
+  const big = () => charge({ chargeTime: 1, ranged: { ...RANGED_ATTACK.ranged!, size: 10, trail: 7, impactSize: 9, speed: 9, color: '#00ff00' } });
+  const small = { ...RANGED_ATTACK, ranged: { ...RANGED_ATTACK.ranged!, size: 1, trail: 0, impactSize: 2, speed: 3 } } as AttackDef;
+
+  it('a projectile keeps the look and numbers of the weapon that fired it', () => {
+    let s = battle(big(), small);
+    // Normal attack (RT): the monster's own settings (size 1), not the Powerup's (size 10).
+    s = run(s, 1, PRESS).s;
+    const own = s.battle!.combat!.projectiles[0];
+    expect(own.look).toEqual({ size: 1, trail: 0, color: null });
+    expect(own.impactRadius).toBe(M.impactRadius(2));
+    expect(own.speed).toBe(M.projectileSpeed(3) * 256);
+    // Charged attack (LT): the Powerup's settings.
+    s = run(s, 200).s; // cooldown over
+    s = chargeAndRelease(s, 1).s;
+    const charged = s.battle!.combat!.projectiles.find((p) => p.id !== own.id)!;
+    expect(charged.look).toEqual({ size: 10, trail: 7, color: '#00ff00' });
+    expect(charged.impactRadius).toBe(M.impactRadius(9));
+    expect(charged.speed).toBe(M.projectileSpeed(9) * 256);
+  });
+
+  it('a limited Powerup activating does not change shots already in flight', () => {
+    let s = battle(charge({ chargeTime: undefined, duration: 'limited', timeLimit: 5, ranged: big().ranged }), small);
+    s = run(s, 1, PRESS).s;
+    const first = s.battle!.combat!.projectiles[0];
+    s = run(s, 1, { special: true }).s;
+    const w = A(s).weapon;
+    expect(w.kind === 'ranged' ? w.look.size : 0).toBe(10);
+    expect(s.battle!.combat!.projectiles.find((p) => p.id === first.id)!.look.size).toBe(1);
+  });
+
+  it('melee: the swing that starts decides its range (own vs Powerup)', () => {
+    const own = { type: 'melee', melee: { speed: 2, knockback: 1, range: 2 } } as AttackDef;
+    let s = closeIn(battle(meleeCharge({ chargeTime: 1, melee: { speed: 5, knockback: 9, range: 9 } }), own));
+    const r = run(s, 1, PRESS);
+    const sw = A(r.s).swingWeapon;
+    expect(sw.kind === 'melee' && sw.range).toBe(M.meleeRange(2));
+    const c = chargeAndRelease(closeIn(battle(meleeCharge({ chargeTime: 1, melee: { speed: 5, knockback: 9, range: 9 } }), own)), 1);
+    const cw = A(c.s).swingWeapon;
+    expect(cw.kind === 'melee' && cw.range).toBe(M.meleeRange(9));
+  });
+});
+
 // --- CHARGE ON THE LEFT TRIGGER, THROUGH THE REAL INPUT PIPELINE ------------------------------
 
 /**

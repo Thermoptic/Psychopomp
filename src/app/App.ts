@@ -93,8 +93,7 @@ export class App {
     if (combat) {
       const next: typeof this.ui.trails = {};
       for (const p of combat.projectiles) {
-        const w = combat.fighters[p.side].weapon;
-        const keep = w.kind === 'ranged' ? powerupMapping.trailTicks(w.look.trail) : 0;
+        const keep = powerupMapping.trailTicks(p.look.trail);
         if (keep <= 0) continue;
         next[p.id] = [...(this.ui.trails[p.id] ?? []), { x: p.x / 256, y: p.y / 256 }].slice(-keep);
       }
@@ -106,7 +105,8 @@ export class App {
       for (const e of r.events) {
         if (e.type !== 'ATTACK_STARTED') continue;
         const f = fighters[e.side];
-        if (f.weapon.kind === 'melee') this.ui.slashes.push({ side: e.side, ms: SLASH_MS, aim: { ...f.swingAim } });
+        // The swing that just started (not the equipped weapon: a Charge Powerup can differ from the normal attack).
+        if (f.swingWeapon.kind === 'melee') this.ui.slashes.push({ side: e.side, ms: SLASH_MS, aim: { ...f.swingAim }, reach: f.swingWeapon.range });
       }
     }
     this.sfx.handle(r.events);
